@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<!-- Physical parameters of the mecanum robot. All units SI (m, kg, rad). -->
+<!-- Dimensions match the STL meshes in meshes/visual. -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Chassis -->
+  <xacro:property name="chassis_length" value="0.605"/>
+  <xacro:property name="chassis_width" value="0.394"/>
+  <xacro:property name="chassis_height" value="0.064"/>
+  <xacro:property name="chassis_mass" value="5.0"/>
+  <!-- Height of the chassis centre above base_link (wheel axle height) -->
+  <xacro:property name="chassis_z_offset" value="0.008"/>
+
+  <!-- Wheels -->
+  <xacro:property name="wheel_radius" value="0.05"/>
+  <xacro:property name="wheel_width" value="0.08"/>
+  <xacro:property name="wheel_mass" value="0.3"/>
+
+  <!-- Wheel placement relative to base_link (chassis centre). Axles are not symmetric
+       about the chassis centre; values taken from the axle bosses on the chassis mesh. -->
+  <xacro:property name="front_axle_x" value="0.216"/>
+  <xacro:property name="rear_axle_x" value="-0.235"/>
+  <xacro:property name="wheelbase" value="${front_axle_x - rear_axle_x}"/>
+  <!-- track = left/right wheel centre distance -->
+  <xacro:property name="track_width" value="0.414"/>
+
+  <!-- Meshes (already in metres, origin at the link frame) -->
+  <xacro:property name="mesh_dir" value="package://mecanum_description/meshes/visual"/>
+  <xacro:property name="chassis_mesh" value="${mesh_dir}/macchumwheel_body_001_nowheel.stl"/>
+  <!-- X-configuration: diagonal wheels share the same roller handedness -->
+  <xacro:property name="wheel_mesh_left_hand" value="${mesh_dir}/macchumwheelFL.stl"/>
+  <xacro:property name="wheel_mesh_right_hand" value="${mesh_dir}/macchumwheelbase_FR.stl"/>
+
+</robot>

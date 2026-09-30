@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<!-- Robot body: base_footprint, base_link (chassis) and the four wheels. -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="mecanum_robot" params="prefix">
+
+    <!-- Ground-projected robot frame (REP-105) -->
+    <link name="${prefix}base_footprint" />
+
+    <joint name="${prefix}base_joint" type="fixed">
+      <parent link="${prefix}base_footprint" />
+      <child link="${prefix}base_link" />
+      <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0" />
+    </joint>
+
+    <!-- base_link sits at wheel axle height -->
+    <link name="${prefix}base_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <mesh filename="${chassis_mesh}" />
+        </geometry>
+        <material name="blue" />
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${chassis_z_offset}" rpy="0 0 0" />
+        <geometry>
+          <box size="${chassis_length} ${chassis_width} ${chassis_height}" />
+        </geometry>
+      </collision>
+      <xacro:box_inertia mass="${chassis_mass}" x="${chassis_length}" y="${chassis_width}"
+        z="${chassis_height}">
+        <origin xyz="0 0 ${chassis_z_offset}" rpy="0 0 0" />
+      </xacro:box_inertia>
+    </link>
+
+    <!-- Wheels: left/right meshes are shared between front and rear -->
+    <xacro:mecanum_wheel prefix="${prefix}" name="front_left" parent="base_link"
+      mesh="${wheel_mesh_left_hand}" x="${front_axle_x}" y="${track_width/2}" />
+    <xacro:mecanum_wheel prefix="${prefix}" name="front_right" parent="base_link"
+      mesh="${wheel_mesh_right_hand}" x="${front_axle_x}" y="${-track_width/2}" />
+    <xacro:mecanum_wheel prefix="${prefix}" name="rear_left" parent="base_link"
+      mesh="${wheel_mesh_left_hand}" x="${rear_axle_x}" y="${track_width/2}" />
+    <xacro:mecanum_wheel prefix="${prefix}" name="rear_right" parent="base_link"
+      mesh="${wheel_mesh_right_hand}" x="${rear_axle_x}" y="${-track_width/2}" />
+
+  </xacro:macro>
+
+</robot>

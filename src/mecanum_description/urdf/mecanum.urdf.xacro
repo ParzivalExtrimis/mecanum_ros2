@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- Main entry point for the mecanum robot description. -->
+<robot name="mecanum" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Optional prefix for all links/joints (e.g. "robot1_") -->
+  <xacro:arg name="prefix" default=""/>
+
+  <xacro:include filename="$(find mecanum_description)/urdf/mecanum_params.xacro"/>
+  <xacro:include filename="$(find mecanum_description)/urdf/materials.xacro"/>
+  <xacro:include filename="$(find mecanum_description)/urdf/inertial_macros.xacro"/>
+  <xacro:include filename="$(find mecanum_description)/urdf/mecanum_wheel.xacro"/>
+  <xacro:include filename="$(find mecanum_description)/urdf/mecanum_robot.xacro"/>
+
+  <xacro:mecanum_robot prefix="$(arg prefix)"/>
+
+</robot>
