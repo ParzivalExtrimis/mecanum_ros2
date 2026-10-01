@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<!--
+  Simulation entry point: the unmodified robot description plus Gazebo-only additions.
+
+  All xacro args of mecanum_description pass through (prefix, use_l2, l2_x ... l2_spacer_length).
+  The sim plugins assume prefix:="" and the model name "mecanum" (see mecanum.gazebo.xacro).
+-->
+<robot name="mecanum" xmlns:xacro="http://www.ros.org/wiki/xacro"
+       xmlns:gz="http://gazebosim.org/schema">
+
+  <xacro:include filename="$(find mecanum_description)/urdf/mecanum.urdf.xacro"/>
+  <xacro:include filename="$(find mecanum_simulation)/urdf/mecanum.gazebo.xacro"/>
+
+</robot>

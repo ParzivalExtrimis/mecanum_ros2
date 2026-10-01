@@ -1,0 +1,32 @@
+# Per-wheel motor calibration for esp32_driver. Model (see wheel_calibration.py):
+#   value = deadband + scale * |omega|   (capped at max_value)
+#   direction = sign * sign(omega)
+# value is in ESP32 units, omega in wheel rad/s (positive rolls the robot forward).
+# The calibration tool (phase 5) overwrites scale and deadband from LIO measurements.
+esp32_driver:
+  ros__parameters:
+    wheels:
+      front_left:
+        motor_id: 0          # STAND-IN: ESP32 motor ID of this wheel is unknown, run motion_test on hardware and note which wheel each ID drives
+        sign: 1              # STAND-IN: motor polarity is unknown, run motion_test; flip if this wheel turns backward on the forward step
+        scale: 0.0666667     # STAND-IN: ESP32 value per rad/s is unknown (1/15 assumes value 1.0 = 15 rad/s), run the calibration tool
+        deadband: 0.0        # STAND-IN: minimum value that turns the wheel is unknown, run the calibration tool
+        max_value: 1.0       # STAND-IN: ESP32 value range is unknown (normalized 0..1 assumed), take it from the new firmware protocol
+      front_right:
+        motor_id: 1          # STAND-IN: as front_left
+        sign: 1              # STAND-IN: as front_left
+        scale: 0.0666667     # STAND-IN: as front_left
+        deadband: 0.0        # STAND-IN: as front_left
+        max_value: 1.0       # STAND-IN: as front_left
+      rear_left:
+        motor_id: 2          # STAND-IN: as front_left
+        sign: 1              # STAND-IN: as front_left
+        scale: 0.0666667     # STAND-IN: as front_left
+        deadband: 0.0        # STAND-IN: as front_left
+        max_value: 1.0       # STAND-IN: as front_left
+      rear_right:
+        motor_id: 3          # STAND-IN: as front_left
+        sign: 1              # STAND-IN: as front_left
+        scale: 0.0666667     # STAND-IN: as front_left
+        deadband: 0.0        # STAND-IN: as front_left
+        max_value: 1.0       # STAND-IN: as front_left
