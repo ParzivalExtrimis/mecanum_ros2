@@ -1,0 +1,26 @@
+# esp32_driver parameters (mecanum_base/esp32_driver_node.py).
+# Per-wheel calibration lives in wheel_calibration.yaml (written by the calibration tool).
+esp32_driver:
+  ros__parameters:
+    # mock | sim | esp32. Launch files override this; esp32 is not implemented until the
+    # rewritten firmware's protocol is defined.
+    transport: mock
+    # Jazzy Nav2 publishes geometry_msgs/Twist unless enable_stamped_cmd_vel is true.
+    cmd_vel_topic: cmd_vel
+    cmd_vel_stamped: false
+    # Topic of the sim transport (simulated ESP32).
+    motor_commands_topic: /esp32/motor_commands
+    rate_hz: 20.0
+    cmd_timeout: 0.25
+
+    # Geometry, derived from mecanum_description/urdf/mecanum_params.xacro. Those values mix
+    # CAD and measured approximations (see STANDINS.md); test/test_urdf_defaults.py checks
+    # that these match the URDF.
+    wheel_radius: 0.05   # wheel_radius
+    lx: 0.2255           # half wheelbase = (front_axle_x - rear_axle_x) / 2 = (0.216 + 0.235) / 2
+    ly: 0.207            # half track = track_width / 2 = 0.414 / 2
+
+    # Body velocity limits. The command is scaled down uniformly to fit within all three.
+    max_vx: 0.3   # STAND-IN: safe forward speed for the real base is unknown, raise after hardware tests show stable stopping and tracking
+    max_vy: 0.3   # STAND-IN: safe strafe speed is unknown, raise after hardware tests show stable strafing
+    max_wz: 0.8   # STAND-IN: safe rotation speed is unknown, raise after hardware tests (LIO tolerance to fast rotation also limits it)

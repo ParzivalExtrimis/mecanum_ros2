@@ -1,0 +1,23 @@
+# Simulated ESP32 + motors (sim_motor_plant). This is the "true" plant.
+#
+# Default: an ideal plant that matches the driver's stand-in calibration
+# (mecanum_base/config/wheel_calibration.yaml), so the robot moves exactly as commanded.
+# To exercise the motion test or the calibration tool, make these differ from the driver's
+# calibration: a different scale, a deadband, a flipped sign or swapped wiring.
+sim_motor_plant:
+  ros__parameters:
+    motor_commands_topic: /esp32/motor_commands
+    wheel_command_prefix: /sim/wheel_cmd/
+    # Seconds without commands before the simulated firmware stops the wheels; 0 = off.
+    watchdog_timeout: 0.0   # STAND-IN: whether the real firmware has a watchdog is unknown, check the rewritten firmware
+    # ESP32 motor ID wired to each wheel.
+    wiring:
+      front_left: 0
+      front_right: 1
+      rear_left: 2
+      rear_right: 3
+    plant:
+      front_left:  {sign: 1, scale: 0.0666667, deadband: 0.0, max_omega: 15.0}   # STAND-IN: max_omega (wheel speed at full command) is unknown, take it from the motor/gearbox datasheet or measure the no-load wheel speed
+      front_right: {sign: 1, scale: 0.0666667, deadband: 0.0, max_omega: 15.0}   # STAND-IN: as front_left
+      rear_left:   {sign: 1, scale: 0.0666667, deadband: 0.0, max_omega: 15.0}   # STAND-IN: as front_left
+      rear_right:  {sign: 1, scale: 0.0666667, deadband: 0.0, max_omega: 15.0}   # STAND-IN: as front_left

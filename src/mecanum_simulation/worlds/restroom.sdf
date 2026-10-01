@@ -1,0 +1,167 @@
+<?xml version="1.0" ?>
+<!--
+  restroom.sdf: indoor test world for the mecanum base (primitives only, no downloads).
+
+  STAND-IN: this is not a real site. It approximates a small restroom so that mapping,
+  navigation and docking can be developed before the robot sees the real building.
+  Replace or extend it once the target site is known.
+
+  Layout (metres, world frame, z up):
+    corridor   x -1..7, y -2..0     robot spawn / home at (0, -1), facing +x
+    lobby      x -1..2, y  0..4     column at (0.5, 1.5)
+    restroom   x  2..7, y  0..4     doorway x 3.0..3.9 in the wall at y = 0
+               sink counter along the west wall, bin at (4.3, 0.6)
+               stall in the north-east corner (x 5.4..7, y 2.2..4), open towards -x,
+               partitions from z 0.15 to 1.9 m
+    toilet_1   against the east wall at y = 3.075, bowl front edge at x = 6.34
+
+  No ceiling yet: it is added with the simulated LiDAR in phase 3.
+-->
+<sdf version="1.9">
+  <world name="restroom">
+
+    <physics name="2ms" type="ignored">
+      <max_step_size>0.002</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system"
+            name="gz::sim::systems::SceneBroadcaster"/>
+
+    <scene>
+      <ambient>0.6 0.6 0.6 1</ambient>
+      <background>0.8 0.85 0.9 1</background>
+    </scene>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>1 1 1 1</diffuse>
+      <specular>0.3 0.3 0.3 1</specular>
+      <direction>-0.4 0.2 -0.9</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>50 50</size></plane></geometry>
+          <surface>
+            <friction>
+              <!-- STAND-IN: real floor friction is unknown (tiles, wet floors); measure the
+                   force to slide the robot sideways, or tune until sim slip matches the
+                   real robot. Value mirrors Gazebo's mecanum_drive demo. -->
+              <ode><mu>50</mu></ode>
+            </friction>
+          </surface>
+        </collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>50 50</size></plane></geometry>
+          <material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse><specular>0.1 0.1 0.1 1</specular></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="building">
+      <static>true</static>
+      <!-- outer walls -->
+      <link name="wall_south">
+        <pose>3.0 -2.05 1.2 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>8.2 0.1 2.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>8.2 0.1 2.4</size></box></geometry><material><ambient>0.85 0.85 0.82 1</ambient><diffuse>0.85 0.85 0.82 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <link name="wall_north">
+        <pose>3.0 4.05 1.2 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>8.2 0.1 2.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>8.2 0.1 2.4</size></box></geometry><material><ambient>0.85 0.85 0.82 1</ambient><diffuse>0.85 0.85 0.82 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <link name="wall_west">
+        <pose>-1.05 1.0 1.2 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>0.1 6.0 2.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.1 6.0 2.4</size></box></geometry><material><ambient>0.85 0.85 0.82 1</ambient><diffuse>0.85 0.85 0.82 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <link name="wall_east">
+        <pose>7.05 1.0 1.2 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>0.1 6.0 2.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.1 6.0 2.4</size></box></geometry><material><ambient>0.85 0.85 0.82 1</ambient><diffuse>0.85 0.85 0.82 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <!-- restroom south wall with a 0.9 m doorway at x 3.0..3.9 -->
+      <link name="restroom_wall_south_a">
+        <pose>2.5 0.0 1.2 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>1.0 0.1 2.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>1.0 0.1 2.4</size></box></geometry><material><ambient>0.85 0.85 0.82 1</ambient><diffuse>0.85 0.85 0.82 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <link name="restroom_wall_south_b">
+        <pose>5.45 0.0 1.2 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>3.1 0.1 2.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>3.1 0.1 2.4</size></box></geometry><material><ambient>0.85 0.85 0.82 1</ambient><diffuse>0.85 0.85 0.82 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <link name="restroom_door_header">
+        <pose>3.45 0.0 2.25 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>0.9 0.1 0.3</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.9 0.1 0.3</size></box></geometry><material><ambient>0.85 0.85 0.82 1</ambient><diffuse>0.85 0.85 0.82 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <link name="restroom_wall_west">
+        <pose>2.0 2.0 1.2 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>0.1 4.0 2.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.1 4.0 2.4</size></box></geometry><material><ambient>0.85 0.85 0.82 1</ambient><diffuse>0.85 0.85 0.82 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <!-- lobby and corridor -->
+      <link name="lobby_column">
+        <pose>0.5 1.5 1.2 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>0.3 0.3 2.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.3 0.3 2.4</size></box></geometry><material><ambient>0.85 0.85 0.82 1</ambient><diffuse>0.85 0.85 0.82 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <link name="corridor_bench">
+        <pose>1.0 -1.75 0.225 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>1.2 0.4 0.45</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>1.2 0.4 0.45</size></box></geometry><material><ambient>0.35 0.32 0.30 1</ambient><diffuse>0.35 0.32 0.30 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <!-- restroom fixtures -->
+      <link name="sink_counter">
+        <pose>2.35 3.15 0.425 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>0.6 1.5 0.85</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.6 1.5 0.85</size></box></geometry><material><ambient>0.35 0.32 0.30 1</ambient><diffuse>0.35 0.32 0.30 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <!-- stall: partitions with a 0.15 m floor gap, as in real restrooms -->
+      <link name="stall_partition_side">
+        <pose>6.175 2.2 1.025 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>1.55 0.04 1.75</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>1.55 0.04 1.75</size></box></geometry><material><ambient>0.75 0.70 0.60 1</ambient><diffuse>0.75 0.70 0.60 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <link name="stall_partition_post">
+        <pose>5.42 2.2 0.95 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>0.05 0.05 1.9</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.05 0.05 1.9</size></box></geometry><material><ambient>0.75 0.70 0.60 1</ambient><diffuse>0.75 0.70 0.60 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <link name="stall_partition_front">
+        <pose>5.4 3.8 1.025 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>0.04 0.3 1.75</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.04 0.3 1.75</size></box></geometry><material><ambient>0.75 0.70 0.60 1</ambient><diffuse>0.75 0.70 0.60 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <!-- toilet_1 (STAND-IN shape): tank, pedestal and bowl, front edge at x = 6.34 -->
+      <link name="toilet_1_tank">
+        <pose>6.85 3.075 0.6 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>0.2 0.45 0.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.2 0.45 0.4</size></box></geometry><material><ambient>0.97 0.97 0.97 1</ambient><diffuse>0.97 0.97 0.97 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <link name="toilet_1_pedestal">
+        <pose>6.64 3.075 0.2 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>0.22 0.25 0.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.22 0.25 0.4</size></box></geometry><material><ambient>0.97 0.97 0.97 1</ambient><diffuse>0.97 0.97 0.97 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <link name="toilet_1_bowl">
+        <pose>6.53 3.075 0.2 0 0 0</pose>
+        <collision name="collision"><geometry><cylinder><radius>0.19</radius><length>0.4</length></cylinder></geometry></collision>
+        <visual name="visual"><geometry><cylinder><radius>0.19</radius><length>0.4</length></cylinder></geometry><material><ambient>0.97 0.97 0.97 1</ambient><diffuse>0.97 0.97 0.97 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <link name="bin">
+        <pose>4.3 0.6 0.25 0 0 0</pose>
+        <collision name="collision"><geometry><cylinder><radius>0.15</radius><length>0.5</length></cylinder></geometry></collision>
+        <visual name="visual"><geometry><cylinder><radius>0.15</radius><length>0.5</length></cylinder></geometry><material><ambient>0.35 0.32 0.30 1</ambient><diffuse>0.35 0.32 0.30 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+    </model>
+
+  </world>
+</sdf>

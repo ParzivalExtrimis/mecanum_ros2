@@ -1,0 +1,38 @@
+# ros_gz_bridge configuration for the mecanum simulation.
+# Wheel joint states and the ground-truth TF are deliberately NOT bridged (see
+# urdf/mecanum.gazebo.xacro).
+
+- ros_topic_name: /clock
+  gz_topic_name: /clock
+  ros_type_name: rosgraph_msgs/msg/Clock
+  gz_type_name: gz.msgs.Clock
+  direction: GZ_TO_ROS
+
+# Wheel speed commands (rad/s) from sim_motor_plant to the JointController of each wheel.
+- ros_topic_name: /sim/wheel_cmd/front_left
+  gz_topic_name: /model/mecanum/joint/front_left_wheel_joint/cmd_vel
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+- ros_topic_name: /sim/wheel_cmd/front_right
+  gz_topic_name: /model/mecanum/joint/front_right_wheel_joint/cmd_vel
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+- ros_topic_name: /sim/wheel_cmd/rear_left
+  gz_topic_name: /model/mecanum/joint/rear_left_wheel_joint/cmd_vel
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+- ros_topic_name: /sim/wheel_cmd/rear_right
+  gz_topic_name: /model/mecanum/joint/rear_right_wheel_joint/cmd_vel
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+
+# Ground truth for evaluation only (frames sim_gt_world / sim_gt_base, never in TF).
+- ros_topic_name: /sim/ground_truth/odom
+  gz_topic_name: /sim/ground_truth/odom
+  ros_type_name: nav_msgs/msg/Odometry
+  gz_type_name: gz.msgs.Odometry
+  direction: GZ_TO_ROS
