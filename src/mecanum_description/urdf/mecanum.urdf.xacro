@@ -13,4 +13,11 @@
 
   <xacro:mecanum_robot prefix="$(arg prefix)"/>
 
+  <!-- Unitree L2 LiDAR (mount, lidar and IMU frames). Mount pose args are declared in
+       sensors/unitree_l2.xacro. Set use_l2:=false to build the bare base. -->
+  <xacro:arg name="use_l2" default="true"/>
+  <xacro:if value="$(arg use_l2)">
+    <xacro:include filename="$(find mecanum_description)/urdf/sensors/unitree_l2.xacro"/>
+  </xacro:if>
+
 </robot>

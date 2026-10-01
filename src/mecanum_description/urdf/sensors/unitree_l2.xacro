@@ -1,0 +1,123 @@
+<?xml version="1.0"?>
+<!--
+  Unitree L2 4D LiDAR: mount link, lidar frame and IMU frame.
+
+  Included from mecanum.urdf.xacro when use_l2 is true (the default).
+
+  Frames (vendor definition, unilidar_sdk2 README "Coordinate System Definition"):
+    - Lidar frame origin: centre of the L2's bottom mounting surface.
+      +X points away from the cable outlet, +Z is normal to the bottom surface, right-handed.
+    - IMU frame: axes parallel to the lidar frame, origin at
+      (-0.007698, -0.014655, 0.00667) m in the lidar frame.
+
+  Tree (fixed joints, published by robot_state_publisher):
+    base_link -> l2_mount -> l2_lidar   (identity: the mount frame IS the bottom mounting face)
+                 l2_mount -> l2_imu     (vendor lidar-to-IMU offset)
+
+  The Unitree ROS 2 driver's cloud_frame / imu_frame parameters must be set to
+  l2_lidar / l2_imu (with the prefix, if one is used) so its messages match these frames.
+
+  Body geometry is from the vendor datasheet: 75 x 75 x 65 mm, 230 g.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Mount pose of the L2 bottom mounting face relative to base_link.
+       base_link is the chassis centre at wheel-axle height (see mecanum_robot.xacro).
+       The chassis top plate is 0.040 m above base_link, so the default z puts the L2
+       upright, centred, on a 0.10 m spacer, with the cable pointing to the rear.
+       Inverted mount example: l2_roll:=3.14159 l2_z:=<height of the mounting face>. -->
+  <!-- STAND-IN: L2 mount pose (the L2 is not mounted yet), measure the centre of the L2 bottom mounting face relative to base_link once the bracket exists -->
+  <xacro:arg name="l2_x" default="0.0"/>
+  <!-- STAND-IN: L2 mount pose (the L2 is not mounted yet), measure as for l2_x -->
+  <xacro:arg name="l2_y" default="0.0"/>
+  <!-- STAND-IN: L2 mount pose (the L2 is not mounted yet), measure as for l2_x -->
+  <xacro:arg name="l2_z" default="0.14"/>
+  <!-- STAND-IN: L2 mount orientation (upright assumed), read from the bracket CAD or measure with a level -->
+  <xacro:arg name="l2_roll" default="0.0"/>
+  <!-- STAND-IN: L2 mount orientation (level assumed), read from the bracket CAD or measure with a level -->
+  <xacro:arg name="l2_pitch" default="0.0"/>
+  <!-- STAND-IN: L2 mount yaw (cable to the rear assumed), check which way the cable outlet points -->
+  <xacro:arg name="l2_yaw" default="0.0"/>
+  <!-- STAND-IN: spacer/bracket length between the mounting face and the structure it is
+       fixed to (drawn along -Z of l2_mount), measure the real bracket; 0 disables it -->
+  <xacro:arg name="l2_spacer_length" default="0.10"/>
+
+  <!-- Vendor datasheet values (not stand-ins) -->
+  <xacro:property name="l2_body_radius" value="0.0375"/>
+  <xacro:property name="l2_body_height" value="0.065"/>
+  <xacro:property name="l2_mass" value="0.230"/>
+  <!-- IMU origin in the lidar frame, from the unilidar_sdk2 README -->
+  <xacro:property name="l2_imu_x" value="-0.007698"/>
+  <xacro:property name="l2_imu_y" value="-0.014655"/>
+  <xacro:property name="l2_imu_z" value="0.00667"/>
+
+  <!-- Radius of the drawn spacer; cosmetic, also used as a collision body -->
+  <xacro:property name="l2_spacer_radius" value="0.02"/>
+
+  <xacro:macro name="unitree_l2" params="prefix parent xyz rpy spacer_length">
+
+    <joint name="${prefix}l2_mount_joint" type="fixed">
+      <parent link="${prefix}${parent}"/>
+      <child link="${prefix}l2_mount"/>
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+    </joint>
+
+    <!-- Sensor body. Frame origin = centre of the bottom mounting face. -->
+    <link name="${prefix}l2_mount">
+      <visual>
+        <origin xyz="0 0 ${l2_body_height/2}" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="${l2_body_radius}" length="${l2_body_height}"/>
+        </geometry>
+        <material name="dark_grey"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${l2_body_height/2}" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="${l2_body_radius}" length="${l2_body_height}"/>
+        </geometry>
+      </collision>
+      <xacro:if value="${spacer_length > 0}">
+        <visual>
+          <origin xyz="0 0 ${-spacer_length/2}" rpy="0 0 0"/>
+          <geometry>
+            <cylinder radius="${l2_spacer_radius}" length="${spacer_length}"/>
+          </geometry>
+          <material name="grey"/>
+        </visual>
+        <collision>
+          <origin xyz="0 0 ${-spacer_length/2}" rpy="0 0 0"/>
+          <geometry>
+            <cylinder radius="${l2_spacer_radius}" length="${spacer_length}"/>
+          </geometry>
+        </collision>
+      </xacro:if>
+      <xacro:cylinder_inertia mass="${l2_mass}" radius="${l2_body_radius}" length="${l2_body_height}">
+        <origin xyz="0 0 ${l2_body_height/2}" rpy="0 0 0"/>
+      </xacro:cylinder_inertia>
+    </link>
+
+    <!-- Point cloud frame (vendor lidar frame) -->
+    <joint name="${prefix}l2_lidar_joint" type="fixed">
+      <parent link="${prefix}l2_mount"/>
+      <child link="${prefix}l2_lidar"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+    <link name="${prefix}l2_lidar"/>
+
+    <!-- Built-in 6-axis IMU frame -->
+    <joint name="${prefix}l2_imu_joint" type="fixed">
+      <parent link="${prefix}l2_mount"/>
+      <child link="${prefix}l2_imu"/>
+      <origin xyz="${l2_imu_x} ${l2_imu_y} ${l2_imu_z}" rpy="0 0 0"/>
+    </joint>
+    <link name="${prefix}l2_imu"/>
+
+  </xacro:macro>
+
+  <xacro:unitree_l2 prefix="$(arg prefix)" parent="base_link"
+    xyz="$(arg l2_x) $(arg l2_y) $(arg l2_z)"
+    rpy="$(arg l2_roll) $(arg l2_pitch) $(arg l2_yaw)"
+    spacer_length="$(arg l2_spacer_length)"/>
+
+</robot>
