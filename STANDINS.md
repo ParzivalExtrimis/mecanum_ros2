@@ -9,10 +9,7 @@ here once the real value is known.
 
 | File | Parameter | Placeholder | How to obtain the real value |
 |---|---|---|---|
-| `src/mecanum_description/urdf/sensors/unitree_l2.xacro` | `l2_x`, `l2_y`, `l2_z` | `0.0`, `0.0`, `0.14` m (upright, centred, on a 0.10 m spacer above the 0.040 m chassis top) | After mounting, measure the centre of the L2's bottom mounting face relative to `base_link` (chassis centre, wheel-axle height, 0.05 m above the floor). Or read it from the bracket CAD. |
-| `src/mecanum_description/urdf/sensors/unitree_l2.xacro` | `l2_roll`, `l2_pitch` | `0.0`, `0.0` (upright, level) | Read from the bracket CAD, or measure the tilt of the mounting face with a digital level. An inverted mount is `l2_roll:=3.14159`. |
-| `src/mecanum_description/urdf/sensors/unitree_l2.xacro` | `l2_yaw` | `0.0` (cable outlet to the rear) | The L2's +X axis points away from the cable outlet. Measure the angle between that direction and the robot's forward axis. |
-| `src/mecanum_description/urdf/sensors/unitree_l2.xacro` | `l2_spacer_length` | `0.10` m | Measure the real spacer or bracket between the mounting face and the structure it is fixed to. Use `0` if the L2 sits directly on the plate. |
+| `src/mecanum_description/urdf/sensors/unitree_l2.xacro` | `l2_mast_mass` | `0.9` kg for the pole plus bracket, assuming a 2 mm wall aluminium tube | Weigh the pole and bracket assembly without the L2. It only affects simulation dynamics. |
 | `src/mecanum_base/config/esp32_driver.yaml` | `max_vx`, `max_vy`, `max_wz` | `0.3` m/s, `0.3` m/s, `0.8` rad/s | Raise them step by step during hardware tests while stopping, tracking and LIO quality stay good. |
 | `src/mecanum_base/config/wheel_calibration.yaml` | `wheels.<wheel>.motor_id` | `0`, `1`, `2`, `3` for FL, FR, RL, RR | Take them from the rewritten firmware. Otherwise run `motion_test` on blocks and note which wheel each ID drives. |
 | `src/mecanum_base/config/wheel_calibration.yaml` | `wheels.<wheel>.sign` | `1` | Run `motion_test`. Flip the sign of any wheel that turns backward on the forward step. |
@@ -25,6 +22,15 @@ here once the real value is known.
 | `src/mecanum_simulation/urdf/mecanum.gazebo.xacro` | `sim_wheel_mu` | `1.0` | Tune it until simulated slip matches the real robot on the target floor. |
 | `src/mecanum_simulation/worlds/restroom.sdf` | ground plane `mu` | `50`, from Gazebo's mecanum demo | Measure the sideways sliding force on the real floor, or tune it with `sim_wheel_mu`. |
 | `src/mecanum_simulation/worlds/restroom.sdf` | Whole layout, including the `toilet_1` shape and pose | Primitive corridor, lobby, restroom and stall. `toilet_1` bowl front edge at x = 6.34 m, y = 3.075 m. | Replace it with the real site's layout once known. A floor plan is enough for walls and fixtures. |
+
+## Provisional design choices
+
+These values are decided, not unknown, but they may still change. Each is set in one place.
+
+| Choice | Current value | Set by | If it changes |
+|---|---|---|---|
+| L2 cable outlet direction on the bracket | Toward the pole, so the L2's +X points forward along the overhang | xacro arg `l2_bracket_yaw` in `src/mecanum_description/urdf/sensors/unitree_l2.xacro`, default `0.0` | Set the new default: `3.14159` if the cable points to the overhang tip, `±1.5708` if it points sideways. Re-mount the real L2 to match. Check any LIO config that hard-codes a lidar or IMU extrinsic; extrinsics should come from TF. Frames, the simulated sensor, the self-filter and the L2 driver follow automatically. |
+| Mast position | Pole at the rear edge, centred, L2 looking forward and down | xacro args `l2_mast_x`, `l2_mast_y`, `l2_mast_z`, `l2_mast_yaw` | Pole at the front is `l2_mast_x:=0.2875 l2_mast_yaw:=3.14159`. Re-check the self-filter and the footprint. |
 
 ## Existing description values of uncertain accuracy
 

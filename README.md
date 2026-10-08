@@ -58,7 +58,7 @@ Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
 Each link has exactly one publisher.
 
 ```
-map -> odom -> base_footprint -> base_link -> {wheels, l2_mount -> {l2_lidar, l2_imu}}
+map -> odom -> base_footprint -> base_link -> {wheels, l2_mast, l2_mount -> {l2_lidar, l2_imu}}
 ```
 
 | Transform | Publisher |
@@ -97,16 +97,34 @@ sudo apt install ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-nav2-sim
 ros2 launch mecanum_description display.launch.py
 ```
 
-The L2 is included by default. The URDF can be generated directly with xacro. The L2 mount
-pose is set with the xacro args `l2_x l2_y l2_z l2_roll l2_pitch l2_yaw l2_spacer_length`:
+The L2 and its mast are included by default. The mast is a 725 mm pole at the rear edge of
+the chassis plate. A bracket on top, tilted 20°, holds the L2 inverted, so it looks forward
+and down at the floor ahead. The meshes come from the CAD; see
+`src/mecanum_description/refs/mecanum_ros2_lidar_placement.jpeg`. The bracket top is about
+0.85 m above the floor, which is the robot's height for the costmaps.
+
+The URDF can be generated directly with xacro:
 
 ```bash
 xacro $(ros2 pkg prefix mecanum_description)/share/mecanum_description/urdf/mecanum.urdf.xacro
-xacro .../mecanum.urdf.xacro use_l2:=false
-xacro .../mecanum.urdf.xacro l2_roll:=3.14159 l2_z:=0.60 l2_spacer_length:=0.46
+xacro .../mecanum.urdf.xacro use_l2:=false                              # bare base
+xacro .../mecanum.urdf.xacro l2_mast_x:=0.2875 l2_mast_yaw:=3.14159     # pole at the front
+xacro .../mecanum.urdf.xacro l2_bracket_yaw:=3.14159                    # L2 cable toward the tip
 ```
 
-The last command gives an inverted L2 hanging under a mast.
+`l2_bracket_yaw` is provisional; see `STANDINS.md`.
+
+**Re-exporting the mast from CAD.** The CAD exports are in millimetres, in the CAD assembly
+frame. Convert them in place to metres in the `l2_mast` frame:
+
+```bash
+tools/cad_stl_to_ros.py --origin=-5,-2115,-21 --axes=y,-x,z --scale 0.001 --report-l2 \
+  src/mecanum_description/meshes/visual/725mmpole.stl \
+  src/mecanum_description/meshes/visual/lidarsetup01.stl
+```
+
+The script refuses files it has already converted. If the bracket changes, copy the printed L2
+face centre into `l2_face_x/y/z` in `unitree_l2.xacro`.
 
 ### Simulation: drive the base (phase 2)
 
