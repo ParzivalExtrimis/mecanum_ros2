@@ -21,6 +21,8 @@ sim:=false  robot_state_publisher + joint_state_publisher (zero wheel angles) an
             esp32_driver with the esp32 transport. The real transport is not implemented
             until the rewritten firmware's protocol exists; the driver then exits with an
             explanation. The L2 driver is added in the hardware phase.
+Both        L2 perception (mecanum_localization/perception.launch.py): self-filter and
+            cloud-to-scan, /l2/points -> /l2/points_filtered -> /scan.
 """
 
 import os
@@ -40,6 +42,7 @@ def generate_launch_description():
     sim_share = get_package_share_directory('mecanum_simulation')
     base_share = get_package_share_directory('mecanum_base')
     desc_share = get_package_share_directory('mecanum_description')
+    loc_share = get_package_share_directory('mecanum_localization')
 
     sim = LaunchConfiguration('sim')
     rviz = LaunchConfiguration('rviz')
@@ -64,6 +67,9 @@ def generate_launch_description():
         DeclareLaunchArgument('sim', default_value='true',
                               description='true: Gazebo simulation, false: real hardware'),
         DeclareLaunchArgument('rviz', default_value='false', description='Start RViz'),
+        DeclareLaunchArgument(
+            'rviz_config', default_value=os.path.join(bringup_share, 'rviz', 'sensors.rviz'),
+            description='RViz configuration (robot.rviz: model and TF only)'),
         DeclareLaunchArgument('gui', default_value='true',
                               description='Gazebo GUI (sim only; false = headless)'),
         DeclareLaunchArgument(
@@ -88,6 +94,13 @@ def generate_launch_description():
             executable='joint_state_publisher',
             condition=UnlessCondition(sim)),
 
+        # L2 perception: self-filter and cloud-to-scan, identical in sim and on hardware.
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(loc_share, 'launch', 'perception.launch.py')),
+            launch_arguments={'use_sim_time': sim}.items(),
+            condition=IfCondition(LaunchConfiguration('use_l2'))),
+
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(base_share, 'launch', 'base.launch.py')),
             launch_arguments={'transport': transport, 'use_sim_time': sim}.items()),
@@ -95,7 +108,7 @@ def generate_launch_description():
         Node(
             package='rviz2',
             executable='rviz2',
-            arguments=['-d', os.path.join(bringup_share, 'rviz', 'robot.rviz')],
+            arguments=['-d', LaunchConfiguration('rviz_config')],
             parameters=[{'use_sim_time': sim}],
             condition=IfCondition(rviz)),
     ])

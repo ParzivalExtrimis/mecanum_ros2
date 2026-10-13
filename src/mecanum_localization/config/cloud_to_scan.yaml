@@ -1,0 +1,18 @@
+# 3D cloud -> 2D laser scan for slam_toolbox / AMCL (pointcloud_to_laserscan).
+# Input is the self-filtered L2 cloud; the scan is expressed in base_footprint.
+cloud_to_scan:
+  ros__parameters:
+    target_frame: base_footprint
+    transform_tolerance: 0.05
+    # Height band (above the floor) folded into the scan.
+    min_height: 0.10   # STAND-IN: obstacle band assumed 0.10-0.50 m; tune on the real site (low fixtures, toilet bowl height)
+    max_height: 0.50   # STAND-IN: as min_height
+    angle_min: -3.141592653589793
+    angle_max: 3.141592653589793
+    angle_increment: 0.008726646   # 0.5 deg
+    scan_time: 0.18                # one L2 sweep at 5.55 Hz
+    range_min: 0.05
+    range_max: 30.0
+    use_inf: true
+    inf_epsilon: 1.0
+    queue_size: 5

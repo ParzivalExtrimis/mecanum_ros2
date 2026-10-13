@@ -40,7 +40,7 @@ Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
 | `mecanum_base` | done, phase 2; calibration tool in phase 5 | ESP32 driver node, mecanum kinematics, motion test |
 | `mecanum_interfaces` | messages done, phase 2; actions in phase 8 | Motor command and debug messages, plus task and mission actions later |
 | `mecanum_lidar` | driver done, hardware test pending | Unitree L2 driver (`/l2/points`, `/l2/imu`, no TF) on the vendored SDK, bench-test launch, RViz config |
-| `mecanum_localization` | planned, phases 3, 4, 6 | Self-filter, cloud-to-scan, LIO and its odom adapter, slam_toolbox, AMCL |
+| `mecanum_localization` | self-filter and cloud-to-scan done, phase 3; LIO, SLAM in phases 4 and 6 | Self-filter, cloud-to-scan, LIO and its odom adapter, slam_toolbox, AMCL |
 | `mecanum_navigation` | planned, phase 7 | Nav2 parameters, collision monitor, docking, keepout mask, maps |
 | `mecanum_mission` | planned, phase 8 | Mission executive and placeholder task server |
 | `mecanum_bringup` | `robot.launch.py` done, phase 2 | Top-level launch files and RViz configs |
@@ -152,6 +152,27 @@ ros2 launch mecanum_base motion_test.launch.py use_sim_time:=true \
   measure_odom_topic:=/sim/ground_truth/odom
 ```
 
+### Simulation: L2 sensor and perception (phase 3)
+
+`robot.launch.py` also starts the simulated L2 and the perception pipeline. The topics are the
+same as with the real driver:
+
+| Topic | Content |
+|---|---|
+| `/l2/points` | Raw cloud, one full sweep at 5.55 Hz |
+| `/l2/imu` | IMU at 250 Hz |
+| `/l2/points_filtered` | Cloud without the robot body |
+| `/scan` | 2D scan from the 0.10 to 0.50 m band |
+
+```bash
+ros2 launch mecanum_bringup robot.launch.py rviz:=true   # RViz shows clouds and scan
+```
+
+The L2 hangs inverted, tilted 30° forward, so it sees well ahead and to the sides but
+**little directly behind the robot**. Behind the robot, an object is visible only above a
+height of 0.93 m − 0.58 × its distance behind the L2. Low obstacles closer than about 0.7 m
+behind the rear edge are invisible. See `src/mecanum_localization/README.md`.
+
 To dry-run the driver without any simulator, using the mock transport:
 
 ```bash
@@ -184,8 +205,8 @@ starts.
 | 0 | Explore workspace, verify upstream packages | done |
 | 1 | L2 sensor frames in the description, `STANDINS.md`, this README | done |
 | 2 | Gazebo world, simulated drive plant, ESP32 driver with mock and sim transports, motion test | done |
-| 3 | Simulated L2 cloud and IMU, self-filter, cloud-to-scan | next |
-| 4 | LIO and odom adapter, evaluated against Gazebo ground truth | |
+| 3 | Simulated L2 cloud and IMU, self-filter, cloud-to-scan | done |
+| 4 | LIO and odom adapter, evaluated against Gazebo ground truth | next |
 | 5 | Motor calibration tool, validated against injected plant errors | |
 | 6 | Mapping with slam_toolbox, map saving | |
 | 7 | Localization and Nav2 | |

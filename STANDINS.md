@@ -22,6 +22,13 @@ here once the real value is known.
 | `src/mecanum_simulation/urdf/mecanum.gazebo.xacro` | `sim_wheel_mu` | `1.0` | Tune it until simulated slip matches the real robot on the target floor. |
 | `src/mecanum_simulation/worlds/restroom.sdf` | ground plane `mu` | `50`, from Gazebo's mecanum demo | Measure the sideways sliding force on the real floor, or tune it with `sim_wheel_mu`. |
 | `src/mecanum_simulation/worlds/restroom.sdf` | Whole layout, including the `toilet_1` shape and pose | Primitive corridor, lobby, restroom and stall. `toilet_1` bowl front edge at x = 6.34 m, y = 3.075 m. | Replace it with the real site's layout once known. A floor plan is enough for walls and fixtures. |
+| `src/mecanum_simulation/urdf/mecanum.gazebo.xacro` | L2 `gpu_lidar` samples | 360 horizontal × 32 vertical per sweep at 5.55 Hz, a regular grid | Compare with a real L2 cloud from the `mecanum_lidar` bench test: points per revolution and vertical spacing. |
+| `src/mecanum_simulation/urdf/mecanum.gazebo.xacro` | L2 range noise | Gaussian σ 0.01 m. The datasheet gives accuracy ≤ 2.0 cm. | Record a flat wall with the real L2 and measure the spread. |
+| `src/mecanum_simulation/urdf/mecanum.gazebo.xacro` | L2 IMU rate | 250 Hz | Read the IMU rate from the `mecanum_lidar` status line. |
+| `src/mecanum_simulation/urdf/mecanum.gazebo.xacro` | L2 IMU noise | σ 0.002 rad/s gyro, σ 0.02 m/s² accelerometer | Record the IMU at rest for a few minutes and take the standard deviations. |
+| `src/mecanum_simulation/worlds/restroom.sdf` | Ceiling height | 2.4 m | Use the real site's ceiling height. |
+| `src/mecanum_localization/config/self_filter.yaml` | Self-filter box margins | x ±0.33 m, y ±0.27 m: 2.75 cm and 2.3 cm beyond the chassis and wheels | Record a cloud on the real robot and check for self-hits outside the box, or for nearby obstacles wrongly removed. |
+| `src/mecanum_localization/config/cloud_to_scan.yaml` | `min_height`, `max_height` | 0.10 m, 0.50 m | Tune on the real site, for example for low fixtures and the toilet bowl height. |
 
 ## Provisional design choices
 

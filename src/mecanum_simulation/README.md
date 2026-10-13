@@ -68,7 +68,35 @@ with z up, in metres:
 | Stall | x 5.4 to 7, y 2.2 to 4, open towards -x. Partitions leave a 0.15 m floor gap. |
 | `toilet_1` | Against the east wall at y = 3.075. The bowl's front edge is at x = 6.34. |
 
-The ceiling is added in phase 3, together with the simulated LiDAR.
+A 2.4 m ceiling is a separate model, `ceiling`. The simulated L2 sees it. To look at the robot
+from above in the Gazebo GUI, make it transparent: in the entity tree, right-click `ceiling`,
+then choose View > Transparent.
+
+## Simulated Unitree L2
+
+`urdf/mecanum.gazebo.xacro` adds two sensors. Both are bridged to the real driver's topics and
+frames:
+
+| Sensor | Model | Output |
+|---|---|---|
+| Lidar | `gpu_lidar` on `l2_lidar`. 360 × 32 samples per sweep at 5.55 Hz, about 64k points/s. Elevation 0° to 90° in the L2 frame, the factory standard FOV, or −6° to 90° with `sim_l2_wide_fov:=true`. Range 0.05 to 30 m, noise σ 0.01 m. | `/l2/points` in `l2_lidar` |
+| IMU | IMU on `l2_imu` at 250 Hz, Gaussian noise | `/l2/imu` in `l2_imu` |
+
+The sample counts, the noise and the IMU rate are stand-ins. The sim differs from the real L2
+in three ways:
+- **No per-point time field.** Gazebo renders each sweep instantly, so the cloud has no `time`
+  field and no motion distortion. LIO must not rely on deskewing in sim.
+- **Regular grid.** The points form a regular grid, not the L2's non-repetitive pattern.
+- **Full sweeps.** One message is a full sweep. The real driver's 18-scan clouds may be partial;
+  this is checked in the hardware phase.
+
+Measured in the restroom world at spawn:
+
+| Quantity | Value |
+|---|---|
+| Points on the robot itself | 25% of each raw cloud, removed by the self-filter |
+| Floor points | About 45% of the raw cloud |
+| IMU at rest | (4.52, −1.88, −8.49) m/s², as predicted by the URDF orientation |
 
 ## Usage
 
