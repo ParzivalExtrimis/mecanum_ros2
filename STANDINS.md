@@ -29,7 +29,7 @@ These values are decided, not unknown, but they may still change. Each is set in
 
 | Choice | Current value | Set by | If it changes |
 |---|---|---|---|
-| L2 cable outlet direction on the bracket | Toward the pole, so the L2's +X points forward along the overhang | xacro arg `l2_bracket_yaw` in `src/mecanum_description/urdf/sensors/unitree_l2.xacro`, default `0.0` | Set the new default: `3.14159` if the cable points to the overhang tip, `±1.5708` if it points sideways. Re-mount the real L2 to match. Check any LIO config that hard-codes a lidar or IMU extrinsic; extrinsics should come from TF. Frames, the simulated sensor, the self-filter and the L2 driver follow automatically. |
+| L2 cable outlet direction on the bracket | 22.9° clockwise seen from above, from pointing straight at the pole, so toward the rear-left. Measured on the actual mount. The L2's +X points forward-right. | xacro arg `l2_bracket_yaw` in `src/mecanum_description/urdf/sensors/unitree_l2.xacro`, default `0.3996804` rad. It is a rotation about the L2's own tilted axis; seen from above it appears as 26.0°. | Set the new default. `0.0` means the cable points straight at the pole, and `3.14159` toward the overhang tip; positive is clockwise from above. Re-mount the real L2 to match. Check any LIO config that hard-codes a lidar or IMU extrinsic; extrinsics should come from TF. Frames, the simulated sensor, the self-filter and the L2 driver follow automatically. |
 | Mast position | Pole at the rear edge, centred, L2 looking forward and down | xacro args `l2_mast_x`, `l2_mast_y`, `l2_mast_z`, `l2_mast_yaw` | Pole at the front is `l2_mast_x:=0.2875 l2_mast_yaw:=3.14159`. Re-check the self-filter and the footprint. |
 
 ## Existing description values of uncertain accuracy

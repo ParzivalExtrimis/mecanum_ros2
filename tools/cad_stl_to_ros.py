@@ -31,8 +31,8 @@ Link frame "l2_mast": origin at the centre of the pole's bottom face, x along th
 overhang (away from the pole), z up::
 
     tools/cad_stl_to_ros.py --origin=-5,-2115,-21 --axes=y,-x,z --scale 0.001 \
-        src/mecanum_description/meshes/visual/725mmpole.stl \
-        src/mecanum_description/meshes/visual/lidarsetup01.stl
+        src/mecanum_description/meshes/visual/810mmL2stand.stl \
+        src/mecanum_description/meshes/visual/L2lidar30degree.stl
 
 ``--report-l2`` additionally locates the Unitree L2 body (75 x 75 x 65 mm block under a
 tilted bracket plate) in the converted bracket mesh and prints its base-face centre, tilt

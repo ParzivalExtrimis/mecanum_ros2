@@ -98,11 +98,13 @@ sudo apt install ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-nav2-sim
 ros2 launch mecanum_description display.launch.py
 ```
 
-The L2 and its mast are included by default. The mast is a 725 mm pole at the rear edge of
-the chassis plate. A bracket on top, tilted 20°, holds the L2 inverted, so it looks forward
-and down at the floor ahead. The meshes come from the CAD; see
-`src/mecanum_description/refs/mecanum_ros2_lidar_placement.jpeg`. The bracket top is about
-0.85 m above the floor, which is the robot's height for the costmaps.
+The L2 and its mast are included by default. The mast is an 810 mm pole at the rear edge of
+the chassis plate. A bracket on top, tilted 30°, holds the L2 inverted, so it looks forward
+and down. Its axis meets the floor about 0.32 m ahead of the chassis centre. The L2's cable
+exits 22.9° clockwise seen from above, toward the rear-left. The meshes come from the CAD; see
+`src/mecanum_description/refs/mecanum_ros2_lidar_placement.jpeg`, which shows the earlier
+725 mm, 20° version. The L2 lidar frame is 0.93 m above the floor and the bracket top is about
+0.95 m, which is the robot's height for the costmaps.
 
 The URDF can be generated directly with xacro:
 
@@ -110,22 +112,24 @@ The URDF can be generated directly with xacro:
 xacro $(ros2 pkg prefix mecanum_description)/share/mecanum_description/urdf/mecanum.urdf.xacro
 xacro .../mecanum.urdf.xacro use_l2:=false                              # bare base
 xacro .../mecanum.urdf.xacro l2_mast_x:=0.2875 l2_mast_yaw:=3.14159     # pole at the front
-xacro .../mecanum.urdf.xacro l2_bracket_yaw:=3.14159                    # L2 cable toward the tip
+xacro .../mecanum.urdf.xacro l2_bracket_yaw:=0.0                        # cable straight at the pole
 ```
 
-`l2_bracket_yaw` is provisional; see `STANDINS.md`.
+`l2_bracket_yaw` defaults to 0.3996804 rad, 22.9°, the actual mount. See `STANDINS.md`.
 
 **Re-exporting the mast from CAD.** The CAD exports are in millimetres, in the CAD assembly
 frame. Convert them in place to metres in the `l2_mast` frame:
 
 ```bash
 tools/cad_stl_to_ros.py --origin=-5,-2115,-21 --axes=y,-x,z --scale 0.001 --report-l2 \
-  src/mecanum_description/meshes/visual/725mmpole.stl \
-  src/mecanum_description/meshes/visual/lidarsetup01.stl
+  src/mecanum_description/meshes/visual/810mmL2stand.stl \
+  src/mecanum_description/meshes/visual/L2lidar30degree.stl
 ```
 
 The script refuses files it has already converted. If the bracket changes, copy the printed L2
-face centre into `l2_face_x/y/z` in `unitree_l2.xacro`.
+face centre into `l2_face_x/y/z` and the printed tilt into `l2_bracket_tilt` in
+`unitree_l2.xacro`. The CAD's L2 is a plain block, so the cable direction comes from the
+real mount, not from the export.
 
 ### Simulation: drive the base (phase 2)
 
