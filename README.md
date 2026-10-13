@@ -39,6 +39,7 @@ Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
 | `mecanum_simulation` | done, phase 2 | Gazebo world, sim-only xacro (mecanum friction, wheel controllers, ground truth), bridge, simulated ESP32 and motors |
 | `mecanum_base` | done, phase 2; calibration tool in phase 5 | ESP32 driver node, mecanum kinematics, motion test |
 | `mecanum_interfaces` | messages done, phase 2; actions in phase 8 | Motor command and debug messages, plus task and mission actions later |
+| `mecanum_lidar` | driver done, hardware test pending | Unitree L2 driver (`/l2/points`, `/l2/imu`, no TF) on the vendored SDK, bench-test launch, RViz config |
 | `mecanum_localization` | planned, phases 3, 4, 6 | Self-filter, cloud-to-scan, LIO and its odom adapter, slam_toolbox, AMCL |
 | `mecanum_navigation` | planned, phase 7 | Nav2 parameters, collision monitor, docking, keepout mask, maps |
 | `mecanum_mission` | planned, phase 8 | Mission executive and placeholder task server |
@@ -68,8 +69,8 @@ map -> odom -> base_footprint -> base_link -> {wheels, l2_mast, l2_mount -> {l2_
 | `base_footprint` and below | robot_state_publisher from the URDF |
 
 The wheel joints are continuous but have no encoders, so joint_state_publisher publishes zero
-angles for them. The Unitree driver and LIO packages broadcast their own TF, which is remapped
-away in launch files.
+angles for them. The L2 driver (`mecanum_lidar`) publishes no TF. LIO packages broadcast their
+own TF, which is remapped away in launch files.
 
 ## Build
 
@@ -153,6 +154,18 @@ To dry-run the driver without any simulator, using the mock transport:
 ros2 launch mecanum_base base.launch.py transport:=mock
 ```
 
+### Hardware: test the Unitree L2
+
+Connect the L2's UART plug through a USB-to-UART adapter that supports 4,000,000 baud. The L2
+must be in serial mode, and it ships in Ethernet mode. See the
+[mecanum_lidar README](src/mecanum_lidar/README.md) for switching modes, Ethernet use
+(`connection:=udp`) and what to check.
+
+```bash
+ros2 launch mecanum_lidar l2.launch.py                       # driver + RViz, L2 on a desk
+ros2 launch mecanum_lidar l2.launch.py robot_model:=true fixed_frame:=base_footprint  # mounted
+```
+
 ### Mapping, navigation and mission runs
 
 The exact launch sequences will be added here as phases 6 to 8 land.
@@ -173,4 +186,4 @@ starts.
 | 6 | Mapping with slam_toolbox, map saving | |
 | 7 | Localization and Nav2 | |
 | 8 | Docking and mission executive, end to end | |
-| H | Hardware: ESP32 transport, Unitree driver, real mount pose, real calibration | when hardware is ready |
+| H | Hardware: ESP32 transport, Unitree driver, real mount pose, real calibration | L2 driver done (`mecanum_lidar`); rest when hardware is ready |

@@ -1,0 +1,39 @@
+# Unitree L2 driver (mecanum_lidar/l2_driver).
+#
+# The connection settings (connection, lidar_ip, local_ip, serial_port) are launch arguments of
+# l2.launch.py, so they are not repeated here. The default connection is serial (USB).
+l2_driver:
+  ros__parameters:
+    # UDP ports, factory defaults. The L2 sends from lidar_ip:lidar_port to local_ip:local_port.
+    lidar_port: 6101
+    local_port: 6201
+    # Serial link speed, factory default.
+    baudrate: 4000000
+
+    # Work mode bit field stored in the L2 (unilidar_sdk2 README, "Configuring Work Mode"):
+    #   bit 0: 0 standard FOV (180 deg), 1 wide FOV (192 deg)
+    #   bit 1: 0 3D, 1 2D
+    #   bit 2: 0 IMU on, 1 IMU off
+    #   bit 3: 0 Ethernet, 1 serial (takes effect after a power cycle)
+    #   bit 4: 0 spin up at power-on, 1 wait for a start command
+    # -1 leaves the stored mode unchanged. The factory mode is 0.
+    work_mode: -1
+
+    # Scans accumulated into each published cloud (vendor default).
+    cloud_scan_num: 18
+    # Returns outside [range_min, range_max] m are dropped by the SDK. These are the vendor
+    # launch values, i.e. no filtering; the self-filter comes in phase 3.
+    range_min: 0.0
+    range_max: 100.0
+    # true: stamp with this computer's clock (needed for TF and LIO). false: the L2's own clock.
+    use_system_timestamp: true
+
+    # Frames from mecanum_description/urdf/sensors/unitree_l2.xacro.
+    cloud_frame_id: l2_lidar
+    imu_frame_id: l2_imu
+
+    # Seconds without any packet before warning.
+    data_timeout: 2.0
+    # Seconds between status lines (cloud and IMU rates, mean acceleration, cover dirt).
+    # 0 disables them.
+    stats_period: 5.0
