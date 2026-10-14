@@ -168,10 +168,16 @@ same as with the real driver:
 ros2 launch mecanum_bringup robot.launch.py rviz:=true   # RViz shows clouds and scan
 ```
 
-The L2 hangs inverted, tilted 30° forward, so it sees well ahead and to the sides but
-**little directly behind the robot**. Behind the robot, an object is visible only above a
-height of 0.93 m − 0.58 × its distance behind the L2. Low obstacles closer than about 0.7 m
-behind the rear edge are invisible. See `src/mecanum_localization/README.md`.
+The L2 hangs inverted, tilted 30° forward, so it sees well ahead and to the sides. Behind the
+robot it has two limits:
+- **Pole shadow.** The pole, 66 mm behind the L2, blocks a sector about 60° wide straight back.
+  Nothing there is visible at any distance or height.
+- **Field-of-view edge.** Elsewhere toward the rear, the L2 only sees below a line that drops
+  with distance. Low, near objects are visible; tall or far ones are not. At 45° rear-left or
+  rear-right, a 0.3 m box is fully visible at 1 m, partly visible at 2 m, and invisible beyond
+  about 2.3 m.
+
+See `src/mecanum_localization/README.md` and `docs/hardware_l2_test.md`.
 
 To dry-run the driver without any simulator, using the mock transport:
 
@@ -181,10 +187,14 @@ ros2 launch mecanum_base base.launch.py transport:=mock
 
 ### Hardware: test the Unitree L2
 
-Connect the L2's UART plug through a USB-to-UART adapter that supports 4,000,000 baud. The L2
-must be in serial mode, and it ships in Ethernet mode. See the
-[mecanum_lidar README](src/mecanum_lidar/README.md) for switching modes, Ethernet use
-(`connection:=udp`) and what to check.
+The full procedure is in [docs/hardware_l2_test.md](docs/hardware_l2_test.md). It covers
+configuring the L2 to match the simulation, verifying the mount with `tools/l2_mount_check.py`,
+and comparing sim with real. The quick bench test:
+
+Connect the L2 to the computer's Ethernet port. The L2 ships in Ethernet mode, at
+192.168.1.62. The computer needs 192.168.1.2 on that port; see "Ethernet setup" in the
+[mecanum_lidar README](src/mecanum_lidar/README.md), which also covers USB-UART
+(`connection:=serial`).
 
 ```bash
 ros2 launch mecanum_lidar l2.launch.py                       # driver + RViz, L2 on a desk

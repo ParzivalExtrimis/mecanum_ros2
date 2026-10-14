@@ -5,6 +5,7 @@ Top-level launch files and RViz configurations for the mecanum base.
 | Launch file | Phase | Starts |
 |---|---|---|
 | `robot.launch.py` | 2, 3 | Simulation or hardware base, the drive node and L2 perception |
+| `hardware_sensors.launch.py` | 3, H | Real L2: driver, URDF TF, self-filter, scan and the sensors RViz view. No drive node. |
 | `mapping.launch.py` | 6, planned | Robot, LIO and slam_toolbox mapping |
 | `navigation.launch.py` | 7, planned | Robot, LIO, localization and Nav2 |
 | `mission.launch.py` | 8, planned | Navigation plus docking and the mission executive |
@@ -46,3 +47,24 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard
 
 Until LIO runs in phase 4, there is no `odom` frame. RViz uses `base_footprint` as its fixed
 frame, so the robot's motion is only visible in Gazebo.
+
+## `hardware_sensors.launch.py`
+
+This launch shows the real L2 the way `robot.launch.py rviz:=true` shows the simulated one. It
+starts:
+- the L2 driver from `mecanum_lidar`;
+- robot_state_publisher and joint_state_publisher, for the URDF TF including the mast;
+- the self-filter and the cloud-to-scan conversion;
+- RViz with `rviz/sensors.rviz`, showing the robot model, the raw and filtered clouds and `/scan`.
+
+It does not start the drive node, so the robot does not move.
+
+```bash
+ros2 launch mecanum_bringup hardware_sensors.launch.py                                 # Ethernet (default)
+ros2 launch mecanum_bringup hardware_sensors.launch.py connection:=serial serial_port:=/dev/ttyACM0  # USB-UART
+```
+
+Arguments: `connection`, `serial_port`, `lidar_ip`, `local_ip`, `params_file` (driver config,
+default `mecanum_lidar/config/l2.yaml`), `rviz` and `rviz_config`.
+
+Only one L2 driver can own the serial port. Stop any other `l2.launch.py` first.

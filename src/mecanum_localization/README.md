@@ -40,10 +40,27 @@ This one node is the place to swap in a URDF-based self-filter once the arm is m
 - **Band.** Points between 0.10 and 0.50 m above the floor, a stand-in, become a 360° scan in
   `base_footprint` at 0.5° resolution.
 - **Rear coverage is limited.** In its own frame the L2 sees the hemisphere on its dome side.
-  Tilted 30° forward, it sees well ahead and to the sides. Behind the robot it only sees below
-  about 30° under the horizontal, or 24° in wide mode. Rear obstacles therefore enter the scan
-  band only between about 0.75 and 1.4 m behind the L2. Phase 7 accounts for this in the rear
-  safety design.
+  Tilted 30° forward, a point at horizontal distance r and azimuth φ from the L2 (φ = 0 ahead)
+  is in view only if its height z satisfies:
+  ```
+  z ≤ 0.93 + r · tan(30°) · cos φ
+  ```
+  Ahead, it sees up to 30° above the horizontal. To the sides, it sees everything up to its own
+  height of 0.93 m. Toward the rear, the limit drops with distance, so **low, near objects are
+  visible and tall or far ones are not**. Straight back, the floor leaves the view about 1.6 m
+  from the L2; at 45° rear-left or rear-right, about 2.3 m.
+- **Pole shadow.** The pole stands 66 mm behind the L2. It blocks a sector about **60° wide
+  straight back**, roughly 150° to 210° azimuth around the L2. Nothing there is ever visible.
+- **Measured in sim with a 0.3 m box at 45° rear-right:**
+
+  | Distance from the L2 | Result |
+  |---|---|
+  | 1.0 m | Fully visible and in `/scan` |
+  | 2.0 m | Lowest 0.21 m visible; in `/scan` |
+  | 2.6 m | Invisible |
+  | 1.0 m straight back | Invisible, because of the pole shadow |
+
+  Phase 7 accounts for this in its rear safety design.
 
 ## Usage
 

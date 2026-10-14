@@ -15,7 +15,7 @@
 """
 Run the Unitree L2 driver, optionally with the robot model and RViz.
 
-Connects over USB serial (serial_port, default /dev/ttyACM0); connection:=udp for Ethernet.
+Connects over Ethernet/UDP by default (factory addresses); connection:=serial for USB-UART.
 
 Bench test (L2 on a desk, default):     ros2 launch mecanum_lidar l2.launch.py
 Mounted on the robot, check mount pose: ros2 launch mecanum_lidar l2.launch.py \
@@ -48,8 +48,8 @@ def generate_launch_description():
         value_type=str)
 
     return LaunchDescription([
-        DeclareLaunchArgument('connection', default_value='serial',
-                              description='serial (USB, default) or udp (Ethernet)'),
+        DeclareLaunchArgument('connection', default_value='udp',
+                              description='udp (Ethernet, default) or serial (USB-UART)'),
         DeclareLaunchArgument('lidar_ip', default_value='192.168.1.62',
                               description='L2 address (udp)'),
         DeclareLaunchArgument('local_ip', default_value='192.168.1.2',

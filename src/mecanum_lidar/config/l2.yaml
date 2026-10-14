@@ -1,7 +1,7 @@
 # Unitree L2 driver (mecanum_lidar/l2_driver).
 #
 # The connection settings (connection, lidar_ip, local_ip, serial_port) are launch arguments of
-# l2.launch.py, so they are not repeated here. The default connection is serial (USB).
+# l2.launch.py, so they are not repeated here. The default connection is udp (Ethernet).
 l2_driver:
   ros__parameters:
     # UDP ports, factory defaults. The L2 sends from lidar_ip:lidar_port to local_ip:local_port.

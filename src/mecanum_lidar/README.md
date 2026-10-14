@@ -4,7 +4,7 @@ Driver for the Unitree L2 4D LiDAR, a bench-test launch file and an RViz configu
 
 The driver `l2_driver` is a small C++ node built on Unitree's SDK
 ([third_party/unilidar_sdk2](third_party/unilidar_sdk2/README.md), vendored, BSD-3). It reads
-the L2 over USB serial (the default here) or Ethernet (UDP), and publishes:
+the L2 over Ethernet (UDP, the default here) or USB serial, and publishes:
 
 | Topic | Type | Frame | Content |
 |---|---|---|---|
@@ -36,7 +36,7 @@ The SDK has a bug of its own. `closeUDP()` recurses forever in `~UDPHandler` and
 seen under gdb. The driver therefore never calls the close functions, and lets process exit
 close the socket.
 
-## USB serial setup (default)
+## USB serial setup (optional)
 
 Connect the L2's UART plug to the computer with a USB-to-UART adapter that supports
 **4,000,000 baud**. Many cheap adapters top out lower. The adapter normally appears as
@@ -57,9 +57,12 @@ If the status shows "Receiving data from the L2" before you even write the mode,
 already in serial mode. To go back to Ethernet later, run the same command with
 `work_mode:=0`, then power-cycle.
 
-## Ethernet setup (optional)
+## Ethernet setup (default)
 
-Use this only with `connection:=udp`.
+Ethernet is the default (`connection:=udp`). On the AMD Renoir/Cezanne dev laptop, sustained
+4 Mbaud USB-serial traffic made the USB host controller crash ("xHCI host controller not
+responding, assume dead"), taking every USB-A port down until reboot. Ethernet avoids USB
+entirely and is the L2's native interface.
 
 
 Factory settings: the L2 is `192.168.1.62` and sends UDP from port 6101 to
@@ -68,35 +71,46 @@ into. The SDK listens on port 6201 on every interface, so a wrong address does n
 startup. It shows up as the driver's "No data from the L2" warning.
 
 With NetworkManager, find your Ethernet interface with `ip -br link`. It is the `enp…` or
-`eth…` entry, and differs between machines. Set `IFACE` to it:
+`eth…` entry, and differs between machines. Set `IFACE` to it.
+
+The profile uses **host routes (/32)** instead of a /24 subnet. It gives the computer only
+192.168.1.2 on that port, with one route to the L2 at 192.168.1.62. Many home and office
+networks, including Wi-Fi, also use 192.168.1.0/24. A /24 on the Ethernet port would clash with
+them. The /32 routes are more specific, so traffic to the L2 goes over the cable and everything
+else stays on Wi-Fi. The L2 keeps its factory addresses.
 
 ```bash
 IFACE=enp2s0   # replace with yours
-nmcli connection add type ethernet ifname "$IFACE" con-name unitree-l2 \
-  ipv4.method manual ipv4.addresses 192.168.1.2/24 ipv6.method disabled
-nmcli connection up unitree-l2
+nmcli connection add type ethernet ifname "$IFACE" con-name unitree-l2-eth \
+  ipv4.method manual ipv4.addresses 192.168.1.2/32 ipv4.routes "192.168.1.62/32" \
+  ipv4.never-default yes ipv6.method disabled connection.autoconnect yes \
+  connection.autoconnect-priority 10
 ```
 
-The profile activates only when the port has a link. If `ip -br link` shows the port as
-`NO-CARRIER`, the L2 is unplugged, unpowered or still booting. Once the link is up, run
-`nmcli connection up unitree-l2` explicitly. Otherwise a DHCP profile such as
-`Wired connection 1` may claim the port first.
+The profile activates on its own when the port gets a link. If `ip -br link` shows the port as
+`NO-CARRIER`, the L2 is unplugged, unpowered or still booting. Check the link and the route with:
 
-If another interface, such as Wi-Fi, is already on `192.168.1.0/24`, the two routes clash. Give
-the L2 link its own subnet instead. Change the L2's address with the `set_ip_address` example
-from upstream unilidar_sdk2 (not vendored here), then pass `lidar_ip:=` and `local_ip:=`.
+```bash
+ip -br addr show "$IFACE"            # 192.168.1.2/32
+ip route get 192.168.1.62            # ... dev enp2s0 src 192.168.1.2
+ping -c 3 192.168.1.62
+```
+
+If 192.168.1.2 or .62 is already used by a device on your Wi-Fi network, that device becomes
+unreachable from this computer while the profile is up. In that case, move the L2 to its own
+subnet with the `set_ip_address` example from upstream unilidar_sdk2 (not vendored here), then
+pass `lidar_ip:=` and `local_ip:=`.
 
 To see whether packets arrive at all, run `sudo tcpdump -ni "$IFACE" udp port 6201`.
 
 ## Bench test
 
-The L2 sits on a desk, powered and connected over USB serial.
+The L2 sits on a desk, powered and connected over Ethernet (or USB serial with `connection:=serial`).
 
 ```bash
 source install/setup.bash
-ros2 launch mecanum_lidar l2.launch.py                           # /dev/ttyACM0
-ros2 launch mecanum_lidar l2.launch.py serial_port:=/dev/ttyUSB0  # other adapters
-ros2 launch mecanum_lidar l2.launch.py connection:=udp            # Ethernet instead
+ros2 launch mecanum_lidar l2.launch.py                                               # Ethernet
+ros2 launch mecanum_lidar l2.launch.py connection:=serial serial_port:=/dev/ttyACM0  # USB-UART
 ```
 
 RViz opens with the fixed frame `l2_lidar`. The cloud is coloured by height, with 1 s decay so
@@ -116,6 +130,11 @@ the room fills in. What to check:
 4. **Cover dirt** should stay near 0 %. A high value means the dome needs cleaning.
 
 You can also check the rates with `ros2 topic hz /l2/points` and `ros2 topic hz /l2/imu`.
+
+For the full hardware procedure, see
+[docs/hardware_l2_test.md](../../docs/hardware_l2_test.md). It covers setting the work mode,
+`cloud_scan_num` and ranges to match the simulation, verifying the mount with
+`tools/l2_mount_check.py`, and the sim-against-real comparison.
 
 ### Mounted on the robot
 
