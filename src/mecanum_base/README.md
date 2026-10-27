@@ -43,17 +43,16 @@ RL = (vx + vy - (lx+ly) wz) / r      RR = (vx - vy + (lx+ly) wz) / r
 
 `mecanum_base/kinematics.py` is pure Python and has unit tests.
 
-The geometry defaults come from `mecanum_description`. `test/test_urdf_defaults.py`
-checks them against the URDF:
+The geometry (`wheel_radius`, `lx`, `ly`) comes from `mecanum_description` and is set in
+`config/esp32_driver.yaml`. The node has no built-in defaults for it. `test/test_urdf_defaults.py`
+checks the YAML against the URDF.
 
-| Parameter | Value |
-|---|---|
-| `wheel_radius` | 0.05 m |
-| `lx` | 0.2255 m |
-| `ly` | 0.207 m |
+> **REWRITE (branch `feature/model-v2`):** the previous model's geometry was removed from the
+> YAML, so the driver refuses to start until the new URDF exists and the three values are set
+> from it. `test_urdf_defaults.py` is skipped until then. See the root `REWRITE.md`.
 
-The wheel centres sit 9.5 mm behind `base_link`. The formulas rotate about the wheel
-centre, and the offset is ignored for open-loop control.
+The formulas rotate about the centre of the wheel group. If the wheel centres are offset from
+`base_link`, the offset is ignored for open-loop control.
 
 ## Wheel calibration model
 
@@ -80,7 +79,7 @@ condition, so re-run it when those change.
 | `motor_commands_topic` | `/esp32/motor_commands` | Output topic of the `sim` transport |
 | `rate_hz` | `20.0` | Fixed send rate |
 | `cmd_timeout` | `0.25` | Seconds without cmd_vel before zeros are sent |
-| `wheel_radius`, `lx`, `ly` | URDF values | Geometry |
+| `wheel_radius`, `lx`, `ly` | none, required | Geometry, from the URDF |
 | `max_vx`, `max_vy`, `max_wz` | `0.3`, `0.3`, `0.8` | Stand-in velocity limits |
 | `wheels.<wheel>.{motor_id, sign, scale, deadband, max_value}` | see YAML | Calibration |
 

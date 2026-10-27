@@ -26,7 +26,11 @@ link axes (``--axes``, e.g. ``y,-x,z`` means link x = CAD y, link y = -CAD x, li
 recomputed. The output is binary STL with a header starting ``ROS-converted:``; files that
 already carry it are refused, so a converted file is never transformed twice.
 
-L2 mast (mecanum_description/urdf/sensors/unitree_l2.xacro), exported from Shapr3D in mm.
+REWRITE: the example below and ``--report-l2`` are for the previous model's L2 mast, whose
+meshes were removed on branch feature/model-v2 (see REWRITE.md). The converter itself is
+generic; work out ``--origin`` and ``--axes`` for each new CAD export.
+
+L2 mast (previous model), exported from Shapr3D in mm.
 Link frame "l2_mast": origin at the centre of the pole's bottom face, x along the bracket
 overhang (away from the pole), z up::
 

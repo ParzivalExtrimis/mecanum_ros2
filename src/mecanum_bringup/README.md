@@ -60,7 +60,7 @@ are off. On hardware, use `hardware_sensors.launch.py lio:=true`, which loads
 This launch shows the real L2 the way `robot.launch.py rviz:=true` shows the simulated one. It
 starts:
 - the L2 driver from `mecanum_lidar`;
-- robot_state_publisher and joint_state_publisher, for the URDF TF including the mast;
+- robot_state_publisher and joint_state_publisher, for the URDF TF including the L2 mount;
 - the self-filter and the cloud-to-scan conversion;
 - RViz with `rviz/sensors.rviz`, showing the robot model, the raw and filtered clouds and `/scan`.
 

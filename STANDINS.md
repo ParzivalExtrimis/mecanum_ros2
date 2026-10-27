@@ -9,7 +9,6 @@ here once the real value is known.
 
 | File | Parameter | Placeholder | How to obtain the real value |
 |---|---|---|---|
-| `src/mecanum_description/urdf/sensors/unitree_l2.xacro` | `l2_mast_mass` | `0.9` kg for the pole plus bracket, assuming a 2 mm wall aluminium tube | Weigh the pole and bracket assembly without the L2. It only affects simulation dynamics. |
 | `src/mecanum_base/config/esp32_driver.yaml` | `max_vx`, `max_vy`, `max_wz` | `0.3` m/s, `0.3` m/s, `0.8` rad/s | Raise them step by step during hardware tests while stopping, tracking and LIO quality stay good. |
 | `src/mecanum_base/config/wheel_calibration.yaml` | `wheels.<wheel>.motor_id` | `0`, `1`, `2`, `3` for FL, FR, RL, RR | Take them from the rewritten firmware. Otherwise run `motion_test` on blocks and note which wheel each ID drives. |
 | `src/mecanum_base/config/wheel_calibration.yaml` | `wheels.<wheel>.sign` | `1` | Run `motion_test`. Flip the sign of any wheel that turns backward on the forward step. |
@@ -27,31 +26,15 @@ here once the real value is known.
 | `src/mecanum_simulation/urdf/mecanum.gazebo.xacro` | L2 IMU rate | 250 Hz | Read the IMU rate from the `mecanum_lidar` status line. |
 | `src/mecanum_simulation/urdf/mecanum.gazebo.xacro` | L2 IMU noise | σ 0.002 rad/s gyro, σ 0.02 m/s² accelerometer | Record the IMU at rest for a few minutes and take the standard deviations. |
 | `src/mecanum_simulation/worlds/restroom.sdf` | Ceiling height | 2.4 m | Use the real site's ceiling height. |
-| `src/mecanum_localization/config/self_filter.yaml` | Self-filter box margins | x ±0.33 m, y ±0.27 m: 2.75 cm and 2.3 cm beyond the chassis and wheels | Record a cloud on the real robot and check for self-hits outside the box, or for nearby obstacles wrongly removed. |
 | `src/mecanum_localization/config/cloud_to_scan.yaml` | `min_height`, `max_height` | 0.10 m, 0.50 m | Tune on the real site, for example for low fixtures and the toilet bowl height. |
 | `src/mecanum_localization/config/rko_lio.yaml` | `min_range`, `max_range`, `voxel_size` | 0.3 m, 30 m, 0.25 m: indoor guesses | Tune in phase 4H on the real robot: loop drift, corridor and static drift. |
 | `src/mecanum_localization/mecanum_localization/lio_odom_adapter.py` | `pose_covariance_diagonal`, `twist_covariance_diagonal` | x, y 0.0025 m²; yaw 0.0012 rad²; vx, vy, wz 0.0025 | Set from the drift measured in phase 4H. They matter once an EKF or AMCL uses them. |
 | `src/mecanum_localization/mecanum_localization/gt_compare.py` | `max_drift_percent`, `max_yaw_error_deg` | 1% of the path, 2° | The phase 4 targets from `docs/plan.md`. Replace them with what docking and navigation actually need. |
 
-## Provisional design choices
+## Removed with the previous robot model
 
-These values are decided, not unknown, but they may still change. Each is set in one place.
-
-| Choice | Current value | Set by | If it changes |
-|---|---|---|---|
-| L2 cable outlet direction on the bracket | 22.9° clockwise seen from above, from pointing straight at the pole, so toward the rear-left. Measured on the actual mount. The L2's +X points forward-right. | xacro arg `l2_bracket_yaw` in `src/mecanum_description/urdf/sensors/unitree_l2.xacro`, default `0.3996804` rad. It is a rotation about the L2's own tilted axis; seen from above it appears as 26.0°. | Set the new default. `0.0` means the cable points straight at the pole, and `3.14159` toward the overhang tip; positive is clockwise from above. Re-mount the real L2 to match. Check any LIO config that hard-codes a lidar or IMU extrinsic; extrinsics should come from TF. Frames, the simulated sensor, the self-filter and the L2 driver follow automatically. |
-| Mast position | Pole at the rear edge, centred, L2 looking forward and down | xacro args `l2_mast_x`, `l2_mast_y`, `l2_mast_z`, `l2_mast_yaw` | Pole at the front is `l2_mast_x:=0.2875 l2_mast_yaw:=3.14159`. Re-check the self-filter and the footprint. |
-
-## Existing description values of uncertain accuracy
-
-These values are in `mecanum_description/urdf/mecanum_params.xacro`, where each carries a
-`STAND-IN` comment. Per the owner, they combine CAD values and measured approximations.
-Kinematics, footprint and simulation all derive from them.
-
-| File | Parameter | Current value | How to obtain the real value |
-|---|---|---|---|
-| `src/mecanum_description/urdf/mecanum_params.xacro` | `wheel_radius` | `0.05` m | Roll the robot through ten wheel revolutions on the floor and divide the distance by 20π. Measure under load, because rollers compress. |
-| `src/mecanum_description/urdf/mecanum_params.xacro` | `front_axle_x`, `rear_axle_x` | `0.216`, `-0.235` m | Measure the axle centres relative to the chassis centre. Their difference is the wheelbase, and half of it is `lx` in the kinematics. |
-| `src/mecanum_description/urdf/mecanum_params.xacro` | `track_width` | `0.414` m | Measure between the left and right wheel mid-planes. Half of it is `ly` in the kinematics. |
-| `src/mecanum_description/urdf/mecanum_params.xacro` | `chassis_length`, `chassis_width`, `chassis_height` | `0.605`, `0.394`, `0.064` m | Measure the base plate. These values set the footprint and the self-filter box. |
-| `src/mecanum_description/urdf/mecanum_params.xacro` | `chassis_mass`, `wheel_mass` | `5.0`, `0.3` kg | Weigh the assembled base without wheels, then weigh one wheel with its motor mount. These values only affect simulation dynamics. |
+On branch `feature/model-v2` the robot model is being replaced. The previous model's stand-ins
+and provisional design choices were removed with its geometry: the description dimensions and
+masses, the L2 mast mass, the mast position, the L2 cable direction and the self-filter box
+margins. They are listed, with how each was to be measured, in [`REWRITE.md`](REWRITE.md). Add
+new rows here for the new model's uncertain values when its URDF is written.

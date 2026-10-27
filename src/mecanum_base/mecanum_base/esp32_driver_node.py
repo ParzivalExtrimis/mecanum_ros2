@@ -33,15 +33,18 @@ from mecanum_base.transport import make_transport, TRANSPORTS
 from mecanum_base.wheel_calibration import WheelCalibration
 from mecanum_interfaces.msg import WheelCommands
 import rclpy
+from rclpy.exceptions import ParameterUninitializedException
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 from rclpy.signals import SignalHandlerOptions
 
-# Defaults derived from mecanum_description/urdf/mecanum_params.xacro. config/esp32_driver.yaml
-# repeats them; test/test_urdf_defaults.py checks both against the URDF.
-DEFAULT_WHEEL_RADIUS = 0.05   # wheel_radius
-DEFAULT_LX = 0.2255           # (front_axle_x - rear_axle_x) / 2 = (0.216 + 0.235) / 2
-DEFAULT_LY = 0.207            # track_width / 2 = 0.414 / 2
+# Geometry from mecanum_description/urdf/mecanum_params.xacro. There are no code defaults:
+# config/esp32_driver.yaml must set all three, and test/test_urdf_defaults.py checks it against
+# the URDF.
+# REWRITE: the previous model's defaults were removed (see REWRITE.md); set the YAML values from
+# the new URDF.
+GEOMETRY_PARAMETERS = ('wheel_radius', 'lx', 'ly')
 
 
 class Esp32DriverNode(Node):
@@ -55,9 +58,8 @@ class Esp32DriverNode(Node):
         self.declare_parameter('motor_commands_topic', '/esp32/motor_commands')
         self.declare_parameter('rate_hz', 20.0)
         self.declare_parameter('cmd_timeout', 0.25)
-        self.declare_parameter('wheel_radius', DEFAULT_WHEEL_RADIUS)
-        self.declare_parameter('lx', DEFAULT_LX)
-        self.declare_parameter('ly', DEFAULT_LY)
+        for name in GEOMETRY_PARAMETERS:
+            self.declare_parameter(name, Parameter.Type.DOUBLE)
         self.declare_parameter('max_vx', 0.3)
         self.declare_parameter('max_vy', 0.3)
         self.declare_parameter('max_wz', 0.8)
@@ -77,6 +79,11 @@ class Esp32DriverNode(Node):
                 deadband=self._float(prefix + 'deadband'),
                 max_value=self._float(prefix + 'max_value'))
 
+        missing = [name for name in GEOMETRY_PARAMETERS if not self._is_set(name)]
+        if missing:
+            raise ValueError(
+                f'geometry parameters not set: {", ".join(missing)}. Set them in '
+                'config/esp32_driver.yaml from the robot URDF (see REWRITE.md).')
         geometry = MecanumGeometry(
             lx=self._float('lx'), ly=self._float('ly'),
             wheel_radius=self._float('wheel_radius'))
@@ -114,6 +121,13 @@ class Esp32DriverNode(Node):
             f'cmd_timeout={self._core.cmd_timeout:.2f} s, lx={geometry.lx:.4f} '
             f'ly={geometry.ly:.4f} r={geometry.wheel_radius:.4f}, limits=({limits.max_vx}, '
             f'{limits.max_vy}, {limits.max_wz})')
+
+    def _is_set(self, name):
+        try:
+            self.get_parameter(name)
+        except ParameterUninitializedException:
+            return False
+        return True
 
     def _float(self, name):
         return float(self.get_parameter(name).value)

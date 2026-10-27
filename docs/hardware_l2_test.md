@@ -1,5 +1,9 @@
 # Unitree L2 on hardware: configuration, mount verification and sim comparison
 
+> **REWRITE (branch `feature/model-v2`):** the mount verification, measurement table and
+> visibility model below describe the previous L2 mast, which was removed with the old
+> model. Rewrite them for the new mount. See [`REWRITE.md`](../REWRITE.md).
+
 > **Paused (2026-10-16).** Hardware work resumes after the sim track; see
 > [`hardware_transition.md`](hardware_transition.md) for this stage's status, dependencies and
 > confidence. Re-read its section 2 (contracts) and the stage's "Depends on" before running this

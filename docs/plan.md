@@ -1,5 +1,10 @@
 # Development plan: the sim track
 
+> **REWRITE (branch `feature/model-v2`):** the robot model is being replaced. Geometry
+> quoted here (the 810 mm mast, the 0.93 m L2 height, the pole shadow, the Nav2 footprint
+> ±0.3025 × ±0.247 m, the 0.954 m robot height) belongs to the previous model. See
+> [`REWRITE.md`](../REWRITE.md).
+
 This plan covers development in simulation only. Keep this file in step with the work.
 
 Hardware work is planned separately, in [`hardware_transition.md`](hardware_transition.md). It

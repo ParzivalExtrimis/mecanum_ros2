@@ -12,16 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Check that the driver's geometry defaults match the robot description (URDF)."""
+"""Check that the driver's geometry in config/esp32_driver.yaml matches the URDF."""
 
 import os
 import xml.etree.ElementTree as ET
 
 from ament_index_python.packages import get_package_share_directory
-from mecanum_base import esp32_driver_node
 import pytest
 import xacro
 import yaml
+
+# REWRITE: the URDF is a frame skeleton and esp32_driver.yaml has no geometry until the new
+# model is written (see REWRITE.md). Remove this skip once both carry the new values. If the new
+# wheel collision is not a cylinder, change the radius lookup in urdf_geometry().
+pytestmark = pytest.mark.skip(
+    reason='robot model is being rewritten (REWRITE.md): no wheel geometry in the URDF yet')
 
 CONFIG = os.path.join(os.path.dirname(__file__), '..', 'config', 'esp32_driver.yaml')
 
@@ -53,10 +58,3 @@ def test_yaml_geometry_matches_urdf(urdf_geometry):
         params = yaml.safe_load(f)['esp32_driver']['ros__parameters']
     for key, value in urdf_geometry.items():
         assert params[key] == pytest.approx(value, abs=1e-6), key
-
-
-def test_code_defaults_match_urdf(urdf_geometry):
-    assert esp32_driver_node.DEFAULT_WHEEL_RADIUS == pytest.approx(
-        urdf_geometry['wheel_radius'], abs=1e-6)
-    assert esp32_driver_node.DEFAULT_LX == pytest.approx(urdf_geometry['lx'], abs=1e-6)
-    assert esp32_driver_node.DEFAULT_LY == pytest.approx(urdf_geometry['ly'], abs=1e-6)

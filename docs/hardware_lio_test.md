@@ -1,5 +1,9 @@
 # LIO on hardware: the robot pushed by hand (phase 4H)
 
+> **REWRITE (branch `feature/model-v2`):** this procedure assumes the previous model (L2 on
+> the rear mast, self-filter box of the old chassis, the chassis plate front edge as the
+> measuring point). Re-check it for the new model. See [`REWRITE.md`](../REWRITE.md).
+
 > **Paused (2026-10-16).** Hardware work resumes after the sim track; see
 > [`hardware_transition.md`](hardware_transition.md) for this stage's status, dependencies and
 > confidence. Re-read its section 2 (contracts) and the stage's "Depends on" before running this

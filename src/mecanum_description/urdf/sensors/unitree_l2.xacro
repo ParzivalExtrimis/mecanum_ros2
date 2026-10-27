@@ -1,67 +1,27 @@
 <?xml version="1.0"?>
 <!--
-  Unitree L2 4D LiDAR on its mast: mast link, mount link, lidar frame and IMU frame.
+  Unitree L2 4D LiDAR: mount link, lidar frame and IMU frame.
 
   Included from mecanum.urdf.xacro when use_l2 is true (the default).
 
-  Mechanical design (CAD, Shapr3D; reference: refs/mecanum_ros2_lidar_placement.jpeg):
-    - An 810 mm pole (70 x 30 mm section) stands on the chassis plate, flush with its rear
-      edge, centred left-right.
-    - On top, a bracket plate tilted 30 deg overhangs forward. The L2 hangs inverted under it:
-      its bottom mounting face is against the plate, its dome points down and 30 deg forward,
-      so it sees the floor ahead of the robot.
-    - The L2's cable exits 22.9 deg clockwise (seen from above) from pointing straight at the
-      pole, i.e. toward the rear-left; see l2_bracket_yaw.
-    Meshes: meshes/visual/810mmL2stand.stl (pole) and meshes/visual/L2lidar30degree.stl (bracket +
-    L2 body), converted from mm to m into the l2_mast frame by tools/cad_stl_to_ros.py.
+  REWRITE: the previous mast was removed for the new model (see REWRITE.md): the l2_mast link
+  and joint, the pole and bracket meshes, the mast pose args (l2_mast_x/y/z/yaw), the CAD face
+  offset (l2_face_x/y/z), the 30 deg bracket tilt, the cable direction (l2_bracket_yaw) and the
+  mast mass. Only vendor facts of the L2 itself are kept below. Add the new mount's links, meshes
+  and pose when the new geometry is written.
 
   Frames (all fixed joints, published by robot_state_publisher):
-    base_link -> l2_mast    origin at the centre of the pole's bottom face, x along the
-                            overhang (forward), z up. Carries the pole + bracket meshes.
-    base_link -> l2_mount   centre of the L2's bottom mounting face; z into the dome
-                            (forward-down), x along the bracket away from the pole
-                            (forward-up). Pose = mast pose + CAD offset.
-    l2_mount  -> l2_lidar   vendor point-cloud frame: l2_mount rotated by l2_bracket_yaw
-                            about z (22.9 deg on the actual mount).
-    l2_mount  -> l2_imu     vendor IMU frame: axes parallel to l2_lidar, origin at
-                            (-0.007698, -0.014655, 0.00667) m in l2_lidar.
+    <parent> -> l2_mount   centre of the L2's bottom mounting face, z normal to it into the
+                           sensor (dome). REWRITE: pose on the new mount.
+    l2_mount -> l2_lidar   vendor point-cloud frame. REWRITE: rotation about z that sets the
+                           cable outlet direction on the new mount.
+    l2_lidar -> l2_imu     vendor IMU frame: axes parallel to l2_lidar, origin at
+                           (-0.007698, -0.014655, 0.00667) m in l2_lidar.
   Vendor frame definition (unilidar_sdk2 README): origin at the centre of the bottom mounting
   surface, +X away from the cable outlet, +Z normal to the bottom surface into the sensor.
   The L2 driver (mecanum_lidar) stamps its messages with l2_lidar / l2_imu.
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-
-  <!-- Mast placement on the chassis (design values, see the header). The default puts the
-       pole's 30 mm face flush with the rear plate edge (-0.3025 + 0.015), centred, standing
-       on the plate top 0.040 m above base_link. Pole at the front instead:
-       l2_mast_x:=0.2875 l2_mast_yaw:=3.14159 -->
-  <xacro:arg name="l2_mast_x" default="-0.2875"/>
-  <xacro:arg name="l2_mast_y" default="0.0"/>
-  <xacro:arg name="l2_mast_z" default="0.040"/>
-  <xacro:arg name="l2_mast_yaw" default="0.0"/>
-
-  <!-- Rotation (rad) of the L2 about its own Z on the bracket, from the reference orientation
-       in which the cable outlet points straight at the pole (vendor +X along the overhang).
-       The L2 hangs inverted, so its Z points down: a positive angle looks CLOCKWISE from above.
-       Actual mount: the cable exits 22.9 deg clockwise from above (toward the rear-left), so
-       vendor +X points forward-right: 0.3996804 rad = 22.9 deg. If the cable direction
-       changes, set this and see STANDINS.md "Provisional design choices"
-       (pi = cable toward the overhang tip). -->
-  <xacro:arg name="l2_bracket_yaw" default="0.3996804"/>
-
-  <!-- From the CAD (tools/cad_stl_to_ros.py, report-l2 option), in the l2_mast frame -->
-  <xacro:property name="l2_face_x" value="0.06592"/>
-  <xacro:property name="l2_face_y" value="0.0075"/>
-  <xacro:property name="l2_face_z" value="0.83999"/>
-  <xacro:property name="l2_bracket_tilt" value="${radians(30.0)}"/>
-
-  <!-- Pole section and height, for the mast inertia -->
-  <xacro:property name="l2_pole_x" value="0.030"/>
-  <xacro:property name="l2_pole_y" value="0.070"/>
-  <xacro:property name="l2_pole_height" value="0.810"/>
-  <!-- STAND-IN: mast mass (pole + bracket) is unknown, weigh the assembly; 0.9 kg assumes a
-       2 mm wall aluminium tube plus the bracket plate -->
-  <xacro:property name="l2_mast_mass" value="0.9"/>
 
   <!-- Vendor datasheet values (not stand-ins) -->
   <xacro:property name="l2_body_size" value="0.075"/>
@@ -72,68 +32,17 @@
   <xacro:property name="l2_imu_y" value="-0.014655"/>
   <xacro:property name="l2_imu_z" value="0.00667"/>
 
-  <xacro:property name="l2_pole_mesh" value="${mesh_dir}/810mmL2stand.stl"/>
-  <xacro:property name="l2_bracket_mesh" value="${mesh_dir}/L2lidar30degree.stl"/>
+  <xacro:macro name="unitree_l2" params="prefix parent">
 
-  <xacro:macro name="unitree_l2" params="prefix parent mast_x mast_y mast_z mast_yaw bracket_yaw">
-
-    <!-- L2 face position in the parent frame, and the IMU offset rotated by the bracket yaw -->
-    <xacro:property name="mount_x"
-      value="${mast_x + cos(mast_yaw) * l2_face_x - sin(mast_yaw) * l2_face_y}"/>
-    <xacro:property name="mount_y"
-      value="${mast_y + sin(mast_yaw) * l2_face_x + cos(mast_yaw) * l2_face_y}"/>
-    <xacro:property name="mount_z" value="${mast_z + l2_face_z}"/>
-    <xacro:property name="imu_x"
-      value="${cos(bracket_yaw) * l2_imu_x - sin(bracket_yaw) * l2_imu_y}"/>
-    <xacro:property name="imu_y"
-      value="${sin(bracket_yaw) * l2_imu_x + cos(bracket_yaw) * l2_imu_y}"/>
-
-    <!-- Pole + bracket (+ the L2 body, which is part of the bracket mesh) -->
-    <joint name="${prefix}l2_mast_joint" type="fixed">
-      <parent link="${prefix}${parent}"/>
-      <child link="${prefix}l2_mast"/>
-      <origin xyz="${mast_x} ${mast_y} ${mast_z}" rpy="0 0 ${mast_yaw}"/>
-    </joint>
-
-    <link name="${prefix}l2_mast">
-      <visual>
-        <geometry>
-          <mesh filename="${l2_pole_mesh}"/>
-        </geometry>
-        <material name="grey"/>
-      </visual>
-      <visual>
-        <geometry>
-          <mesh filename="${l2_bracket_mesh}"/>
-        </geometry>
-        <material name="dark_grey"/>
-      </visual>
-      <collision>
-        <geometry>
-          <mesh filename="${l2_pole_mesh}"/>
-        </geometry>
-      </collision>
-      <collision>
-        <geometry>
-          <mesh filename="${l2_bracket_mesh}"/>
-        </geometry>
-      </collision>
-      <xacro:box_inertia mass="${l2_mast_mass}" x="${l2_pole_x}" y="${l2_pole_y}"
-        z="${l2_pole_height}">
-        <origin xyz="0 0 ${l2_pole_height/2}" rpy="0 0 0"/>
-      </xacro:box_inertia>
-    </link>
-
-    <!-- L2 bottom mounting face: mast pose + CAD offset (rotated by the mast yaw).
-         Orientation: inverted (roll pi), then tilted 30 deg so z points forward-down.
-         URDF rpy is Rz(yaw) Ry(pitch) Rx(roll), so the mast yaw is simply the yaw term. -->
     <joint name="${prefix}l2_mount_joint" type="fixed">
       <parent link="${prefix}${parent}"/>
       <child link="${prefix}l2_mount"/>
-      <origin xyz="${mount_x} ${mount_y} ${mount_z}" rpy="${pi} ${-l2_bracket_tilt} ${mast_yaw}"/>
+      <!-- REWRITE: origin removed. Set the L2's bottom mounting face pose on the new mount
+           (position, tilt, z into the dome). -->
     </joint>
 
-    <!-- Sensor mass only; the body geometry is in the bracket mesh of l2_mast -->
+    <!-- Sensor mass only. REWRITE: add the L2 body visual/collision, unless the new mount's
+         meshes already contain it. -->
     <link name="${prefix}l2_mount">
       <xacro:box_inertia mass="${l2_mass}" x="${l2_body_size}" y="${l2_body_size}"
         z="${l2_body_height}">
@@ -145,22 +54,22 @@
     <joint name="${prefix}l2_lidar_joint" type="fixed">
       <parent link="${prefix}l2_mount"/>
       <child link="${prefix}l2_lidar"/>
-      <origin xyz="0 0 0" rpy="0 0 ${bracket_yaw}"/>
+      <!-- REWRITE: rotation removed. Rotate about z so vendor +X points away from the cable
+           outlet as mounted on the new robot. -->
     </joint>
     <link name="${prefix}l2_lidar"/>
 
-    <!-- Built-in 6-axis IMU frame: vendor offset, expressed in l2_mount -->
+    <!-- Built-in 6-axis IMU frame: vendor offset in the lidar frame -->
     <joint name="${prefix}l2_imu_joint" type="fixed">
-      <parent link="${prefix}l2_mount"/>
+      <parent link="${prefix}l2_lidar"/>
       <child link="${prefix}l2_imu"/>
-      <origin xyz="${imu_x} ${imu_y} ${l2_imu_z}" rpy="0 0 ${bracket_yaw}"/>
+      <origin xyz="${l2_imu_x} ${l2_imu_y} ${l2_imu_z}" rpy="0 0 0"/>
     </joint>
     <link name="${prefix}l2_imu"/>
 
   </xacro:macro>
 
-  <xacro:unitree_l2 prefix="$(arg prefix)" parent="base_link"
-    mast_x="$(arg l2_mast_x)" mast_y="$(arg l2_mast_y)" mast_z="$(arg l2_mast_z)"
-    mast_yaw="$(arg l2_mast_yaw)" bracket_yaw="$(arg l2_bracket_yaw)"/>
+  <!-- REWRITE: parent is base_link until the new mount's links exist -->
+  <xacro:unitree_l2 prefix="$(arg prefix)" parent="base_link"/>
 
 </robot>

@@ -1,37 +1,40 @@
 # mecanum_description
 
-URDF/xacro description of the 4-wheel mecanum base and its Unitree L2 lidar mast, with meshes and
-a display launch file. Every other package takes its frames, dimensions and sensor poses from
+URDF/xacro description of the 4-wheel mecanum base and its Unitree L2 lidar, with meshes and a
+display launch file. Every other package takes its frames, dimensions and sensor poses from
 here.
+
+> **REWRITE (branch `feature/model-v2`):** the previous model's meshes, dimensions, masses and
+> L2 mast were removed for the new model. The URDF is a frame skeleton: the link and joint names
+> and the tree are kept, but there are no meshes, poses, sizes or masses, apart from the L2's
+> vendor values. What was removed, and what must change once the new meshes and URDF exist, is
+> listed in the root [`REWRITE.md`](../../REWRITE.md).
 
 ## Files
 
 | Path | Content |
 |---|---|
 | `urdf/mecanum.urdf.xacro` | Top-level file. Includes everything below. |
-| `urdf/mecanum_params.xacro` | Dimensions and masses. Uncertain values are marked `STAND-IN` (also in the root `STANDINS.md`). |
-| `urdf/mecanum_robot.xacro` | `base_footprint`, `base_link` and the chassis |
+| `urdf/mecanum_params.xacro` | Dimensions and masses. Empty until the rewrite; its header lists what the new geometry must provide. |
+| `urdf/mecanum_robot.xacro` | `base_footprint`, `base_link` and the four wheel calls |
 | `urdf/mecanum_wheel.xacro` | Wheel macro: `<name>_wheel_link` with a continuous joint |
-| `urdf/sensors/unitree_l2.xacro` | L2 mast and bracket (CAD meshes), `l2_mount`, `l2_lidar`, `l2_imu` |
+| `urdf/sensors/unitree_l2.xacro` | `l2_mount`, `l2_lidar`, `l2_imu` with the L2's vendor values. The new mount is still to be added. |
 | `urdf/materials.xacro`, `urdf/inertial_macros.xacro` | Helpers |
-| `meshes/visual/` | STL meshes in metres. The mast meshes come from `tools/cad_stl_to_ros.py`. |
+| `meshes/visual/`, `meshes/collision/` | STL meshes in metres. Empty until the new meshes are added. |
 | `launch/display.launch.py`, `rviz/display.rviz` | View the model in RViz |
-| `refs/` | Reference photo of the lidar placement |
 
 ## Frames
 
-`base_footprint` → `base_link` → the four wheel links, `l2_mast` and `l2_mount`;
-`l2_mount` → `l2_lidar` and `l2_imu`. robot_state_publisher publishes all of them; nothing
-else may publish TF below `base_footprint`.
+`base_footprint` → `base_link` → the four wheel links and `l2_mount`; `l2_mount` → `l2_lidar` →
+`l2_imu`. robot_state_publisher publishes all of them; nothing else may publish TF below
+`base_footprint`. In the skeleton every joint has an identity origin, so all frames coincide.
 
 ## Xacro arguments
 
 | Argument | Default | Meaning |
 |---|---|---|
 | `prefix` | `""` | Prefix for every link and joint name |
-| `use_l2` | `true` | Include the L2 mast and sensor frames |
-| `l2_mast_x`, `l2_mast_y`, `l2_mast_z`, `l2_mast_yaw` | `-0.2875`, `0`, `0.040`, `0` | Pole position on the chassis. The default is the rear edge, centred, with the L2 looking forward. |
-| `l2_bracket_yaw` | `0.3996804` | L2 rotation about its own axis on the bracket (22.9°, cable toward the rear-left). See `STANDINS.md` before changing it. |
+| `use_l2` | `true` | Include the L2 sensor frames |
 
 ```bash
 xacro $(ros2 pkg prefix mecanum_description)/share/mecanum_description/urdf/mecanum.urdf.xacro \

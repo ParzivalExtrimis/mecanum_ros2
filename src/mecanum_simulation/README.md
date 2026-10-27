@@ -107,6 +107,9 @@ in three ways:
 
 Measured in the restroom world at spawn:
 
+> **REWRITE (branch `feature/model-v2`):** measured with the previous model and L2 mast. Redo
+> after the new URDF exists. See the root `REWRITE.md`.
+
 | Quantity | Value |
 |---|---|
 | Points on the robot itself | 25% of each raw cloud, removed by the self-filter |
@@ -139,6 +142,9 @@ ros2 launch mecanum_simulation sim.launch.py gui:=false
 ## Measured behaviour (phase 2, ideal plant)
 
 These figures come from the motion test and probes against `/sim/ground_truth/odom`:
+
+> **REWRITE (branch `feature/model-v2`):** measured with the previous model's wheels (cylinder
+> collision, 9.5 mm wheel-centre offset). Redo after the new URDF exists.
 
 | Motion | Result |
 |---|---|

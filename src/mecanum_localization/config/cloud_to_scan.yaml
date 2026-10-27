@@ -5,6 +5,7 @@ cloud_to_scan:
     target_frame: base_footprint
     transform_tolerance: 0.05
     # Height band (above the floor) folded into the scan.
+    # REWRITE: re-check the band against the new L2 mount: the L2 must see it around the robot.
     min_height: 0.10   # STAND-IN: obstacle band assumed 0.10-0.50 m; tune on the real site (low fixtures, toilet bowl height)
     max_height: 0.50   # STAND-IN: as min_height
     angle_min: -3.141592653589793

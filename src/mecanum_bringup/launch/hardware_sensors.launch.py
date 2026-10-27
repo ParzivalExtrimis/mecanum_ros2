@@ -18,7 +18,7 @@ Real Unitree L2 with the same perception and RViz view as the simulation.
 Starts, all on wall-clock time:
   - the L2 driver (mecanum_lidar/l2_driver): /l2/points, /l2/imu
   - robot_state_publisher + joint_state_publisher (zero wheel angles): the URDF TF,
-    including the L2 mast mount
+    including the L2 mount
   - L2 perception (mecanum_localization/perception.launch.py):
     /l2/points -> /l2/points_filtered -> /scan
   - with lio:=true, LIO odometry (mecanum_localization/lio.launch.py) with the hardware config
@@ -103,7 +103,10 @@ def generate_launch_description():
                     + [('robot_model', 'false'), ('rviz', 'false')]),
             ]),
 
-        # URDF TF, including the L2 mast mount. The wheels have no encoders; joint_state_publisher
+        # REWRITE: include the hardware drivers of the new model's additional sensors here, next
+        # to the L2 driver above (see REWRITE.md).
+
+        # URDF TF, including the L2 mount. The wheels have no encoders; joint_state_publisher
         # publishes zero angles so their TF exists.
         Node(
             package='robot_state_publisher',

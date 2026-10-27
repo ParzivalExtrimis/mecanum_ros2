@@ -24,7 +24,8 @@ collects data for --duration seconds and reports:
    base_footprint. A tilted or offset floor means the real mount differs from the URDF. The
    tool reports the L2's real height and tilt, and its roll/pitch error.
 2. IMU gravity: the mean accelerometer reading in l2_imu, against the URDF prediction. It gives
-   the L2's tilt from vertical and its rotation about its own axis (l2_bracket_yaw).
+   the L2's tilt from vertical and its rotation about its own axis (the l2_mount -> l2_lidar
+   yaw).
 3. Wall (optional, --wall-side left|right): with the robot parked parallel to a straight wall,
    the wall's direction gives the heading error of the whole mount, and its offset the
    distance to the wall (compare with a tape measure).
@@ -130,7 +131,8 @@ def gravity_angles(acc):
 
     acc is the mean accelerometer reading (specific force, pointing up) in the sensor frame.
     The spin is the rotation of the sensor about its own +Z axis, measured from the
-    orientation whose +X points uphill. It matches l2_bracket_yaw for the L2 mount.
+    orientation whose +X points uphill. On a mount tilted toward +X, as the previous mast was,
+    it equals the l2_mount -> l2_lidar yaw.
     """
     a = np.asarray(acc, float) / np.linalg.norm(acc)
     tilt = math.degrees(math.acos(max(-1.0, min(1.0, -a[2]))))
@@ -189,6 +191,8 @@ def cloud_xyz(msg):
 
 def load_crop_box():
     """Self-filter box from mecanum_localization's installed config (or None)."""
+    # REWRITE: None until self_filter.yaml has a box for the new model again, so the
+    # on-robot checks below are skipped.
     try:
         from ament_index_python.packages import get_package_share_directory
         import yaml
@@ -225,6 +229,7 @@ def main(argv=None):
                         help='a straight wall parallel to the robot on this side')
     parser.add_argument('--wall-distance', type=float, default=None,
                         help='tape-measured distance (m) from the robot centreline to the wall')
+    # REWRITE: 0.4 m clears the previous robot's footprint; re-check for the new model.
     parser.add_argument('--floor-radius', type=float, nargs=2, default=(0.4, 3.0),
                         help='horizontal range (m) of floor points used for the fit')
     args = parser.parse_args(argv)
@@ -335,13 +340,15 @@ def main(argv=None):
     row('IMU tilt from vertical [deg]', f'{m_tilt:.2f}', f'{e_tilt:.2f}',
         abs(m_tilt - e_tilt) <= 1.0, 'tol 1 deg; includes floor slope')
     row('L2 spin about own axis [deg]', f'{m_spin:+.2f}', f'{e_spin:+.2f}',
-        abs(spin_err) <= 2.0, f'= l2_bracket_yaw; error {spin_err:+.2f}')
+        abs(spin_err) <= 2.0, f'= l2_lidar yaw on the mount; error {spin_err:+.2f}')
 
     # 3. Wall
     if args.wall_side != 'none':
         sign = 1.0 if args.wall_side == 'left' else -1.0
         # Side walls are seen from the floor up to the L2's height (the edge of its field of
         # view runs through the horizontal there); 0.5-0.9 m avoids most furniture.
+        # REWRITE: the band and |y| > 0.35 m fit the previous L2 height (0.93 m) and robot
+        # width; re-check for the new mount.
         band = (pts_b[:, 2] > 0.5) & (pts_b[:, 2] < 0.9) & (pts_b[:, 0] > -1.0) \
             & (pts_b[:, 0] < 2.0) & (sign * pts_b[:, 1] > 0.35) & (sign * pts_b[:, 1] < 4.0)
         if band.sum() < 30:
@@ -374,6 +381,7 @@ def main(argv=None):
         on_robot = float(in_box(pts_b, box).mean())
         near = float((in_box(pts_b, box, grow=0.10) & ~in_box(pts_b, box)
                       & (pts_b[:, 2] > 0.05)).mean())
+        # REWRITE: ~25% was measured with the previous model in sim; re-measure.
         row('points on the robot', f'{on_robot:.1%}', '~25% (sim)', True,
             'removed by the self-filter')
         row('points just outside the box', f'{near:.2%}', '~0', near < 0.005,

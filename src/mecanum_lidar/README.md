@@ -125,9 +125,11 @@ the room fills in. What to check:
    about (0, 0, +9.8) m/s². Raising the +X side (away from the cable) should make the X
    reading positive.
 3. **Frame direction.** The red axis (+X) should point away from the cable outlet. Objects in
-   front of that side should appear along the red axis. The URDF's `l2_bracket_yaw` assumes
-   this convention. On the robot the cable exits 22.9° clockwise seen from above, toward the
-   rear-left, so +X points forward-right.
+   front of that side should appear along the red axis. The URDF's `l2_mount -> l2_lidar`
+   rotation assumes this convention.
+   **REWRITE (branch `feature/model-v2`):** the cable direction of the previous mount (22.9°
+   clockwise from above, `l2_bracket_yaw`) was removed with it. Set the new mount's rotation in
+   `unitree_l2.xacro`; see the root `REWRITE.md`.
 4. **Cover dirt** should stay near 0 %. A high value means the dome needs cleaning.
 
 You can also check the rates with `ros2 topic hz /l2/points` and `ros2 topic hz /l2/imu`.
@@ -145,9 +147,12 @@ ros2 launch mecanum_lidar l2.launch.py robot_model:=true fixed_frame:=base_footp
 
 This also starts robot_state_publisher and joint_state_publisher with the full robot description.
 In RViz, tick **RobotModel**. The floor points should lie on the grid (z = 0) and walls should be
-vertical. If they are not, the mounted L2 does not match the CAD mount in
-`mecanum_description/urdf/sensors/unitree_l2.xacro`. Check the mast position, the bracket tilt
-and the cable direction (`l2_bracket_yaw`, see [STANDINS.md](../../STANDINS.md)).
+vertical. If they are not, the mounted L2 does not match the mount in
+`mecanum_description/urdf/sensors/unitree_l2.xacro`. Check the mount position, its tilt and the
+cable direction.
+
+> **REWRITE (branch `feature/model-v2`):** the URDF has no L2 mount pose until the new model is
+> written, so this check is not meaningful yet. See the root `REWRITE.md`.
 
 Leave `robot_model:=false` when another launch file already publishes the robot description.
 

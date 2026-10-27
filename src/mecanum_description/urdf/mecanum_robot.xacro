@@ -1,5 +1,9 @@
 <?xml version="1.0"?>
 <!-- Robot body: base_footprint, base_link (chassis) and the four wheels. -->
+<!-- REWRITE: frame skeleton only. The previous model's chassis mesh, collision box, inertia,
+     wheel meshes and wheel positions were removed (see REWRITE.md). The link and joint names are
+     kept because other packages use them. Rename them only together with REWRITE.md
+     "Kept, re-check after the rewrite". -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
   <xacro:macro name="mecanum_robot" params="prefix">
@@ -10,39 +14,21 @@
     <joint name="${prefix}base_joint" type="fixed">
       <parent link="${prefix}base_footprint" />
       <child link="${prefix}base_link" />
-      <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0" />
+      <!-- REWRITE: origin removed. Lift base_link to the new wheel axle height (z = wheel
+           radius) so base_footprint stays on the floor. -->
     </joint>
 
     <!-- base_link sits at wheel axle height -->
-    <link name="${prefix}base_link">
-      <visual>
-        <origin xyz="0 0 0" rpy="0 0 0" />
-        <geometry>
-          <mesh filename="${chassis_mesh}" />
-        </geometry>
-        <material name="blue" />
-      </visual>
-      <collision>
-        <origin xyz="0 0 ${chassis_z_offset}" rpy="0 0 0" />
-        <geometry>
-          <box size="${chassis_length} ${chassis_width} ${chassis_height}" />
-        </geometry>
-      </collision>
-      <xacro:box_inertia mass="${chassis_mass}" x="${chassis_length}" y="${chassis_width}"
-        z="${chassis_height}">
-        <origin xyz="0 0 ${chassis_z_offset}" rpy="0 0 0" />
-      </xacro:box_inertia>
-    </link>
+    <!-- REWRITE: visual, collision and inertial removed. Add them from the new chassis meshes
+         (meshes/visual, meshes/collision), including the new geometry meshes. -->
+    <link name="${prefix}base_link" />
 
-    <!-- Wheels: left/right meshes are shared between front and rear -->
-    <xacro:mecanum_wheel prefix="${prefix}" name="front_left" parent="base_link"
-      mesh="${wheel_mesh_left_hand}" x="${front_axle_x}" y="${track_width/2}" />
-    <xacro:mecanum_wheel prefix="${prefix}" name="front_right" parent="base_link"
-      mesh="${wheel_mesh_right_hand}" x="${front_axle_x}" y="${-track_width/2}" />
-    <xacro:mecanum_wheel prefix="${prefix}" name="rear_left" parent="base_link"
-      mesh="${wheel_mesh_left_hand}" x="${rear_axle_x}" y="${track_width/2}" />
-    <xacro:mecanum_wheel prefix="${prefix}" name="rear_right" parent="base_link"
-      mesh="${wheel_mesh_right_hand}" x="${rear_axle_x}" y="${-track_width/2}" />
+    <!-- REWRITE: wheel meshes and positions removed. Pass the new wheel meshes and the wheel
+         centres (front/rear axle x, +-track/2) once mecanum_params.xacro defines them. -->
+    <xacro:mecanum_wheel prefix="${prefix}" name="front_left" parent="base_link" />
+    <xacro:mecanum_wheel prefix="${prefix}" name="front_right" parent="base_link" />
+    <xacro:mecanum_wheel prefix="${prefix}" name="rear_left" parent="base_link" />
+    <xacro:mecanum_wheel prefix="${prefix}" name="rear_right" parent="base_link" />
 
   </xacro:macro>
 

@@ -37,6 +37,9 @@
   gz_type_name: gz.msgs.Odometry
   direction: GZ_TO_ROS
 
+# REWRITE: add bridges for the new model's additional sensors (see REWRITE.md), on the same
+# topics and frames as their hardware drivers.
+
 # Simulated Unitree L2, on the same topics as the real driver (mecanum_lidar).
 # gpu_lidar publishes its packed cloud on <sensor topic>/points; frames come from gz_frame_id.
 - ros_topic_name: /l2/points

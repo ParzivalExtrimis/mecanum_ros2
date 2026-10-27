@@ -31,15 +31,12 @@ never appears in the TF tree. There are no encoders, so wheel commands are never
 
 ## Self-filter: `config/self_filter.yaml`
 
-The L2 hangs inverted under its bracket at the rear, 0.93 m up, tilted 30° forward. It
-therefore sees the chassis plate, the wheels, the mast and the bracket. The filter drops every
-point inside a box in `base_footprint`:
+The L2 sees parts of the robot itself. The filter drops every point inside a box in
+`base_footprint` that covers the whole robot.
 
-| Axis | Range | Basis |
-|---|---|---|
-| x | -0.33 to 0.33 m | Chassis length 0.605 m, plus a stand-in margin |
-| y | -0.27 to 0.27 m | Wheels at y ±0.247 m, plus a stand-in margin |
-| z | -0.05 to 1.00 m | Bracket top at 0.954 m |
+> **REWRITE (branch `feature/model-v2`):** the previous model's box (x ±0.33 m, y ±0.27 m,
+> z -0.05 to 1.00 m) was removed from the YAML. Until the new URDF sets it again, pcl_ros uses
+> its default ±1 m cube. See the root `REWRITE.md`.
 
 The filter transforms the cloud into `base_footprint`, crops it, and publishes it back in
 `l2_lidar`. LIO therefore sees sensor-frame points.
@@ -50,6 +47,10 @@ This one node is the place to swap in a URDF-based self-filter once the arm is m
 
 - **Band.** Points between 0.10 and 0.50 m above the floor, a stand-in, become a 360° scan in
   `base_footprint` at 0.5° resolution.
+> **REWRITE (branch `feature/model-v2`):** the rear-coverage model, the pole shadow and the
+> measurements below describe the previous L2 mast (0.93 m up, tilted 30°, pole behind the L2).
+> Redo them for the new mount.
+
 - **Rear coverage is limited.** In its own frame the L2 sees the hemisphere on its dome side.
   Tilted 30° forward, a point at horizontal distance r and azimuth φ from the L2 (φ = 0 ahead)
   is in view only if its height z satisfies:

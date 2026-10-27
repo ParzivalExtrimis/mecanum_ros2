@@ -23,6 +23,9 @@ the motor transport and the LiDAR driver.
 
 Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
 
+On branch `feature/model-v2` the robot model is being replaced. The previous meshes and
+geometry were removed, and what must be rewritten is listed in [REWRITE.md](REWRITE.md).
+
 ## Platform
 
 | Item | Version |
@@ -59,7 +62,7 @@ Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
 Each link has exactly one publisher.
 
 ```
-map -> odom -> base_footprint -> base_link -> {wheels, l2_mast, l2_mount -> {l2_lidar, l2_imu}}
+map -> odom -> base_footprint -> base_link -> {wheels, l2_mount -> l2_lidar -> l2_imu}
 ```
 
 | Transform | Publisher |
@@ -98,38 +101,22 @@ sudo apt install ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-nav2-sim
 ros2 launch mecanum_description display.launch.py
 ```
 
-The L2 and its mast are included by default. The mast is an 810 mm pole at the rear edge of
-the chassis plate. A bracket on top, tilted 30°, holds the L2 inverted, so it looks forward
-and down. Its axis meets the floor about 0.32 m ahead of the chassis centre. The L2's cable
-exits 22.9° clockwise seen from above, toward the rear-left. The meshes come from the CAD; see
-`src/mecanum_description/refs/mecanum_ros2_lidar_placement.jpeg`, which shows the earlier
-725 mm, 20° version. The L2 lidar frame is 0.93 m above the floor and the bracket top is about
-0.95 m, which is the robot's height for the costmaps.
+> **REWRITE (branch `feature/model-v2`):** the robot model is being replaced. The previous
+> meshes, dimensions and L2 mast (810 mm pole, 30° bracket, cable at 22.9°) were removed, and
+> the URDF is a frame skeleton until the new meshes and geometry are written. Everything removed,
+> and everything that must change afterwards, is listed in [`REWRITE.md`](REWRITE.md).
 
-The URDF can be generated directly with xacro:
+The L2 frames are included by default. The URDF can be generated directly with xacro:
 
 ```bash
 xacro $(ros2 pkg prefix mecanum_description)/share/mecanum_description/urdf/mecanum.urdf.xacro
 xacro .../mecanum.urdf.xacro use_l2:=false                              # bare base
-xacro .../mecanum.urdf.xacro l2_mast_x:=0.2875 l2_mast_yaw:=3.14159     # pole at the front
-xacro .../mecanum.urdf.xacro l2_bracket_yaw:=0.0                        # cable straight at the pole
 ```
 
-`l2_bracket_yaw` defaults to 0.3996804 rad, 22.9°, the actual mount. See `STANDINS.md`.
-
-**Re-exporting the mast from CAD.** The CAD exports are in millimetres, in the CAD assembly
-frame. Convert them in place to metres in the `l2_mast` frame:
-
-```bash
-tools/cad_stl_to_ros.py --origin=-5,-2115,-21 --axes=y,-x,z --scale 0.001 --report-l2 \
-  src/mecanum_description/meshes/visual/810mmL2stand.stl \
-  src/mecanum_description/meshes/visual/L2lidar30degree.stl
-```
-
-The script refuses files it has already converted. If the bracket changes, copy the printed L2
-face centre into `l2_face_x/y/z` and the printed tilt into `l2_bracket_tilt` in
-`unitree_l2.xacro`. The CAD's L2 is a plain block, so the cable direction comes from the
-real mount, not from the export.
+**Converting CAD exports.** CAD exports are usually in millimetres, in the CAD assembly frame.
+`tools/cad_stl_to_ros.py` converts them in place to metres in a link frame, given the CAD point
+that becomes the link origin (`--origin`) and the axis mapping (`--axes`). The script refuses
+files it has already converted.
 
 ### Simulation: drive the base (phase 2)
 
@@ -167,6 +154,9 @@ same as with the real driver:
 ```bash
 ros2 launch mecanum_bringup robot.launch.py rviz:=true   # RViz shows clouds and scan
 ```
+
+> **REWRITE (branch `feature/model-v2`):** this paragraph describes the previous L2 mast. Redo
+> it for the new mount.
 
 The L2 hangs inverted, tilted 30° forward, so it sees well ahead and to the sides. Behind the
 robot it has two limits:

@@ -11,6 +11,9 @@
      gz:expressed_in attribute. (A bare <fdir1> under <gazebo reference> loses the attribute.)
      X-roller layout: front_left and rear_right rollers along (1, -1); front_right and
      rear_left along (1, 1).
+     REWRITE: the fdir values below assume the previous wheels' roller handedness. Check them
+     against the new wheel meshes. The new wheel links need exactly one unnamed collision each,
+     or this friction block no longer merges and the wheels lose their mecanum behaviour.
 
   2. One JointController (velocity mode) per wheel. Its gz topic is the default
      /model/mecanum/joint/<joint>/cmd_vel (gz.msgs.Double, rad/s), bridged from
@@ -67,6 +70,8 @@
        The L2's field of view, in its own frame, is the hemisphere on its +Z (dome) side:
        elevation 0..90 deg in standard mode (factory default, work-mode bit 0 = 0) or
        -6..90 deg in wide mode (bit 0 = 1). -->
+  <!-- The sensor model below is the L2's own and carries over to the new model; its pose
+       follows l2_lidar / l2_imu from the URDF. -->
   <xacro:arg name="sim_l2_wide_fov" default="false"/>
   <xacro:if value="$(arg use_l2)">
   <xacro:property name="sim_l2_min_elevation"
@@ -148,6 +153,9 @@
   </gazebo>
 
   </xacro:if>
+
+  <!-- REWRITE: add Gazebo sensors for the new model's additional sensors here, on their URDF
+       frames, and bridge them in config/gz_bridge.yaml (see REWRITE.md). -->
 
   <gazebo>
     <plugin filename="gz-sim-odometry-publisher-system"

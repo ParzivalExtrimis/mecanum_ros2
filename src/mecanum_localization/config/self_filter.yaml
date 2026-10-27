@@ -1,9 +1,8 @@
 # Robot self-filter (pcl_ros CropBox, negative): removes L2 returns that fall on the robot.
 #
-# The inverted, forward-tilted L2 sees the chassis plate, wheels, mast and bracket. The box is
-# defined in base_footprint (z = 0 on the floor) and covers the whole robot up to the bracket
-# top (0.954 m). Everything inside it is dropped; the cloud is published back in l2_lidar so the
-# LIO sees sensor-frame points.
+# The box is defined in base_footprint (z = 0 on the floor) and must cover the whole robot,
+# including every mount and sensor the L2 can see. Everything inside it is dropped; the cloud is
+# published back in l2_lidar so the LIO sees sensor-frame points.
 #
 # This is the single place to replace with a URDF-based self-filter once the arm is mounted
 # (an arm moves through this box and outside it).
@@ -13,10 +12,13 @@ self_filter:
     output_frame: l2_lidar
     negative: true          # keep points OUTSIDE the box
     keep_organized: false
-    # Footprint: chassis 0.605 x 0.394 m, wheels out to y = +-0.247 m (mecanum_params.xacro).
-    min_x: -0.33   # STAND-IN: margin around the chassis is assumed (2.75 cm); check real self-hits in a cloud recorded on the robot and grow or shrink
-    max_x: 0.33    # STAND-IN: as min_x
-    min_y: -0.27   # STAND-IN: as min_x (2.3 cm beyond the wheels)
-    max_y: 0.27    # STAND-IN: as min_x
-    min_z: -0.05
-    max_z: 1.00    # bracket top is 0.954 m above the floor; 4.6 cm margin
+    # REWRITE: the previous model's box was removed (see REWRITE.md). Until it is set again,
+    # pcl_ros uses its built-in default, a +-1 m cube around base_footprint, which matches no
+    # robot. Set it from the new URDF: the chassis and wheel extent plus a margin, and z from
+    # below the floor to above the highest part of the robot.
+    # min_x:
+    # max_x:
+    # min_y:
+    # max_y:
+    # min_z:
+    # max_z:

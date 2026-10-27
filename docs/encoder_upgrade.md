@@ -1,5 +1,10 @@
 # Encoder upgrade: migrating the drive to ros2_control
 
+> **REWRITE (branch `feature/model-v2`):** the controller numbers below (`wheels_radius`
+> 0.05, `sum_of_robot_center_projection_on_X_Y_axis` 0.4325, the 9.5 mm wheel-centre
+> offset) come from the previous model. Take them from the new URDF. See
+> [`REWRITE.md`](../REWRITE.md).
+
 The current drive is open-loop because the motors have no encoders. See
 [decision 0001](decisions/0001-open-loop-drive-without-ros2-control.md). An upcoming motor and
 ESP32 firmware update adds wheel position encoders and state reporting. Once the ESP32 reports
