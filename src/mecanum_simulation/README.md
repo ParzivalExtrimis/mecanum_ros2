@@ -72,6 +72,21 @@ A 2.4 m ceiling is a separate model, `ceiling`. The simulated L2 sees it. To loo
 from above in the Gazebo GUI, make it transparent: in the entity tree, right-click `ceiling`,
 then choose View > Transparent.
 
+## World: `worlds/corridor.sdf`
+
+A test world for the LIO degeneracy check in phase 4, not a site model. It is a straight,
+featureless corridor, 2 m wide and 70 m long, with a 2.4 m ceiling: x −35 to 35, y −2 to 0.
+The default spawn (0, −1) is on its centre line, facing along it.
+
+The walls, floor and ceiling pin down sideways, vertical and rotational motion. Nothing pins
+down motion along the corridor while both end walls are beyond the L2's 30 m range, which holds
+within x −5 to 5. That is the worst case for scan matching.
+
+```bash
+ros2 launch mecanum_bringup robot.launch.py gui:=false \
+  world:=$(ros2 pkg prefix mecanum_simulation)/share/mecanum_simulation/worlds/corridor.sdf
+```
+
 ## Simulated Unitree L2
 
 `urdf/mecanum.gazebo.xacro` adds two sensors. Both are bridged to the real driver's topics and
@@ -135,8 +150,9 @@ These figures come from the motion test and probes against `/sim/ground_truth/od
 
 - **Rotation is 10% fast.** The effective lever arm is 0.04 m shorter than lx + ly, which is
   half the wheel width. The cylinder collision most likely touches the floor near a rim edge
-  instead of at the wheel mid-plane. A sphere collision would avoid this, but the merge
-  mechanism cannot replace the geometry, and `mecanum_description` is extend-only.
+  instead of at the wheel mid-plane. A sphere collision would avoid this. The gazebo merge
+  mechanism cannot replace the geometry, so that change would go in the wheel xacro of
+  `mecanum_description` itself; it is an option for phase 5.
   - Real mecanum wheels also rotate at a rate different from the ideal, because the contact
     point moves along each roller.
   - The phase 5 calibration fits a per-axis scale, which covers both cases.

@@ -23,6 +23,9 @@ sim:=false  robot_state_publisher + joint_state_publisher (zero wheel angles) an
             explanation. The L2 driver is added in the hardware phase.
 Both        L2 perception (mecanum_localization/perception.launch.py): self-filter and
             cloud-to-scan, /l2/points -> /l2/points_filtered -> /scan.
+            LIO odometry (mecanum_localization/lio.launch.py, lio:=true): rko_lio and the
+            adapter, /odom and odom -> base_footprint. Its config is for simulation; the
+            hardware LIO config comes with phase 4H.
 """
 
 import os
@@ -32,7 +35,8 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, LaunchConfiguration, PythonExpression
+from launch.substitutions import (
+    AndSubstitution, Command, LaunchConfiguration, PythonExpression)
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -77,6 +81,8 @@ def generate_launch_description():
             description='Gazebo world (sim only)'),
         DeclareLaunchArgument('use_l2', default_value='true',
                               description='Include the Unitree L2 in the robot model'),
+        DeclareLaunchArgument('lio', default_value='true',
+                              description='Run LIO odometry (needs use_l2)'),
         DeclareLaunchArgument(
             'plant_file', default_value=os.path.join(sim_share, 'config', 'sim_plant.yaml'),
             description='Simulated motor plant (sim only)'),
@@ -100,6 +106,13 @@ def generate_launch_description():
                 os.path.join(loc_share, 'launch', 'perception.launch.py')),
             launch_arguments={'use_sim_time': sim}.items(),
             condition=IfCondition(LaunchConfiguration('use_l2'))),
+
+        # LIO odometry: the only source of odom -> base_footprint (no encoders).
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(loc_share, 'launch', 'lio.launch.py')),
+            launch_arguments={'use_sim_time': sim}.items(),
+            condition=IfCondition(AndSubstitution(LaunchConfiguration('use_l2'),
+                                                  LaunchConfiguration('lio')))),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(base_share, 'launch', 'base.launch.py')),

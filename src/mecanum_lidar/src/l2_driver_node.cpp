@@ -74,7 +74,7 @@ public:
   explicit L2DriverNode(const rclcpp::NodeOptions & options)
   : rclcpp::Node("l2_driver", options)
   {
-    connection_ = declare_parameter<std::string>("connection", "serial");
+    connection_ = declare_parameter<std::string>("connection", "udp");
     lidar_ip_ = declare_parameter<std::string>("lidar_ip", "192.168.1.62");
     lidar_port_ = checked_port(declare_parameter<std::int64_t>("lidar_port", 6101), "lidar_port");
     local_ip_ = declare_parameter<std::string>("local_ip", "192.168.1.2");

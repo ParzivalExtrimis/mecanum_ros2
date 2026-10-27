@@ -49,7 +49,8 @@ power-cycle. If Ethernet does not work, try writing the mode over serial instead
 harmless if the L2 ignores it, but it is not documented to work:
 
 ```bash
-ros2 run mecanum_lidar l2_driver --ros-args -p work_mode:=8 -p serial_port:=/dev/ttyACM0
+ros2 run mecanum_lidar l2_driver --ros-args -p connection:=serial -p work_mode:=8 \
+  -p serial_port:=/dev/ttyACM0
 # Ctrl-C, power-cycle the L2, then run the bench test below.
 ```
 
@@ -154,7 +155,7 @@ Leave `robot_model:=false` when another launch file already publishes the robot 
 
 | Argument | Default | Meaning |
 |---|---|---|
-| `connection` | `serial` | `serial` (USB) or `udp` (Ethernet) |
+| `connection` | `udp` | `udp` (Ethernet) or `serial` (USB) |
 | `lidar_ip` | `192.168.1.62` | L2 address (udp) |
 | `local_ip` | `192.168.1.2` | This computer's address on the L2 link (udp) |
 | `serial_port` | `/dev/ttyACM0` | Serial device (serial) |

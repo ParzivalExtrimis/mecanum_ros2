@@ -21,14 +21,22 @@ Starts, all on wall-clock time:
     including the L2 mast mount
   - L2 perception (mecanum_localization/perception.launch.py):
     /l2/points -> /l2/points_filtered -> /scan
+  - with lio:=true, LIO odometry (mecanum_localization/lio.launch.py) with the hardware config
+    rko_lio_hardware.yaml: /odom and odom -> base_footprint. The robot must stand still
+    while LIO starts.
   - RViz with rviz/sensors.rviz (robot model, raw and filtered clouds, scan)
 
 The drive node is not started: the ESP32 transport does not exist yet, so the robot only
-looks, it does not move. Example:
+looks, it does not move; for LIO it is pushed by hand (docs/hardware_lio_test.md).
+
+replay:=true leaves out the driver and runs everything on the bag's clock, to replay a
+recorded run: ros2 bag play <bag> --clock --topics /l2/points /l2/imu. Examples:
 
     ros2 launch mecanum_bringup hardware_sensors.launch.py                      # Ethernet
+    ros2 launch mecanum_bringup hardware_sensors.launch.py lio:=true            # plus LIO
     ros2 launch mecanum_bringup hardware_sensors.launch.py connection:=serial \
         serial_port:=/dev/ttyACM0                                              # USB-UART
+    ros2 launch mecanum_bringup hardware_sensors.launch.py replay:=true lio:=true
 """
 
 import os
@@ -36,18 +44,24 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
     bringup_share = get_package_share_directory('mecanum_bringup')
     lidar_share = get_package_share_directory('mecanum_lidar')
     loc_share = get_package_share_directory('mecanum_localization')
+    desc_share = get_package_share_directory('mecanum_description')
 
     driver_args = ['connection', 'serial_port', 'lidar_ip', 'local_ip', 'params_file']
+    use_sim_time = LaunchConfiguration('replay')
+    robot_description = ParameterValue(
+        Command(['xacro ', os.path.join(desc_share, 'urdf', 'mecanum.urdf.xacro')]),
+        value_type=str)
 
     return LaunchDescription([
         DeclareLaunchArgument('connection', default_value='udp',
@@ -61,30 +75,62 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'params_file', default_value=os.path.join(lidar_share, 'config', 'l2.yaml'),
             description='L2 driver parameters (work mode, cloud_scan_num, ranges)'),
+        DeclareLaunchArgument('lio', default_value='false',
+                              description='Run LIO odometry; start with the robot standing still'),
+        DeclareLaunchArgument(
+            'lio_config',
+            default_value=os.path.join(loc_share, 'config', 'rko_lio_hardware.yaml'),
+            description='rko_lio parameters'),
+        DeclareLaunchArgument(
+            'replay', default_value='false',
+            description='No driver, bag clock: replay a recording of /l2/points and /l2/imu'),
         DeclareLaunchArgument('rviz', default_value='true', description='Start RViz'),
         DeclareLaunchArgument(
             'rviz_config', default_value=os.path.join(bringup_share, 'rviz', 'sensors.rviz'),
             description='RViz configuration'),
 
-        # L2 driver + URDF TF. Its own RViz is off; the sensors view below replaces it.
+        # L2 driver only; its own RViz is off, the sensors view below replaces it.
         # Scoped: launch arguments given to an include otherwise leak into this file, and the
         # include's rviz:=false would also switch off the RViz node below.
-        GroupAction(scoped=True, actions=[
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    os.path.join(lidar_share, 'launch', 'l2.launch.py')),
-                launch_arguments=[(name, LaunchConfiguration(name)) for name in driver_args]
-                + [('robot_model', 'true'), ('rviz', 'false')]),
-        ]),
+        GroupAction(
+            scoped=True,
+            condition=UnlessCondition(LaunchConfiguration('replay')),
+            actions=[
+                IncludeLaunchDescription(
+                    PythonLaunchDescriptionSource(
+                        os.path.join(lidar_share, 'launch', 'l2.launch.py')),
+                    launch_arguments=[(name, LaunchConfiguration(name)) for name in driver_args]
+                    + [('robot_model', 'false'), ('rviz', 'false')]),
+            ]),
+
+        # URDF TF, including the L2 mast mount. The wheels have no encoders; joint_state_publisher
+        # publishes zero angles so their TF exists.
+        Node(
+            package='robot_state_publisher',
+            executable='robot_state_publisher',
+            output='screen',
+            parameters=[{'robot_description': robot_description,
+                         'use_sim_time': use_sim_time}]),
+        Node(
+            package='joint_state_publisher',
+            executable='joint_state_publisher',
+            parameters=[{'use_sim_time': use_sim_time}]),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(loc_share, 'launch', 'perception.launch.py')),
-            launch_arguments={'use_sim_time': 'false'}.items()),
+            launch_arguments={'use_sim_time': use_sim_time}.items()),
+
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(loc_share, 'launch', 'lio.launch.py')),
+            launch_arguments={'use_sim_time': use_sim_time,
+                              'config': LaunchConfiguration('lio_config')}.items(),
+            condition=IfCondition(LaunchConfiguration('lio'))),
 
         Node(
             package='rviz2',
             executable='rviz2',
             arguments=['-d', LaunchConfiguration('rviz_config')],
+            parameters=[{'use_sim_time': use_sim_time}],
             condition=IfCondition(LaunchConfiguration('rviz'))),
     ])

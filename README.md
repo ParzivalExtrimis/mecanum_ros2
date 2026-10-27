@@ -187,6 +187,9 @@ ros2 launch mecanum_base base.launch.py transport:=mock
 
 ### Hardware: test the Unitree L2
 
+Hardware work is paused; see [docs/hardware_transition.md](docs/hardware_transition.md). The
+procedures below are kept ready for when it resumes.
+
 The full procedure is in [docs/hardware_l2_test.md](docs/hardware_l2_test.md). It covers
 configuring the L2 to match the simulation, verifying the mount with `tools/l2_mount_check.py`,
 and comparing sim with real. The quick bench test:
@@ -201,14 +204,27 @@ ros2 launch mecanum_lidar l2.launch.py                       # driver + RViz, L2
 ros2 launch mecanum_lidar l2.launch.py robot_model:=true fixed_frame:=base_footprint  # mounted
 ```
 
+### Hardware: LIO with the robot pushed by hand
+
+The procedure is in [docs/hardware_lio_test.md](docs/hardware_lio_test.md). Start with the
+robot standing still:
+
+```bash
+ros2 launch mecanum_bringup hardware_sensors.launch.py lio:=true
+tools/lio_marks.py      # press Enter at each tape mark to log /odom
+```
+
 ### Mapping, navigation and mission runs
 
 The exact launch sequences will be added here as phases 6 to 8 land.
 
 ## Development phases
 
-Each phase ends with `colcon build`, `colcon test`, and a checkpoint before the next phase
-starts.
+Development runs in simulation; the plan is in [docs/plan.md](docs/plan.md). Each phase ends
+with `colcon build`, `colcon test`, and a checkpoint before the next phase starts. Hardware work
+is planned separately in [docs/hardware_transition.md](docs/hardware_transition.md), which
+starts when the sim track is complete. It records the assumptions, sim-only shortcuts and
+confidence of each hardware stage. The hardware steps 3H and 4H had started and are paused.
 
 | Phase | Content | Status |
 |---|---|---|
@@ -216,9 +232,9 @@ starts.
 | 1 | L2 sensor frames in the description, `STANDINS.md`, this README | done |
 | 2 | Gazebo world, simulated drive plant, ESP32 driver with mock and sim transports, motion test | done |
 | 3 | Simulated L2 cloud and IMU, self-filter, cloud-to-scan | done |
-| 4 | LIO and odom adapter, evaluated against Gazebo ground truth | next |
+| 4 | LIO and odom adapter, evaluated against Gazebo ground truth | built; sim drift targets not met; decision D4 pending |
 | 5 | Motor calibration tool, validated against injected plant errors | |
 | 6 | Mapping with slam_toolbox, map saving | |
 | 7 | Localization and Nav2 | |
 | 8 | Docking and mission executive, end to end | |
-| H | Hardware: ESP32 transport, Unitree driver, real mount pose, real calibration | L2 driver done (`mecanum_lidar`); rest when hardware is ready |
+| 3H–8H | Hardware transition (`docs/hardware_transition.md`) | Paused 2026-10-16. L2 driver done; 3H and 4H procedures ready; first 4H static run analysed |

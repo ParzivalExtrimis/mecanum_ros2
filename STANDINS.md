@@ -29,6 +29,9 @@ here once the real value is known.
 | `src/mecanum_simulation/worlds/restroom.sdf` | Ceiling height | 2.4 m | Use the real site's ceiling height. |
 | `src/mecanum_localization/config/self_filter.yaml` | Self-filter box margins | x ±0.33 m, y ±0.27 m: 2.75 cm and 2.3 cm beyond the chassis and wheels | Record a cloud on the real robot and check for self-hits outside the box, or for nearby obstacles wrongly removed. |
 | `src/mecanum_localization/config/cloud_to_scan.yaml` | `min_height`, `max_height` | 0.10 m, 0.50 m | Tune on the real site, for example for low fixtures and the toilet bowl height. |
+| `src/mecanum_localization/config/rko_lio.yaml` | `min_range`, `max_range`, `voxel_size` | 0.3 m, 30 m, 0.25 m: indoor guesses | Tune in phase 4H on the real robot: loop drift, corridor and static drift. |
+| `src/mecanum_localization/mecanum_localization/lio_odom_adapter.py` | `pose_covariance_diagonal`, `twist_covariance_diagonal` | x, y 0.0025 m²; yaw 0.0012 rad²; vx, vy, wz 0.0025 | Set from the drift measured in phase 4H. They matter once an EKF or AMCL uses them. |
+| `src/mecanum_localization/mecanum_localization/gt_compare.py` | `max_drift_percent`, `max_yaw_error_deg` | 1% of the path, 2° | The phase 4 targets from `docs/plan.md`. Replace them with what docking and navigation actually need. |
 
 ## Provisional design choices
 
@@ -41,8 +44,8 @@ These values are decided, not unknown, but they may still change. Each is set in
 
 ## Existing description values of uncertain accuracy
 
-These values are in `mecanum_description`, which is extend-only, so they are **not**
-annotated in the files. Per the owner, they combine CAD values and measured approximations.
+These values are in `mecanum_description/urdf/mecanum_params.xacro`, where each carries a
+`STAND-IN` comment. Per the owner, they combine CAD values and measured approximations.
 Kinematics, footprint and simulation all derive from them.
 
 | File | Parameter | Current value | How to obtain the real value |

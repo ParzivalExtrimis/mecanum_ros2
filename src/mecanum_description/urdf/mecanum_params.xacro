@@ -1,27 +1,38 @@
 <?xml version="1.0"?>
 <!-- Physical parameters of the mecanum robot. All units SI (m, kg, rad). -->
-<!-- Dimensions match the STL meshes in meshes/visual. -->
+<!-- Dimensions match the STL meshes in meshes/visual. They combine CAD values and measured
+     approximations; the STAND-IN notes say how to measure each one (also in STANDINS.md). -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
   <!-- Chassis -->
+  <!-- STAND-IN: base plate size is approximate, measure the plate. Sets the footprint and the
+       self-filter box. -->
   <xacro:property name="chassis_length" value="0.605"/>
   <xacro:property name="chassis_width" value="0.394"/>
   <xacro:property name="chassis_height" value="0.064"/>
+  <!-- STAND-IN: mass is a guess, weigh the base without wheels. Affects sim dynamics only. -->
   <xacro:property name="chassis_mass" value="5.0"/>
   <!-- Height of the chassis centre above base_link (wheel axle height) -->
   <xacro:property name="chassis_z_offset" value="0.008"/>
 
   <!-- Wheels -->
+  <!-- STAND-IN: effective radius under load is unknown, roll ten revolutions on the floor and
+       divide the distance by 20*pi. -->
   <xacro:property name="wheel_radius" value="0.05"/>
   <xacro:property name="wheel_width" value="0.08"/>
+  <!-- STAND-IN: mass is a guess, weigh one wheel with its motor mount. Sim dynamics only. -->
   <xacro:property name="wheel_mass" value="0.3"/>
 
   <!-- Wheel placement relative to base_link (chassis centre). Axles are not symmetric
        about the chassis centre; values taken from the axle bosses on the chassis mesh. -->
+  <!-- STAND-IN: axle positions are from the mesh, measure the axle centres from the chassis
+       centre. Their difference is the wheelbase; half of it is lx in the kinematics. -->
   <xacro:property name="front_axle_x" value="0.216"/>
   <xacro:property name="rear_axle_x" value="-0.235"/>
   <xacro:property name="wheelbase" value="${front_axle_x - rear_axle_x}"/>
   <!-- track = left/right wheel centre distance -->
+  <!-- STAND-IN: track is from the mesh, measure between the wheel mid-planes. Half of it is ly
+       in the kinematics. -->
   <xacro:property name="track_width" value="0.414"/>
 
   <!-- Meshes (already in metres, origin at the link frame) -->

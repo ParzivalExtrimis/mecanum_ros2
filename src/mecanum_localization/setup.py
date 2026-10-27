@@ -39,6 +39,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'gt_compare = mecanum_localization.gt_compare:main',
+            'lio_odom_adapter = mecanum_localization.lio_odom_adapter:main',
         ],
     },
 )

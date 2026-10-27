@@ -1,5 +1,10 @@
 # Unitree L2 on hardware: configuration, mount verification and sim comparison
 
+> **Paused (2026-10-16).** Hardware work resumes after the sim track; see
+> [`hardware_transition.md`](hardware_transition.md) for this stage's status, dependencies and
+> confidence. Re-read its section 2 (contracts) and the stage's "Depends on" before running this
+> procedure, because sim-track decisions may have changed what it tests.
+
 This procedure takes the real L2 from the desk to the robot. It makes sure that everything
 built in simulation still holds on hardware: the frames, the mount pose, the stream format, the
 self-filter and the field of view.
@@ -259,7 +264,7 @@ the prediction within about 0.15 m; and `STANDINS.md` was updated.
 - **Phase H.** `robot.launch.py sim:=false` does not start the L2 driver yet. It will include
   `mecanum_lidar/l2.launch.py` in phase H, so the hardware bringup becomes one command.
 - **Phase 4 on hardware.** Push the robot by hand while LIO runs, and check that `/odom`
-  follows. LIO then uses the per-point `time` field the sim lacks.
+  follows: `docs/hardware_lio_test.md`. LIO then uses the per-point `time` field the sim lacks.
 
 ## Results log
 

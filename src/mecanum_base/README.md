@@ -101,6 +101,20 @@ If `measure_odom_topic` is set, the test measures each step and prints PASS or F
 direction and cross-axis drift. Use `/sim/ground_truth/odom` in simulation, and `/odom` on
 hardware once LIO runs.
 
+`pattern` selects other scripts, used to exercise LIO in phase 4:
+
+| `pattern` | Script | Length with the defaults |
+|---|---|---|
+| `axes` | The wheel-mapping steps above (default) | About 2 m |
+| `loop` | Per lap: forward `loop_length`, rotate 180°, forward `loop_length`, strafe right `loop_width`, rotate 180°, strafe right `loop_width`. From the restroom spawn it runs along the corridor and up into the lobby, and closes. | 12 m and 360° per lap (`loop_length` 4, `loop_width` 2) |
+| `corridor` | Per lap: forward `loop_length`, then reverse `loop_length` | 8 m per lap |
+
+`laps` repeats the script. In `loop` and `corridor`, each segment has a target distance or
+angle. With `measure_odom_topic` set, a segment ends when the measured progress reaches the
+target, so calibration errors, such as the simulation's 110% rotation, do not walk the robot
+into the walls. A segment that takes more than twice its nominal time stops the test with a
+failure. Without odometry, each segment runs for its nominal time.
+
 ## Usage
 
 **Dry run without hardware or a simulator.** The mock transport logs the commands:
@@ -114,6 +128,9 @@ ros2 topic echo /esp32_driver/wheel_commands
 `ros2 launch mecanum_bringup robot.launch.py`, then:
 ```bash
 ros2 launch mecanum_base motion_test.launch.py use_sim_time:=true \
+  measure_odom_topic:=/sim/ground_truth/odom
+# LIO drift loop, about 24 m (run gt_compare from mecanum_localization alongside):
+ros2 launch mecanum_base motion_test.launch.py use_sim_time:=true pattern:=loop laps:=2 \
   measure_odom_topic:=/sim/ground_truth/odom
 ```
 
