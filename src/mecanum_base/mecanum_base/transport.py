@@ -15,9 +15,7 @@
 """
 Transports that carry per-motor commands from the driver to the ESP32.
 
-- ``mock``: logs commands, for dry runs without hardware or a simulator.
-- ``sim``: publishes ``mecanum_interfaces/MotorCommands`` for the simulated ESP32
-  (``mecanum_simulation/sim_motor_plant``).
+- ``mock``: logs commands, for dry runs without hardware.
 - ``esp32``: the real network link. Not implemented until the rewritten firmware's protocol
   is fixed; selecting it fails at startup with an explanation.
 """
@@ -74,35 +72,6 @@ class MockTransport(Transport):
         self._count += 1
 
 
-class SimTransport(Transport):
-    """Publishes commands as ``mecanum_interfaces/MotorCommands`` for the simulated ESP32."""
-
-    def __init__(self, node, topic: str = '/esp32/motor_commands'):
-        from mecanum_interfaces.msg import MotorCommands
-        self._msg_type = MotorCommands
-        self._node = node
-        self._topic = topic
-        self._pub = None
-
-    def connect(self) -> None:
-        self._pub = self._node.create_publisher(self._msg_type, self._topic, 10)
-
-    def send(self, commands: Sequence[MotorCommand]) -> None:
-        if self._pub is None:
-            raise RuntimeError('SimTransport.send() called before connect()')
-        msg = self._msg_type()
-        msg.header.stamp = self._node.get_clock().now().to_msg()
-        msg.motor_id = [int(c.motor_id) for c in commands]
-        msg.direction = [int(c.direction) for c in commands]
-        msg.value = [float(c.value) for c in commands]
-        self._pub.publish(msg)
-
-    def close(self) -> None:
-        if self._pub is not None:
-            self._node.destroy_publisher(self._pub)
-            self._pub = None
-
-
 class Esp32Transport(Transport):
     """Real ESP32 link. Placeholder until the firmware protocol is defined."""
 
@@ -110,25 +79,20 @@ class Esp32Transport(Transport):
         raise NotImplementedError(
             'The ESP32 transport is not implemented yet: the motor firmware is being rewritten '
             'and its protocol (transport, address/port, message format, value units, '
-            'direction encoding, motor IDs, watchdog) is not defined. Use transport:=mock or '
-            'transport:=sim. See src/mecanum_base/README.md, "Real ESP32 transport".')
+            'direction encoding, motor IDs, watchdog) is not defined. Use transport:=mock. '
+            'See src/mecanum_base/README.md, "Real ESP32 transport".')
 
     def send(self, commands: Sequence[MotorCommand]) -> None:  # pragma: no cover
         raise NotImplementedError
 
 
-TRANSPORTS = ('mock', 'sim', 'esp32')
+TRANSPORTS = ('mock', 'esp32')
 
 
-def make_transport(name: str, node=None, log: Optional[Callable[[str], None]] = None,
-                   sim_topic: str = '/esp32/motor_commands') -> Transport:
-    """Create a transport by name: 'mock', 'sim' or 'esp32'."""
+def make_transport(name: str, log: Optional[Callable[[str], None]] = None) -> Transport:
+    """Create a transport by name: 'mock' or 'esp32'."""
     if name == 'mock':
         return MockTransport(log=log)
-    if name == 'sim':
-        if node is None:
-            raise ValueError('the sim transport needs a ROS node')
-        return SimTransport(node, sim_topic)
     if name == 'esp32':
         return Esp32Transport()
     raise ValueError(f'unknown transport {name!r}, expected one of {TRANSPORTS}')

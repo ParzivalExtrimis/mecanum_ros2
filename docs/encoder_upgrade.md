@@ -7,6 +7,13 @@ Phase 1 of [`plan.md`](plan.md), which follows sections 1 and 3 to 6 below; on h
 needs the ESP32 to report the **measured** wheel state (section 0) and the hardware plugin
 (section 2). This guide lists the steps in order. The numbers are those of the robot model v2.
 
+**Status (2026-10-28):** the simulation steps (sections 1, 3, 5 and 6) are done; see
+[decision 0002](decisions/0002-ros2-control-with-measured-wheel-state.md) and
+`src/mecanum_controllers`. Two choices differ from the sketches below: the controller's
+reference is remapped to `/cmd_vel` (all sources publish stamped there), and
+`enable_odom_tf` is `true` until the EKF of section 4 exists (plan Phase 3). Sections 0, 2, 4,
+7 and the hardware steps of 8 are open.
+
 The names and parameters below were checked against ROS 2 Jazzy:
 
 | Package | Version |
@@ -133,9 +140,9 @@ Carry each setting over from the current driver config:
 
 | Topic | Type | Notes |
 |---|---|---|
-| `~/reference` | `geometry_msgs/TwistStamped` | The input. Stale stamps are rejected by `reference_timeout`. |
-| `~/odometry` | `nav_msgs/Odometry` | Remap to `/wheel/odometry`. |
-| `~/tf_odometry` | `tf2_msgs/TFMessage` | Unused while `enable_odom_tf` is false. |
+| `~/reference` | `geometry_msgs/TwistStamped` | The input, remapped to `/cmd_vel`. Stale stamps are rejected by `reference_timeout`. |
+| `~/odometry` | `nav_msgs/Odometry` | Remapped to `/wheel/odometry`. |
+| `~/tf_odometry` | `tf2_msgs/TFMessage` | Remapped to `/tf`; used while `enable_odom_tf` is true (until the EKF). |
 
 ## 2. New package `mecanum_hardware`
 
@@ -165,12 +172,11 @@ Keep the Python unit tests' numeric cases as test vectors for the C++ port.
   velocity. That means `controller_server`, `velocity_smoother`, `collision_monitor`,
   `behavior_server` and `docking_server`. The file is
   `mecanum_navigation/config/nav2_params.yaml`.
-- **Collision monitor.** Point its output, the final velocity in the chain, at
-  `/mecanum_drive_controller/reference`.
+- **Collision monitor.** Its output, the final velocity in the chain, goes to `/cmd_vel`,
+  which the safety gate (plan Phase 4) passes on to the controller.
 - **Teleop.** Run it stamped:
   ```bash
-  ros2 run teleop_twist_keyboard teleop_twist_keyboard \
-    --ros-args -p stamped:=true -r cmd_vel:=/mecanum_drive_controller/reference
+  ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true
   ```
 - **Motion test.** Set `cmd_vel_stamped: true` on `motion_test`.
 
@@ -234,7 +240,7 @@ In `gz_bridge.yaml` and `sim.launch.py`:
 | `mecanum_base/kinematics.py` and its tests | Keep as a reference to cross-check the controller's inverse kinematics. |
 | `mecanum_base/motion_test.py` | Keep. Set it stamped and point it at the controller reference. |
 | `mecanum_base/config/wheel_calibration.yaml` | Move the values that remain into the hardware plugin parameters (section 2), then remove it with the driver. With firmware PID there is no open-loop scale or deadband to fit; `motion_test` checks wheel speed tracking. |
-| `mecanum_simulation/sim_motor_plant.py` | Remove. |
+| `mecanum_simulation/sim_motor_plant.py` | Removed in plan Phase 1 (2026-10-28), with `plant_model.py`, `sim_plant.yaml`, the `sim` transport and `MotorCommands`. |
 | `mecanum_bringup/launch/*` | Include `controllers.launch.py`. Drop the driver node and joint_state_publisher. |
 | `STANDINS.md` | Remove the calibration stand-ins that no longer apply. Add the encoder counts per revolution until they are confirmed. |
 

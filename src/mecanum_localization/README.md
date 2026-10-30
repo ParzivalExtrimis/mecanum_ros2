@@ -22,13 +22,17 @@ It uses upstream nodes where they exist. Topics are identical with the real L2 d
   -> rko_lio          lidar-inertial odometry, 3D, frame lio_odom; its TF goes to /lio/tf_unused
 /lio/raw_odom         Odometry, lio_odom -> base_footprint
   -> lio_odom_adapter keep x, y, yaw; start at the origin
-/odom                 Odometry, odom -> base_footprint, plus the TF odom -> base_footprint
+/lio/odom (sim)       Odometry, odom -> base_footprint, no TF
+/odom (hardware)      Odometry, plus the TF odom -> base_footprint
 ```
 
-TF ownership: the adapter is the only publisher of `odom -> base_footprint`. rko_lio has no
-switch to turn its TF off, so `lio.launch.py` remaps its `/tf` to `/lio/tf_unused`; `lio_odom`
-never appears in the TF tree. Wheel commands are never odometry. From plan Phase 3 the EKF
-owns `odom -> base_footprint`, and the adapter runs with `publish_tf:=false` on `/lio/odom`.
+TF ownership: in simulation, `mecanum_drive_controller` publishes `odom -> base_footprint`
+from the measured wheel states (`/wheel/odometry`), and `robot.launch.py` runs the adapter
+with `publish_tf:=false` on `/lio/odom`. On hardware, where the open-loop driver reads no
+encoders, the adapter publishes `/odom` and the TF (the `lio.launch.py` defaults). From plan
+Phase 3 the EKF owns `odom -> base_footprint`. rko_lio has no switch to turn its TF off, so
+`lio.launch.py` remaps its `/tf` to `/lio/tf_unused`; `lio_odom` never appears in the TF tree.
+Wheel commands are never odometry.
 
 ## Self-filter: `config/self_filter.yaml`
 
@@ -113,7 +117,7 @@ The twist is passed through as vx, vy and wz. If rko_lio ever reset, the pose wo
 
 ## Drift against ground truth: `gt_compare` (simulation only)
 
-Pairs `/odom` with `/sim/ground_truth/odom`, interpolated at each estimate's stamp, both taken
+Pairs an odometry topic (`odom_topic`, default `/odom`) with `/sim/ground_truth/odom`, interpolated at each estimate's stamp, both taken
 relative to the first estimate. It reports the path length, final and maximum position error
 (also as a percentage of the path), yaw error, RMS error, mean twist error and jumps, every
 `report_period` seconds and on exit (`duration`, or Ctrl-C / SIGTERM). The run passes when the
@@ -123,10 +127,15 @@ error is under `max_yaw_error_deg` (2°), and there are no jumps. Both targets a
 
 ```bash
 ros2 launch mecanum_bringup robot.launch.py gui:=false
-ros2 run mecanum_localization gt_compare --ros-args -p use_sim_time:=true
+ros2 run mecanum_localization gt_compare --ros-args -p use_sim_time:=true \
+  -p odom_topic:=/wheel/odometry     # or /lio/odom; a second instance needs -r __node:=<name>
 ros2 launch mecanum_base motion_test.launch.py use_sim_time:=true pattern:=loop laps:=2 \
   measure_odom_topic:=/sim/ground_truth/odom
 ```
+
+With the model v2 on ros2_control (2026-10-28, restroom `loop`, 2 laps, 24.6 m): wheel
+odometry final 0.03 m, max 0.096 m (0.39%), yaw max 0.73°; LIO on the upright L2 final
+0.005 m, max 0.056 m (0.23%), yaw max 1.35°. Both pass. The corridor world was not re-run.
 
 ## LIO results with the previous robot model (2026-10-15): targets not met
 

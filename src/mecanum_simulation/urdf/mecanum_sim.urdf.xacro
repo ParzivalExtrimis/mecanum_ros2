@@ -1,6 +1,7 @@
 <?xml version="1.0"?>
 <!--
-  Simulation entry point: the unmodified robot description plus Gazebo-only additions.
+  Simulation entry point: the unmodified robot description plus Gazebo-only additions and
+  ros2_control on Gazebo hardware (mecanum_controllers).
 
   All xacro args of mecanum_description pass through (prefix, use_l2).
   The sim plugins assume prefix:="" and the model name "mecanum" (see mecanum.gazebo.xacro).
@@ -10,5 +11,8 @@
 
   <xacro:include filename="$(find mecanum_description)/urdf/mecanum.urdf.xacro"/>
   <xacro:include filename="$(find mecanum_simulation)/urdf/mecanum.gazebo.xacro"/>
+  <xacro:include filename="$(find mecanum_controllers)/urdf/mecanum.ros2_control.xacro"/>
+
+  <xacro:mecanum_ros2_control prefix="$(arg prefix)" hardware="sim"/>
 
 </robot>

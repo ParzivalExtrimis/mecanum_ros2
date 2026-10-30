@@ -16,18 +16,16 @@
      (mecanum_wheel.xacro), or this friction block no longer merges and the wheels silently
      lose their mecanum behaviour.
 
-  2. One JointController (velocity mode) per wheel. Its gz topic is the default
-     /model/mecanum/joint/<joint>/cmd_vel (gz.msgs.Double, rad/s), bridged from
-     /sim/wheel_cmd/<wheel> and driven by mecanum_simulation/sim_motor_plant.
+  2. The drive: ros2_control, not in this file. mecanum_sim.urdf.xacro includes
+     mecanum_controllers/urdf/mecanum.ros2_control.xacro with hardware=sim, which adds the
+     gz_ros2_control plugin. It commands the wheel joint velocities and reads their measured
+     positions and velocities from physics (ideal encoders) for joint_state_broadcaster and
+     mecanum_drive_controller.
 
   3. Ground truth: OdometryPublisher on gz topic /sim/ground_truth/odom, bridged to the ROS
      topic of the same name. Evaluation only: its frame labels (sim_gt_world, sim_gt_base) are
      not in the TF tree, its gz TF topic is never bridged, and nothing uses it for control or
      odometry.
-
-  Wheel joint states are not published: the open-loop drive reads no wheel state, and
-  joint_state_publisher reports zero wheel angles. The new motors have encoders; Phase 1 of
-  docs/plan.md moves the drive to gz_ros2_control and joint_state_broadcaster.
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" xmlns:gz="http://gazebosim.org/schema">
 
@@ -48,13 +46,6 @@
           </friction>
         </surface>
       </collision>
-    </gazebo>
-    <gazebo>
-      <plugin filename="gz-sim-joint-controller-system"
-              name="gz::sim::systems::JointController">
-        <joint_name>$(arg prefix)${wheel}_wheel_joint</joint_name>
-        <initial_velocity>0.0</initial_velocity>
-      </plugin>
     </gazebo>
   </xacro:macro>
 

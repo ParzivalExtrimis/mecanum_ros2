@@ -4,16 +4,16 @@ Top-level launch files and RViz configurations for the mecanum base.
 
 | Launch file | Phase | Starts |
 |---|---|---|
-| `robot.launch.py` | 2, 3, 4 | Simulation or hardware base, the drive node, L2 perception and LIO odometry |
-| `hardware_sensors.launch.py` | 3H, 4H | Real L2: driver, URDF TF, self-filter, scan and the sensors RViz view; LIO with `lio:=true`. No drive node. |
-| `mapping.launch.py` | 6, planned | Robot, LIO and slam_toolbox mapping |
-| `navigation.launch.py` | 7, planned | Robot, LIO, localization and Nav2 |
-| `mission.launch.py` | 8, planned | Navigation plus docking and the mission executive |
+| `robot.launch.py` | 1 | Simulation (ros2_control drive) or hardware base (open-loop driver), L2 perception and LIO odometry |
+| `hardware_sensors.launch.py` | paused hardware stages 3H, 4H | Real L2: driver, URDF TF, self-filter, scan and the sensors RViz view; LIO with `lio:=true`. No drive node. |
+| `mapping.launch.py` | 5, planned | Robot, EKF and slam_toolbox mapping |
+| `navigation.launch.py` | 6, planned | Robot, EKF, localization and Nav2 |
+| `mission.launch.py` | 7, planned | Navigation plus docking and the mission executive |
 
 ## `robot.launch.py`
 
 ```bash
-ros2 launch mecanum_bringup robot.launch.py              # Gazebo + robot + driver (sim)
+ros2 launch mecanum_bringup robot.launch.py              # Gazebo + robot + controllers (sim)
 ros2 launch mecanum_bringup robot.launch.py gui:=false   # headless
 ros2 launch mecanum_bringup robot.launch.py rviz:=true   # also RViz
 ```
@@ -27,29 +27,31 @@ ros2 launch mecanum_bringup robot.launch.py rviz:=true   # also RViz
 | `world` | restroom | Gazebo world; sim only |
 | `use_l2` | `true` | Include the Unitree L2 in the model |
 | `lio` | `true` | Run LIO odometry; needs `use_l2` |
-| `plant_file` | ideal plant | Simulated motor plant; sim only |
 
 With `sim:=true`, the launch starts:
-- the simulation from `mecanum_simulation/sim.launch.py`;
-- `esp32_driver` with `transport:=sim`;
+- the simulation from `mecanum_simulation/sim.launch.py`, including the controllers:
+  `mecanum_drive_controller` takes `TwistStamped` on `/cmd_vel` and publishes
+  `/wheel/odometry` and the `odom -> base_footprint` TF; `joint_state_broadcaster` publishes
+  `/joint_states`;
 - the L2 perception from `mecanum_localization/perception.launch.py`: the self-filter, from `/l2/points` to `/l2/points_filtered`, then the scan conversion to `/scan`;
-- LIO odometry from `mecanum_localization/lio.launch.py`: rko_lio and the odometry adapter, which publish `/odom` and the `odom -> base_footprint` TF;
+- LIO odometry from `mecanum_localization/lio.launch.py`: rko_lio and the odometry adapter,
+  which publish `/lio/odom` only, with no TF;
 - everything on `use_sim_time:=true`.
 
-With `sim:=false`, it starts robot_state_publisher, joint_state_publisher and `esp32_driver`
-with `transport:=esp32`. The real transport does not exist until the ESP32 firmware rewrite
-defines its protocol, so the driver exits with an explanation. The L2 driver and the hardware
-launch arrive in the hardware phase.
+With `sim:=false`, it starts robot_state_publisher, joint_state_publisher and the open-loop
+`esp32_driver` with `transport:=esp32`, and LIO publishes `/odom` and the TF. The real
+transport does not exist until the ESP32 firmware rewrite defines its protocol, so the driver
+exits with an explanation.
 
-Drive the robot with the keyboard. Hold shift for holonomic, strafing keys:
+Drive the robot with the keyboard, stamped. Hold shift for holonomic, strafing keys:
 
 ```bash
-ros2 run teleop_twist_keyboard teleop_twist_keyboard
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true
 ```
 
-LIO provides the `odom` frame. RViz starts with `base_footprint` as its fixed frame, so that
-the same view also works on hardware without LIO. To watch the robot move in RViz, set
-Global Options > Fixed Frame to `odom`.
+The wheel odometry provides the `odom` frame. RViz starts with `base_footprint` as its fixed
+frame, so that the same view also works on hardware without odometry. To watch the robot move
+in RViz, set Global Options > Fixed Frame to `odom`.
 
 The LIO configuration here is the simulation one: deskewing and the start-up initialization
 are off. On hardware, use `hardware_sensors.launch.py lio:=true`, which loads

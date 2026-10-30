@@ -3,12 +3,16 @@
 This package holds the drive node, mecanum kinematics and the motion test for the mecanum
 base.
 
-The drive is open-loop. This package publishes no odometry and no joint states. It was
-designed when the motors had no encoders; see
-[decision 0001](../../docs/decisions/0001-open-loop-drive-without-ros2-control.md). The new
-motors have position and velocity encoders, and plan Phase 1
-([docs/plan.md](../../docs/plan.md)) moves the drive to ros2_control, following
-[encoder_upgrade.md](../../docs/encoder_upgrade.md). `kinematics.py` and `motion_test` stay.
+**The simulation no longer uses the drive node.** Since plan Phase 1 it drives through
+ros2_control (`mecanum_controllers`,
+[decision 0002](../../docs/decisions/0002-ros2-control-with-measured-wheel-state.md)). The
+open-loop `esp32_driver` stays for the hardware path (`robot.launch.py sim:=false`), with the
+`mock` and `esp32` transports, until the ESP32 hardware plugin replaces it
+([encoder_upgrade.md](../../docs/encoder_upgrade.md)). It publishes no odometry and no joint
+states; it was designed when the motors had no encoders
+([decision 0001](../../docs/decisions/0001-open-loop-drive-without-ros2-control.md)).
+`kinematics.py` is the reference the drive controller is tested against, and `motion_test`
+drives both.
 
 ## Data flow
 
@@ -22,7 +26,6 @@ motors have position and velocity encoders, and plan Phase 1
        -> per-wheel calibration: rad/s -> (motor_id, direction, value)
        -> Transport, called at a fixed rate_hz (20 Hz), not only when commands arrive
   -> mock  : logs commands
-     sim   : mecanum_interfaces/MotorCommands on /esp32/motor_commands (simulated ESP32)
      esp32 : real ESP32 link (not implemented until the firmware protocol exists)
 ```
 
@@ -72,10 +75,9 @@ these values move into the ros2_control hardware plugin (`docs/encoder_upgrade.m
 
 | Parameter | Default | Meaning |
 |---|---|---|
-| `transport` | `mock` | `mock`, `sim` or `esp32` |
+| `transport` | `mock` | `mock` or `esp32` |
 | `cmd_vel_topic` | `cmd_vel` | Input topic |
 | `cmd_vel_stamped` | `false` | `true` subscribes to TwistStamped. Jazzy Nav2 publishes Twist by default. |
-| `motor_commands_topic` | `/esp32/motor_commands` | Output topic of the `sim` transport |
 | `rate_hz` | `20.0` | Fixed send rate |
 | `cmd_timeout` | `0.25` | Seconds without cmd_vel before zeros are sent |
 | `wheel_radius`, `lx`, `ly` | none, required | Geometry, from the URDF |
@@ -98,6 +100,10 @@ judged, because they depend on calibration; see the measured figures in
 If `measure_odom_topic` is set, the test measures each step and prints PASS or FAIL for
 direction and cross-axis drift. Use `/sim/ground_truth/odom` in simulation, and `/odom` on
 hardware.
+
+`motion_test.launch.py` publishes `TwistStamped` on `/cmd_vel` by default, for the drive
+controller. For the open-loop driver on hardware, which takes `Twist` by default, pass
+`cmd_vel_stamped:=false`.
 
 `pattern` selects other scripts, used to exercise odometry (LIO, wheel odometry, the EKF):
 
@@ -126,7 +132,7 @@ ros2 topic echo /esp32_driver/wheel_commands
 ```bash
 ros2 launch mecanum_base motion_test.launch.py use_sim_time:=true \
   measure_odom_topic:=/sim/ground_truth/odom
-# LIO drift loop, about 24 m (run gt_compare from mecanum_localization alongside):
+# Odometry drift loop, about 24 m (run gt_compare from mecanum_localization alongside):
 ros2 launch mecanum_base motion_test.launch.py use_sim_time:=true pattern:=loop laps:=2 \
   measure_odom_topic:=/sim/ground_truth/odom
 ```

@@ -1,0 +1,61 @@
+# ros2_control configuration for the mecanum base: the controller manager, the drive controller
+# and the joint state broadcaster. Loaded by the gz_ros2_control plugin in simulation
+# (urdf/mecanum.ros2_control.xacro) and by ros2_control_node on mock hardware.
+#
+# Topics, remapped in launch/controllers.launch.py:
+#   /cmd_vel           geometry_msgs/TwistStamped in base_footprint, the reference
+#   /wheel/odometry    nav_msgs/Odometry from the measured wheel states
+#   /tf                odom -> base_footprint (enable_odom_tf, until the EKF in Phase 3)
+#   /joint_states      from joint_state_broadcaster
+controller_manager:
+  ros__parameters:
+    update_rate: 50
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+    mecanum_drive_controller:
+      type: mecanum_drive_controller/MecanumDriveController
+
+mecanum_drive_controller:
+  ros__parameters:
+    front_left_wheel_command_joint_name: front_left_wheel_joint
+    front_right_wheel_command_joint_name: front_right_wheel_joint
+    rear_left_wheel_command_joint_name: rear_left_wheel_joint
+    rear_right_wheel_command_joint_name: rear_right_wheel_joint
+    front_left_wheel_state_joint_name: front_left_wheel_joint
+    front_right_wheel_state_joint_name: front_right_wheel_joint
+    rear_left_wheel_state_joint_name: rear_left_wheel_joint
+    rear_right_wheel_state_joint_name: rear_right_wheel_joint
+
+    # Geometry from mecanum_description/urdf/mecanum_params.xacro (keep in sync, as
+    # mecanum_base/config/esp32_driver.yaml). The roller layout is X, the same inverse
+    # kinematics as mecanum_base/kinematics.py.
+    kinematics:
+      wheels_radius: 0.1025   # STAND-IN (as in the URDF): unloaded CAD radius
+      # lx + ly: half wheelbase 0.2360 + half track 0.2150
+      sum_of_robot_center_projection_on_X_Y_axis: 0.451
+      # The wheel-rectangle centre is 0.3 mm ahead of base_link: negligible
+      base_frame_offset: {x: 0.0, y: 0.0, theta: 0.0}
+
+    # Stop when no reference arrives for this long (s); as cmd_timeout of esp32_driver
+    reference_timeout: 0.25
+
+    odom_frame_id: odom
+    base_frame_id: base_footprint
+    # Wheel odometry owns odom -> base_footprint until the EKF takes it over (docs/plan.md
+    # Phase 3), which sets this to false.
+    enable_odom_tf: true
+
+    # STAND-IN: speed limits, as max_vx / max_vy / max_wz of esp32_driver; raise them once
+    # stopping and tracking are shown to be good. min_velocity is the negative bound.
+    linear:
+      x: {max_velocity: 0.3, min_velocity: -0.3}
+      y: {max_velocity: 0.3, min_velocity: -0.3}
+    angular:
+      z: {max_velocity: 0.8, min_velocity: -0.8}
+
+    # STAND-IN: odometry covariances are guesses (x, y, z, roll, pitch, yaw; vx, vy, vz, wx,
+    # wy, wz); set them from the drift measured in docs/plan.md Phase 3. vy is larger: the
+    # rollers slip most sideways.
+    pose_covariance_diagonal: [0.001, 0.002, 1.0e+6, 1.0e+6, 1.0e+6, 0.002]
+    twist_covariance_diagonal: [0.001, 0.004, 1.0e+6, 1.0e+6, 1.0e+6, 0.002]

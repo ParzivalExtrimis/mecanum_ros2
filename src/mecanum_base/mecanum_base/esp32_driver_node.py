@@ -53,7 +53,6 @@ class Esp32DriverNode(Node):
         self.declare_parameter('transport', 'mock')
         self.declare_parameter('cmd_vel_topic', 'cmd_vel')
         self.declare_parameter('cmd_vel_stamped', False)
-        self.declare_parameter('motor_commands_topic', '/esp32/motor_commands')
         self.declare_parameter('rate_hz', 20.0)
         self.declare_parameter('cmd_timeout', 0.25)
         for name in GEOMETRY_PARAMETERS:
@@ -92,9 +91,7 @@ class Esp32DriverNode(Node):
         transport_name = self.get_parameter('transport').value
         if transport_name not in TRANSPORTS:
             raise ValueError(f'transport must be one of {TRANSPORTS}, got {transport_name!r}')
-        self._transport = make_transport(
-            transport_name, node=self, log=self.get_logger().info,
-            sim_topic=self.get_parameter('motor_commands_topic').value)
+        self._transport = make_transport(transport_name, log=self.get_logger().info)
         self._transport.connect()
         self._stopped = False
 

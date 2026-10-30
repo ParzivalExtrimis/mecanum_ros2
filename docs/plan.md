@@ -134,7 +134,10 @@ docking server ─────────────────────�
 teleop / test tools ─────────────────────────────────────┴→ safety gate → mecanum_drive_controller
 ```
 
-All velocity messages are `TwistStamped`, as `mecanum_drive_controller` requires.
+All velocity messages are `TwistStamped`, as `mecanum_drive_controller` requires. Every source
+publishes on `/cmd_vel`. Until Phase 4 the controller's reference is remapped straight to
+`/cmd_vel`; from Phase 4 the safety gate subscribes to `/cmd_vel` and the controller listens to
+the gate's output, so no source changes ([decision 0002](decisions/0002-ros2-control-with-measured-wheel-state.md)).
 
 ### Sensor contract
 
@@ -177,37 +180,55 @@ The frames come from `mecanum_description`. Gazebo-only topics live under `/sim/
   list was deleted.
 - **The simulation still drives open-loop** (`sim_motor_plant`) until Phase 1.
 
-## Phase 1: drive on encoders (ros2_control in simulation)
+## Phase 1: drive on encoders (ros2_control in simulation) (done 2026-10-28)
 
-- **New package `mecanum_controllers`,** following `docs/encoder_upgrade.md`, sections 1 and 3
-  to 6:
+- **New package `mecanum_controllers`,** following `docs/encoder_upgrade.md`, sections 1, 3, 5
+  and 6:
   - `urdf/mecanum.ros2_control.xacro` with a `hardware` arg, `mock` or `sim`. Each wheel joint
     has a velocity command interface and position and velocity state interfaces;
   - `config/controllers.yaml`: `mecanum_drive_controller` with `wheels_radius` 0.1025,
-    `sum_of_robot_center_projection_on_X_Y_axis` 0.451 and `enable_odom_tf: false`, plus
-    `joint_state_broadcaster`;
-  - `launch/controllers.launch.py`, which spawns the controllers after the robot appears in
-    Gazebo.
-- **Simulation:**
-  - the gz_ros2_control plugin replaces the four `JointController` blocks and `sim_motor_plant`;
-  - the anisotropic wheel friction and the ground-truth publisher stay;
-  - joint_state_publisher is removed from the sim launch.
-- **Commands:**
-  - `motion_test` and teleop publish `TwistStamped` on the controller reference;
-  - until Phase 4 the safety gate is a direct remap.
-- **Decision record 0002:** ros2_control with measured wheel state. It supersedes 0001.
-- **Verify:**
-  - with `hardware:=mock`, the controllers load and the joint signs match the
-    `kinematics.py` test vectors;
-  - with `hardware:=sim`, the `motion_test` steps and the `loop` pattern run. Compare
-    `/wheel/odometry` against `/sim/ground_truth/odom` and report the drift per axis, with
-    strafing separate;
-  - **measure the rotation scale.** The previous model rotated at 110% of command because the
-    cylinder wheel collision touches near its rim. Wheel odometry now shows such errors
-    directly.
+    `sum_of_robot_center_projection_on_X_Y_axis` 0.451, the speed limits (0.3, 0.3, 0.8) and
+    `enable_odom_tf: true`, plus `joint_state_broadcaster`;
+  - `launch/controllers.launch.py`: in sim only the spawners (started when the robot is
+    spawned); with `hardware:=mock` also robot_state_publisher and `ros2_control_node`;
+  - `test/test_mock_kinematics.py`, a launch test on mock hardware: wheel speeds equal
+    `mecanum_base/kinematics.py`, the odometry echoes the twist, the limits and the reference
+    timeout apply.
+- **Simulation:** gz_ros2_control replaced the four `JointController` blocks and
+  `sim_motor_plant`, which were deleted with `plant_model.py`, `sim_plant.yaml`, the wheel
+  command bridges, the driver's `sim` transport and the `MotorCommands` message.
+  joint_state_publisher is gone from the sim launch. The anisotropic wheel friction and the
+  ground truth are unchanged.
+- **Commands:** `TwistStamped` on `/cmd_vel` (see "Command chain"). `motion_test` publishes
+  stamped by default; teleop needs `-p stamped:=true`.
+- **Odometry:** the controller publishes `/wheel/odometry` and owns `odom → base_footprint`
+  until Phase 3. LIO publishes `/lio/odom` without TF.
+- **Decision record [0002](decisions/0002-ros2-control-with-measured-wheel-state.md):**
+  ros2_control with measured wheel state. It supersedes 0001.
+- **Measured** (restroom world, headless, 2026-10-28):
+
+  | Test | Result |
+  |---|---|
+  | `motion_test` forward 0.45 m | 99% of commanded, cross-axis drift 0.0% |
+  | `motion_test` strafe left 0.45 m | 99%, drift 0.1% |
+  | `motion_test` rotate 85.9° | 100% of commanded, but the base translates **5.7 cm** (limit 5 cm): FAIL |
+  | `/wheel/odometry` vs ground truth, `loop` × 2 (24.6 m) | final 0.03 m (0.13%), max 0.096 m (0.39%), yaw max 0.73°: PASS |
+  | `/lio/odom` vs ground truth, same run | final 0.005 m, max 0.056 m (0.23%), yaw max 1.35°: PASS |
+  | `/joint_states` | 50 Hz; the wheels turn in TF |
+
+- **The translation during rotation is the centre of mass.** The stand-in COM sits 6.5 cm
+  behind the wheel centre, so the wheels carry unequal loads and the friction-limited rollers
+  slip unevenly. With the COM moved to the centre (a test only, not kept), the rotation step
+  showed no translation but 109% rotation, the cylinder-rim effect of the previous model. The
+  wheel odometry cannot see this slip; it is part of the rotation error the EKF has to absorb
+  (Phase 3). The COM is a stand-in (`STANDINS.md`); `rotate_translation_tolerance` is left at
+  5 cm until the owner decides.
+- **LIO tracks on the upright L2, so far.** Unlike the previous model (18.5% loop error),
+  rko_lio stays within 0.23% on the restroom loop. The corridor world, its hard case, was not
+  re-run; Phase 3 evaluates it as candidate E3.
 - **Shortcut S2:** ideal encoders, with no quantization or noise.
 - **The ESP32 hardware plugin (`mecanum_hardware`) is out of scope.** `mecanum_base`'s driver
-  stays for the hardware path, unchanged.
+  stays for the hardware path (`sim:=false`), with the `mock` and `esp32` transports.
 
 ## Phase 2: simulated sensor suite
 

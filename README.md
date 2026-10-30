@@ -16,7 +16,8 @@ The robot model is in `mecanum_description`, built from the reference URDF
 
 - **Base:** a 0.79 × 0.51 m body, 0.74 m tall, on four 0.205 m mecanum wheels in an X-roller
   layout (wheelbase 0.472 m, track 0.430 m). The motors have **position and velocity
-  encoders**. The drive still runs open-loop until it moves to ros2_control (plan Phase 1).
+  encoders**. In simulation the drive runs on ros2_control; the hardware path keeps the
+  open-loop driver until the ESP32 hardware plugin exists.
 - **Motor control:** an ESP32 on the network, with each motor individually addressable. The
   protocol is pending the firmware rewrite.
 - **Sensors:**
@@ -47,9 +48,9 @@ Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
 | Package | Status | Responsibility |
 |---|---|---|
 | `mecanum_description` | done: model v2 with all sensor frames (plan Phase 0) | URDF/xacro, reference URDF, test display launch |
-| `mecanum_simulation` | open-loop drive and L2 done; ros2_control in Phase 1, the other sensors in Phase 2 | Gazebo worlds, sim-only xacro (mecanum friction, wheel controllers, sensors, ground truth), bridge, simulated ESP32 and motors |
-| `mecanum_base` | done (open-loop driver) | ESP32 driver node, mecanum kinematics, motion test |
-| `mecanum_controllers` | planned, Phase 1 | ros2_control xacro, `mecanum_drive_controller` and `joint_state_broadcaster` config |
+| `mecanum_simulation` | ros2_control drive and L2 done; the other sensors in Phase 2 | Gazebo worlds, sim-only xacro (mecanum friction, sensors, ground truth), bridge |
+| `mecanum_base` | done (open-loop driver, hardware path only) | ESP32 driver node, mecanum kinematics, motion test |
+| `mecanum_controllers` | done, Phase 1 | ros2_control xacro (mock or Gazebo hardware), `mecanum_drive_controller` and `joint_state_broadcaster` config, mock kinematics test |
 | `mecanum_interfaces` | messages done; safety and mission interfaces in Phases 4 and 7 | Motor command and debug messages, plus safety, task and mission interfaces later |
 | `mecanum_lidar` | driver done, hardware test paused | Unitree L2 driver (`/l2/points`, `/l2/imu`, no TF) on the vendored SDK, bench-test launch, RViz config |
 | `mecanum_localization` | self-filter, cloud-to-scan, LIO pipeline done; EKF and SLAM in Phases 3 and 5 | Self-filter, cloud-to-scan, LIO and its odom adapter, EKF, slam_toolbox, AMCL |
@@ -61,8 +62,11 @@ Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
 ## Design decisions
 
 - **[0001: Open-loop drive without ros2_control](docs/decisions/0001-open-loop-drive-without-ros2-control.md).**
-  Superseded: it was made when the motors had no encoders. The new motors have them, and plan
-  Phase 1 moves the drive to ros2_control.
+  Superseded by 0002: it was made when the motors had no encoders.
+- **[0002: ros2_control with measured wheel state](docs/decisions/0002-ros2-control-with-measured-wheel-state.md).**
+  The simulation drives through `mecanum_drive_controller` on gz_ros2_control. Every velocity
+  source publishes `TwistStamped` on `/cmd_vel`; wheel odometry owns `odom -> base_footprint`
+  until the EKF.
 - **[Encoder upgrade guide](docs/encoder_upgrade.md).** The steps to move to ros2_control with
   measured wheel state: `mecanum_controllers`, `mecanum_hardware`, stamped `cmd_vel` and an
   EKF. Plan Phase 1 follows its simulation steps.
@@ -80,11 +84,11 @@ map -> odom -> base_footprint -> base_link -> {chassis_link, wheels, l2_mount ->
 | Transform | Publisher |
 |---|---|
 | `map -> odom` | AMCL or slam_toolbox, never both (plan Phase 5 onward) |
-| `odom -> base_footprint` | today the LIO odom adapter; the EKF from plan Phase 3 |
+| `odom -> base_footprint` | sim: `mecanum_drive_controller` from the measured wheel states; hardware: the LIO odom adapter; the EKF from plan Phase 3 |
 | `base_footprint` and below | robot_state_publisher from the URDF |
 
-Until the drive moves to ros2_control (plan Phase 1), joint_state_publisher publishes zero
-angles for the wheel joints; afterwards `joint_state_broadcaster` publishes the measured ones.
+In simulation `joint_state_broadcaster` publishes the measured wheel angles. On hardware,
+until the ESP32 plugin exists, joint_state_publisher publishes zero angles.
 The L2 driver (`mecanum_lidar`) publishes no TF. LIO packages broadcast their own TF, which is
 remapped away in launch files.
 
@@ -132,14 +136,15 @@ and the axis mapping (`--axes`). The script refuses files it has already convert
 ### Simulation: drive the base
 
 ```bash
-ros2 launch mecanum_bringup robot.launch.py              # Gazebo GUI + robot + driver
+ros2 launch mecanum_bringup robot.launch.py              # Gazebo GUI + robot + controllers
 ros2 launch mecanum_bringup robot.launch.py gui:=false   # headless
 ```
 
-In a second terminal, drive the robot with the keyboard. Hold shift for strafing:
+In a second terminal, drive the robot with the keyboard. The drive controller takes
+`TwistStamped` on `/cmd_vel`. Hold shift for strafing:
 
 ```bash
-ros2 run teleop_twist_keyboard teleop_twist_keyboard
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true
 ```
 
 Or run the motion test. It drives forward, strafes left and rotates, returning to the start
@@ -172,10 +177,10 @@ objects only from about 3 m out, so it is not a near-field obstacle sensor; the 
 D435i and the ultrasonics take that role (plan, "Sensor roles"). It sees almost none of the
 robot itself. See `src/mecanum_localization/README.md`.
 
-To dry-run the driver without any simulator, using the mock transport:
+To dry-run the controllers without Gazebo, on mock hardware:
 
 ```bash
-ros2 launch mecanum_base base.launch.py transport:=mock
+ros2 launch mecanum_controllers controllers.launch.py hardware:=mock
 ```
 
 ### Hardware: test the Unitree L2
@@ -222,7 +227,7 @@ the self-filter and the LIO pipeline; its paused hardware work is kept in
 | Phase | Content | Status |
 |---|---|---|
 | 0 | Model v2 description from the reference URDF | done 2026-10-27 |
-| 1 | Drive on encoders: ros2_control in simulation | |
+| 1 | Drive on encoders: ros2_control in simulation | done 2026-10-28 |
 | 2 | Simulated sensor suite: 2D lidar, D435i, ultrasonics, cliff ToF, bumpers | |
 | 3 | State estimation: EKF on wheel odometry and IMU; LIO re-evaluated | |
 | 4 | Safety layer: cliffs, bumpers, E-stop, sensor loss | |
