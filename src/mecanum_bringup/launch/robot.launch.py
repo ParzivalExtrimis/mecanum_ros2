@@ -13,14 +13,21 @@
 # limitations under the License.
 
 """
-Bring up the robot: simulation (default) or hardware, plus the drive node.
+Bring up the robot: simulation (default) or hardware, plus the drive.
 
-sim:=true   Gazebo world + robot + simulated ESP32 (mecanum_simulation/sim.launch.py) and
-            esp32_driver with the sim transport, all on sim time.
-sim:=false  robot_state_publisher + joint_state_publisher (zero wheel angles) and
-            esp32_driver with the esp32 transport. The real transport is not implemented
-            until the rewritten firmware's protocol exists; the driver then exits with an
-            explanation. The L2 driver is added in the hardware phase.
+sim:=true   Gazebo world + robot + ros2_control (mecanum_simulation/sim.launch.py), all on
+            sim time. mecanum_drive_controller takes TwistStamped on /cmd_vel and owns
+            odom -> base_footprint from the measured wheel states (/wheel/odometry).
+sim:=false  robot_state_publisher + joint_state_publisher (zero wheel angles) and the
+            open-loop esp32_driver with the esp32 transport. The real transport is not
+            implemented until the rewritten firmware's protocol exists; the driver then exits
+            with an explanation.
+Both        L2 perception (mecanum_localization/perception.launch.py): self-filter and
+            cloud-to-scan, /l2/points -> /l2/points_filtered -> /scan.
+            LIO odometry (mecanum_localization/lio.launch.py, lio:=true): rko_lio and the
+            adapter. In sim it publishes /lio/odom only, with no TF (wheel odometry owns it);
+            on hardware, with no wheel odometry, /odom and odom -> base_footprint. Its config
+            is for simulation; the hardware LIO config is in hardware_sensors.launch.py.
 """
 
 import os
@@ -30,7 +37,8 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, LaunchConfiguration, PythonExpression
+from launch.substitutions import (
+    AndSubstitution, Command, LaunchConfiguration, PythonExpression)
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -40,10 +48,14 @@ def generate_launch_description():
     sim_share = get_package_share_directory('mecanum_simulation')
     base_share = get_package_share_directory('mecanum_base')
     desc_share = get_package_share_directory('mecanum_description')
+    loc_share = get_package_share_directory('mecanum_localization')
 
     sim = LaunchConfiguration('sim')
     rviz = LaunchConfiguration('rviz')
-    transport = PythonExpression(["'sim' if '", sim, "' == 'true' else 'esp32'"])
+    # Wheel odometry owns odom -> base_footprint in sim; LIO only on hardware (no encoders
+    # read by the open-loop driver).
+    lio_odom_topic = PythonExpression(["'/lio/odom' if '", sim, "' == 'true' else '/odom'"])
+    lio_publish_tf = PythonExpression(["'false' if '", sim, "' == 'true' else 'true'"])
 
     sim_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(sim_share, 'launch', 'sim.launch.py')),
@@ -51,7 +63,6 @@ def generate_launch_description():
             'world': LaunchConfiguration('world'),
             'gui': LaunchConfiguration('gui'),
             'use_l2': LaunchConfiguration('use_l2'),
-            'plant_file': LaunchConfiguration('plant_file'),
         }.items(),
         condition=IfCondition(sim))
 
@@ -64,6 +75,9 @@ def generate_launch_description():
         DeclareLaunchArgument('sim', default_value='true',
                               description='true: Gazebo simulation, false: real hardware'),
         DeclareLaunchArgument('rviz', default_value='false', description='Start RViz'),
+        DeclareLaunchArgument(
+            'rviz_config', default_value=os.path.join(bringup_share, 'rviz', 'sensors.rviz'),
+            description='RViz configuration (robot.rviz: model and TF only)'),
         DeclareLaunchArgument('gui', default_value='true',
                               description='Gazebo GUI (sim only; false = headless)'),
         DeclareLaunchArgument(
@@ -71,9 +85,8 @@ def generate_launch_description():
             description='Gazebo world (sim only)'),
         DeclareLaunchArgument('use_l2', default_value='true',
                               description='Include the Unitree L2 in the robot model'),
-        DeclareLaunchArgument(
-            'plant_file', default_value=os.path.join(sim_share, 'config', 'sim_plant.yaml'),
-            description='Simulated motor plant (sim only)'),
+        DeclareLaunchArgument('lio', default_value='true',
+                              description='Run LIO odometry (needs use_l2)'),
 
         sim_launch,
 
@@ -88,14 +101,32 @@ def generate_launch_description():
             executable='joint_state_publisher',
             condition=UnlessCondition(sim)),
 
+        # L2 perception: self-filter and cloud-to-scan, identical in sim and on hardware.
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(loc_share, 'launch', 'perception.launch.py')),
+            launch_arguments={'use_sim_time': sim}.items(),
+            condition=IfCondition(LaunchConfiguration('use_l2'))),
+
+        # LIO odometry. In sim an evaluation input on /lio/odom (an EKF input from
+        # docs/plan.md Phase 3); on hardware the source of odom -> base_footprint.
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(loc_share, 'launch', 'lio.launch.py')),
+            launch_arguments={'use_sim_time': sim, 'odom_topic': lio_odom_topic,
+                              'publish_tf': lio_publish_tf}.items(),
+            condition=IfCondition(AndSubstitution(LaunchConfiguration('use_l2'),
+                                                  LaunchConfiguration('lio')))),
+
+        # The open-loop ESP32 driver, hardware only; in sim, ros2_control drives the wheels.
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(base_share, 'launch', 'base.launch.py')),
-            launch_arguments={'transport': transport, 'use_sim_time': sim}.items()),
+            launch_arguments={'transport': 'esp32', 'use_sim_time': 'false'}.items(),
+            condition=UnlessCondition(sim)),
 
         Node(
             package='rviz2',
             executable='rviz2',
-            arguments=['-d', os.path.join(bringup_share, 'rviz', 'robot.rviz')],
+            arguments=['-d', LaunchConfiguration('rviz_config')],
             parameters=[{'use_sim_time': sim}],
             condition=IfCondition(rviz)),
     ])

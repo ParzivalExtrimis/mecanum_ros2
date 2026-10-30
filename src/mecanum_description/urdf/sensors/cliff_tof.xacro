@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<!--
+  Four downward cliff sensors, VL53L1X time-of-flight (BOM item 5): beam frames.
+
+  Included from mecanum.urdf.xacro when use_cliff_tof is true (the default).
+
+  Mount: underside corners, just ahead of / behind each wheel and in line with it, pointing
+  straight down (PDF schedule). One XSHUT line each on hardware (they share I2C address 0x29).
+
+  Frames: cliff_tof_<pos>_link at the centre of the downward face, +x straight down (the beam,
+  sensor_msgs/Range convention). The STEP puts them 0.119 m above the floor, 2 cm inside the
+  open bottom of the body; chassis_link leaves a pocket under each so the floor is visible.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:property name="cliff_tof_body_x" value="0.0296"/>
+  <xacro:property name="cliff_tof_body_y" value="0.05"/>
+  <xacro:property name="cliff_tof_body_z" value="0.029"/>
+  <xacro:property name="cliff_tof_x" value="0.3535"/>
+  <xacro:property name="cliff_tof_y" value="0.2078"/>
+  <!-- STAND-IN: STEP height 0.119 m above the floor; the PDF says 0.08 m. Measure the sensor
+       face height on the robot; the cliff threshold depends on it. -->
+  <xacro:property name="cliff_tof_z" value="0.0169"/>
+
+  <xacro:macro name="cliff_tof" params="prefix parent pos x y z">
+
+    <joint name="${prefix}cliff_tof_${pos}_joint" type="fixed">
+      <parent link="${prefix}${parent}"/>
+      <child link="${prefix}cliff_tof_${pos}_link"/>
+      <origin xyz="${x} ${y} ${z}" rpy="0 ${pi/2} 0"/>
+    </joint>
+
+    <!-- Massless: counted in chassis_mass -->
+    <link name="${prefix}cliff_tof_${pos}_link">
+      <visual>
+        <origin xyz="${-cliff_tof_body_x/2} 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${cliff_tof_body_x} ${cliff_tof_body_y} ${cliff_tof_body_z}"/>
+        </geometry>
+        <material name="tof_blue"/>
+      </visual>
+      <collision>
+        <origin xyz="${-cliff_tof_body_x/2} 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${cliff_tof_body_x} ${cliff_tof_body_y} ${cliff_tof_body_z}"/>
+        </geometry>
+      </collision>
+    </link>
+
+  </xacro:macro>
+
+  <xacro:cliff_tof prefix="$(arg prefix)" parent="base_link" pos="front_left"
+    x="${cliff_tof_x}" y="${cliff_tof_y}" z="${cliff_tof_z}"/>
+  <xacro:cliff_tof prefix="$(arg prefix)" parent="base_link" pos="front_right"
+    x="${cliff_tof_x}" y="${-cliff_tof_y}" z="${cliff_tof_z}"/>
+  <xacro:cliff_tof prefix="$(arg prefix)" parent="base_link" pos="rear_left"
+    x="${-cliff_tof_x}" y="${cliff_tof_y}" z="${cliff_tof_z}"/>
+  <xacro:cliff_tof prefix="$(arg prefix)" parent="base_link" pos="rear_right"
+    x="${-cliff_tof_x}" y="${-cliff_tof_y}" z="${cliff_tof_z}"/>
+
+</robot>

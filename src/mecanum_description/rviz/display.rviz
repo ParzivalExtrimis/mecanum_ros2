@@ -53,7 +53,50 @@ Visualization Manager:
           Alpha: 1
           Show Axes: false
           Show Trail: false
+        bumper_front_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
           Value: true
+        bumper_rear_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        chassis_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        cliff_tof_front_left_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        cliff_tof_front_right_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        cliff_tof_rear_left_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        cliff_tof_rear_right_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        d435i_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        d435i_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
         front_left_wheel_link:
           Alpha: 1
           Show Axes: false
@@ -64,12 +107,50 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
+        l2_imu:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        l2_lidar:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        l2_mount:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        lidar_2d_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         rear_left_wheel_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
         rear_right_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        ultrasonic_front_left_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        ultrasonic_front_right_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        ultrasonic_rear_left_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        ultrasonic_rear_right_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -93,15 +174,49 @@ Visualization Manager:
           Value: true
         base_link:
           Value: true
+        bumper_front_link:
+          Value: true
+        bumper_rear_link:
+          Value: true
+        chassis_link:
+          Value: true
+        cliff_tof_front_left_link:
+          Value: true
+        cliff_tof_front_right_link:
+          Value: true
+        cliff_tof_rear_left_link:
+          Value: true
+        cliff_tof_rear_right_link:
+          Value: true
+        d435i_link:
+          Value: true
+        d435i_optical_frame:
+          Value: true
         front_left_wheel_link:
           Value: true
         front_right_wheel_link:
+          Value: true
+        l2_imu:
+          Value: true
+        l2_lidar:
+          Value: true
+        l2_mount:
+          Value: true
+        lidar_2d_link:
           Value: true
         rear_left_wheel_link:
           Value: true
         rear_right_wheel_link:
           Value: true
-      Marker Scale: 0.30000001192092896
+        ultrasonic_front_left_link:
+          Value: true
+        ultrasonic_front_right_link:
+          Value: true
+        ultrasonic_rear_left_link:
+          Value: true
+        ultrasonic_rear_right_link:
+          Value: true
+      Marker Scale: 0.20000000298023224
       Name: TF
       Show Arrows: true
       Show Axes: true
@@ -109,13 +224,44 @@ Visualization Manager:
       Tree:
         base_footprint:
           base_link:
+            bumper_front_link:
+              {}
+            bumper_rear_link:
+              {}
+            chassis_link:
+              {}
+            cliff_tof_front_left_link:
+              {}
+            cliff_tof_front_right_link:
+              {}
+            cliff_tof_rear_left_link:
+              {}
+            cliff_tof_rear_right_link:
+              {}
+            d435i_link:
+              d435i_optical_frame:
+                {}
             front_left_wheel_link:
               {}
             front_right_wheel_link:
               {}
+            l2_mount:
+              l2_lidar:
+                l2_imu:
+                  {}
+            lidar_2d_link:
+              {}
             rear_left_wheel_link:
               {}
             rear_right_wheel_link:
+              {}
+            ultrasonic_front_left_link:
+              {}
+            ultrasonic_front_right_link:
+              {}
+            ultrasonic_rear_left_link:
+              {}
+            ultrasonic_rear_right_link:
               {}
       Update Interval: 0
       Value: true
@@ -139,7 +285,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 1.5
+      Distance: 2.5
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1

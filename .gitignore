@@ -5,3 +5,7 @@ log/
 
 # editor
 .vscode/
+
+# python
+__pycache__/
+*.pyc

@@ -1,0 +1,39 @@
+# rko_lio (online_node): lidar-inertial odometry on the self-filtered L2 cloud and the L2 IMU.
+#
+# Started by launch/lio.launch.py, which also remaps rko_lio's /tf to /lio/tf_unused (it has no
+# switch to turn its TF off). Its pose goes to /lio/raw_odom in its own frame lio_odom; the
+# lio_odom_adapter turns that into the planar /odom and the odom -> base_footprint TF.
+#
+# Extrinsics come from TF: the lidar and IMU frames are read from the message headers
+# (l2_lidar, l2_imu) and looked up against base_frame on /tf_static (all fixed URDF joints).
+#
+# This file is for SIMULATION. The hardware config, rko_lio_hardware.yaml (phase 4H), differs
+# in deskew (on, with the driver's per-point `time` field) and initialization_phase (on). Keep
+# the other values of the two files in step.
+rko_lio:
+  ros__parameters:
+    imu_topic: /l2/imu
+    lidar_topic: /l2/points_filtered
+    base_frame: base_footprint
+    odom_frame: lio_odom
+    odom_topic: /lio/raw_odom
+
+    # The simulated gpu_lidar sweep has no per-point time field and no motion distortion.
+    deskew: false
+    # Off in simulation. The initialization estimates the IMU bias and gravity direction from
+    # the IMU samples between the first two scans and assumes the robot is at rest. In sim,
+    # LIO starts with Gazebo, while the robot is still settling after the spawn; that gave an
+    # accelerometer bias of 4.3 m/s^2 in z (0.007 when started at rest). The simulated IMU has
+    # no bias and the robot starts level, so identity is the right start. On hardware (4H) turn
+    # it on and start LIO with the robot standing still.
+    initialization_phase: false
+
+    min_range: 0.3     # STAND-IN: indoor guess; the self-filter already removes the robot
+    max_range: 30.0    # STAND-IN: the L2's specified range; lower it if far returns are noisy
+    voxel_size: 0.25   # STAND-IN: indoor map resolution guess (upstream default 1.0 is outdoor)
+    max_correspondence_distance: 0.5
+    max_num_threads: 1
+    reset_on_registration_error: false
+
+    publish_local_map: false
+    publish_deskewed_scan: false

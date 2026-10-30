@@ -1,10 +1,18 @@
 # Encoder upgrade: migrating the drive to ros2_control
 
-The current drive is open-loop because the motors have no encoders. See
-[decision 0001](decisions/0001-open-loop-drive-without-ros2-control.md). An upcoming motor and
-ESP32 firmware update adds wheel position encoders and state reporting. Once the ESP32 reports
-**measured** wheel state, the drive should move to ros2_control. This guide lists the steps
-in order.
+The current drive is open-loop, because the first motors had no encoders. See
+[decision 0001](decisions/0001-open-loop-drive-without-ros2-control.md). The new motors have
+position and velocity encoders, so the drive moves to ros2_control. In simulation that is
+Phase 1 of [`plan.md`](plan.md), which follows sections 1 and 3 to 6 below; on hardware it also
+needs the ESP32 to report the **measured** wheel state (section 0) and the hardware plugin
+(section 2). This guide lists the steps in order. The numbers are those of the robot model v2.
+
+**Status (2026-10-28):** the simulation steps (sections 1, 3, 5 and 6) are done; see
+[decision 0002](decisions/0002-ros2-control-with-measured-wheel-state.md) and
+`src/mecanum_controllers`. Two choices differ from the sketches below: the controller's
+reference is remapped to `/cmd_vel` (all sources publish stamped there), and
+`enable_odom_tf` is `true` until the EKF of section 4 exists (plan Phase 3). Sections 0, 2, 4,
+7 and the hardware steps of 8 are open.
 
 The names and parameters below were checked against ROS 2 Jazzy:
 
@@ -106,8 +114,8 @@ mecanum_drive_controller:
     rear_left_wheel_state_joint_name: rear_left_wheel_joint
     rear_right_wheel_state_joint_name: rear_right_wheel_joint
     kinematics:
-      wheels_radius: 0.05
-      sum_of_robot_center_projection_on_X_Y_axis: 0.4325
+      wheels_radius: 0.1025
+      sum_of_robot_center_projection_on_X_Y_axis: 0.451
       base_frame_offset: {x: 0.0, y: 0.0, theta: 0.0}
     reference_timeout: 0.25
     enable_odom_tf: false        # the EKF owns odom -> base_footprint (step 4)
@@ -115,7 +123,7 @@ mecanum_drive_controller:
     base_frame_id: base_footprint
 ```
 
-`sum_of_robot_center_projection_on_X_Y_axis` is lx + ly, which is 0.2255 + 0.207.
+`sum_of_robot_center_projection_on_X_Y_axis` is lx + ly, which is 0.2360 + 0.2150.
 
 Carry each setting over from the current driver config:
 
@@ -123,7 +131,7 @@ Carry each setting over from the current driver config:
 |---|---|---|
 | `mecanum_base/config/esp32_driver.yaml` | `wheel_radius` | `kinematics.wheels_radius` |
 | `mecanum_base/config/esp32_driver.yaml` | `lx` + `ly` | `kinematics.sum_of_robot_center_projection_on_X_Y_axis` |
-| `mecanum_description/urdf/mecanum_params.xacro` | wheel centre 9.5 mm behind `base_link` | `kinematics.base_frame_offset.x`. Check the sign in the parameter description before setting it. |
+| `mecanum_description/urdf/mecanum_params.xacro` | wheel-rectangle centre 0.3 mm ahead of `base_link` (`front_axle_x` 0.2363, `rear_axle_x` −0.2357) | `kinematics.base_frame_offset.x`: 0, the offset is negligible. Check the sign in the parameter description before setting a non-zero one. |
 | `mecanum_base/config/esp32_driver.yaml` | `max_vx`, `max_vy`, `max_wz` | `linear.x.*`, `linear.y.*`, `angular.z.*` limits |
 | `mecanum_base/config/esp32_driver.yaml` | `cmd_timeout` | `reference_timeout` |
 | `mecanum_base/config/wheel_calibration.yaml` | sign, scale, deadband, max, motor_id | Parameters of the hardware plugin, not the controller |
@@ -132,9 +140,9 @@ Carry each setting over from the current driver config:
 
 | Topic | Type | Notes |
 |---|---|---|
-| `~/reference` | `geometry_msgs/TwistStamped` | The input. Stale stamps are rejected by `reference_timeout`. |
-| `~/odometry` | `nav_msgs/Odometry` | Remap to `/wheel/odometry`. |
-| `~/tf_odometry` | `tf2_msgs/TFMessage` | Unused while `enable_odom_tf` is false. |
+| `~/reference` | `geometry_msgs/TwistStamped` | The input, remapped to `/cmd_vel`. Stale stamps are rejected by `reference_timeout`. |
+| `~/odometry` | `nav_msgs/Odometry` | Remapped to `/wheel/odometry`. |
+| `~/tf_odometry` | `tf2_msgs/TFMessage` | Remapped to `/tf`; used while `enable_odom_tf` is true (until the EKF). |
 
 ## 2. New package `mecanum_hardware`
 
@@ -164,14 +172,13 @@ Keep the Python unit tests' numeric cases as test vectors for the C++ port.
   velocity. That means `controller_server`, `velocity_smoother`, `collision_monitor`,
   `behavior_server` and `docking_server`. The file is
   `mecanum_navigation/config/nav2_params.yaml`.
-- **Collision monitor.** Point its output, the final velocity in the chain, at
-  `/mecanum_drive_controller/reference`.
+- **Collision monitor.** Its output, the final velocity in the chain, goes to `/cmd_vel`,
+  which the safety gate (plan Phase 4) passes on to the controller.
 - **Teleop.** Run it stamped:
   ```bash
-  ros2 run teleop_twist_keyboard teleop_twist_keyboard \
-    --ros-args -p stamped:=true -r cmd_vel:=/mecanum_drive_controller/reference
+  ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true
   ```
-- **Motion test.** Set `cmd_vel_stamped: true` on `motion_test` and on the calibration tool.
+- **Motion test.** Set `cmd_vel_stamped: true` on `motion_test`.
 
 ## 4. Odometry and TF ownership
 
@@ -232,8 +239,8 @@ In `gz_bridge.yaml` and `sim.launch.py`:
 | `mecanum_base/esp32_driver_node.py`, `drive_core.py`, `transport.py` | Remove after the C++ plugin is in service. The protocol logic moves into `mecanum_hardware`. |
 | `mecanum_base/kinematics.py` and its tests | Keep as a reference to cross-check the controller's inverse kinematics. |
 | `mecanum_base/motion_test.py` | Keep. Set it stamped and point it at the controller reference. |
-| Calibration tool | Repurpose. With firmware PID it validates wheel speed tracking instead of fitting open-loop scale and deadband. |
-| `mecanum_simulation/sim_motor_plant.py` | Remove. |
+| `mecanum_base/config/wheel_calibration.yaml` | Move the values that remain into the hardware plugin parameters (section 2), then remove it with the driver. With firmware PID there is no open-loop scale or deadband to fit; `motion_test` checks wheel speed tracking. |
+| `mecanum_simulation/sim_motor_plant.py` | Removed in plan Phase 1 (2026-10-28), with `plant_model.py`, `sim_plant.yaml`, the `sim` transport and `MotorCommands`. |
 | `mecanum_bringup/launch/*` | Include `controllers.launch.py`. Drop the driver node and joint_state_publisher. |
 | `STANDINS.md` | Remove the calibration stand-ins that no longer apply. Add the encoder counts per revolution until they are confirmed. |
 

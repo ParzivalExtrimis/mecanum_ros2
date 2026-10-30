@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>mecanum_controllers</name>
+  <version>0.0.1</version>
+  <description>ros2_control for the mecanum base: the ros2_control xacro (mock or Gazebo hardware), mecanum_drive_controller and joint_state_broadcaster configuration, and the controller launch file.</description>
+  <maintainer email="claude.raseksha@gmail.com">hegde-aryan</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>controller_manager</exec_depend>
+  <exec_depend>gz_ros2_control</exec_depend>
+  <exec_depend>hardware_interface</exec_depend>
+  <exec_depend>joint_state_broadcaster</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>mecanum_description</exec_depend>
+  <exec_depend>mecanum_drive_controller</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>xacro</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+  <test_depend>geometry_msgs</test_depend>
+  <test_depend>launch_testing</test_depend>
+  <test_depend>launch_testing_ament_cmake</test_depend>
+  <test_depend>mecanum_base</test_depend>
+  <test_depend>nav_msgs</test_depend>
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>rclpy</test_depend>
+  <test_depend>sensor_msgs</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

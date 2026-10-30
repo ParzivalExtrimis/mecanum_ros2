@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<!--
+  ros2_control for the mecanum base: one system with the four wheel joints.
+
+  Each <prefix>{front,rear}_{left,right}_wheel_joint has a velocity command interface and
+  position and velocity state interfaces (the motors' encoders). The hardware arg selects the
+  plugin:
+    mock  mock_components/GenericSystem: commands are echoed to the states (dry runs, tests)
+    sim   gz_ros2_control/GazeboSimSystem: states from Gazebo physics; also adds the
+          gz_ros2_control plugin, which hosts the controller manager inside Gazebo
+  The ESP32 hardware plugin (mecanum_hardware/Esp32System) is not written yet; see
+  docs/encoder_upgrade.md section 2.
+
+  Included by mecanum_simulation/urdf/mecanum_sim.urdf.xacro (sim) and
+  urdf/mecanum_mock.urdf.xacro (mock), never by mecanum_description.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="mecanum_wheel_interfaces" params="prefix wheel">
+    <joint name="${prefix}${wheel}_wheel_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="mecanum_ros2_control" params="prefix hardware">
+    <ros2_control name="${prefix}mecanum_base" type="system">
+      <hardware>
+        <xacro:if value="${hardware == 'mock'}">
+          <plugin>mock_components/GenericSystem</plugin>
+          <!-- Integrate position from the commanded velocity -->
+          <param name="calculate_dynamics">true</param>
+        </xacro:if>
+        <xacro:if value="${hardware == 'sim'}">
+          <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+        </xacro:if>
+      </hardware>
+      <xacro:mecanum_wheel_interfaces prefix="${prefix}" wheel="front_left"/>
+      <xacro:mecanum_wheel_interfaces prefix="${prefix}" wheel="front_right"/>
+      <xacro:mecanum_wheel_interfaces prefix="${prefix}" wheel="rear_left"/>
+      <xacro:mecanum_wheel_interfaces prefix="${prefix}" wheel="rear_right"/>
+    </ros2_control>
+
+    <xacro:if value="${hardware == 'sim'}">
+      <gazebo>
+        <plugin filename="gz_ros2_control-system"
+                name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+          <parameters>$(find mecanum_controllers)/config/controllers.yaml</parameters>
+        </plugin>
+      </gazebo>
+    </xacro:if>
+  </xacro:macro>
+
+</robot>

@@ -41,11 +41,8 @@ def test_esp32_transport_is_not_implemented():
         make_transport('esp32')
 
 
-def test_sim_transport_requires_node():
-    with pytest.raises(ValueError):
-        make_transport('sim')
-
-
 def test_unknown_transport_rejected():
-    with pytest.raises(ValueError):
-        make_transport('carrier_pigeon')
+    # 'sim' was the open-loop simulated ESP32, removed with the move to ros2_control.
+    for name in ('sim', 'carrier_pigeon'):
+        with pytest.raises(ValueError):
+            make_transport(name)

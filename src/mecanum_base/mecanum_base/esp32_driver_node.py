@@ -15,9 +15,9 @@
 """
 ESP32 drive node: cmd_vel -> mecanum inverse kinematics -> per-motor ESP32 commands.
 
-Open-loop by design: the motors have no encoders, so this node publishes no odometry and
-no joint states. Odometry comes from LiDAR-inertial odometry only. See
-docs/decisions/0001-open-loop-drive-without-ros2-control.md.
+Open-loop: this node reads no encoders, so it publishes no odometry and no joint states.
+It was designed when the motors had no encoders (docs/decisions/0001, now superseded); the
+new motors have them, and docs/plan.md Phase 1 replaces this drive with ros2_control.
 
 Safety: commands are sent at a fixed rate; zeros are sent when no cmd_vel arrives within
 ``cmd_timeout``, after any exception in the control loop, and on shutdown (SIGINT/SIGTERM).
@@ -33,15 +33,16 @@ from mecanum_base.transport import make_transport, TRANSPORTS
 from mecanum_base.wheel_calibration import WheelCalibration
 from mecanum_interfaces.msg import WheelCommands
 import rclpy
+from rclpy.exceptions import ParameterUninitializedException
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 from rclpy.signals import SignalHandlerOptions
 
-# Defaults derived from mecanum_description/urdf/mecanum_params.xacro. config/esp32_driver.yaml
-# repeats them; test/test_urdf_defaults.py checks both against the URDF.
-DEFAULT_WHEEL_RADIUS = 0.05   # wheel_radius
-DEFAULT_LX = 0.2255           # (front_axle_x - rear_axle_x) / 2 = (0.216 + 0.235) / 2
-DEFAULT_LY = 0.207            # track_width / 2 = 0.414 / 2
+# Geometry from mecanum_description/urdf/mecanum_params.xacro. There are no code defaults:
+# config/esp32_driver.yaml must set all three, and test/test_urdf_defaults.py checks it against
+# the URDF.
+GEOMETRY_PARAMETERS = ('wheel_radius', 'lx', 'ly')
 
 
 class Esp32DriverNode(Node):
@@ -52,12 +53,10 @@ class Esp32DriverNode(Node):
         self.declare_parameter('transport', 'mock')
         self.declare_parameter('cmd_vel_topic', 'cmd_vel')
         self.declare_parameter('cmd_vel_stamped', False)
-        self.declare_parameter('motor_commands_topic', '/esp32/motor_commands')
         self.declare_parameter('rate_hz', 20.0)
         self.declare_parameter('cmd_timeout', 0.25)
-        self.declare_parameter('wheel_radius', DEFAULT_WHEEL_RADIUS)
-        self.declare_parameter('lx', DEFAULT_LX)
-        self.declare_parameter('ly', DEFAULT_LY)
+        for name in GEOMETRY_PARAMETERS:
+            self.declare_parameter(name, Parameter.Type.DOUBLE)
         self.declare_parameter('max_vx', 0.3)
         self.declare_parameter('max_vy', 0.3)
         self.declare_parameter('max_wz', 0.8)
@@ -77,6 +76,11 @@ class Esp32DriverNode(Node):
                 deadband=self._float(prefix + 'deadband'),
                 max_value=self._float(prefix + 'max_value'))
 
+        missing = [name for name in GEOMETRY_PARAMETERS if not self._is_set(name)]
+        if missing:
+            raise ValueError(
+                f'geometry parameters not set: {", ".join(missing)}. Set them in '
+                'config/esp32_driver.yaml from the robot URDF.')
         geometry = MecanumGeometry(
             lx=self._float('lx'), ly=self._float('ly'),
             wheel_radius=self._float('wheel_radius'))
@@ -87,9 +91,7 @@ class Esp32DriverNode(Node):
         transport_name = self.get_parameter('transport').value
         if transport_name not in TRANSPORTS:
             raise ValueError(f'transport must be one of {TRANSPORTS}, got {transport_name!r}')
-        self._transport = make_transport(
-            transport_name, node=self, log=self.get_logger().info,
-            sim_topic=self.get_parameter('motor_commands_topic').value)
+        self._transport = make_transport(transport_name, log=self.get_logger().info)
         self._transport.connect()
         self._stopped = False
 
@@ -114,6 +116,13 @@ class Esp32DriverNode(Node):
             f'cmd_timeout={self._core.cmd_timeout:.2f} s, lx={geometry.lx:.4f} '
             f'ly={geometry.ly:.4f} r={geometry.wheel_radius:.4f}, limits=({limits.max_vx}, '
             f'{limits.max_vy}, {limits.max_wz})')
+
+    def _is_set(self, name):
+        try:
+            self.get_parameter(name)
+        except ParameterUninitializedException:
+            return False
+        return True
 
     def _float(self, name):
         return float(self.get_parameter(name).value)

@@ -35,13 +35,8 @@ setup(
     zip_safe=True,
     maintainer='hegde-aryan',
     maintainer_email='claude.raseksha@gmail.com',
-    description='Gazebo simulation of the mecanum base: world, sim-only URDF additions and '
-                'a simulated ESP32 and motors.',
+    description='Gazebo simulation of the mecanum base: worlds, sim-only URDF additions and '
+                'the ros_gz bridge.',
     license='Apache-2.0',
     tests_require=['pytest'],
-    entry_points={
-        'console_scripts': [
-            'sim_motor_plant = mecanum_simulation.sim_motor_plant:main',
-        ],
-    },
 )

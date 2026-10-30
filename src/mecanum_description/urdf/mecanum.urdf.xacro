@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<!-- Main entry point for the mecanum robot description. -->
+<!-- Main entry point for the mecanum robot description (the washroom robot prototype). -->
 <robot name="mecanum" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
   <!-- Optional prefix for all links/joints (e.g. "robot1_") -->
@@ -13,11 +13,45 @@
 
   <xacro:mecanum_robot prefix="$(arg prefix)"/>
 
-  <!-- Unitree L2 LiDAR (mount, lidar and IMU frames). Mount pose args are declared in
-       sensors/unitree_l2.xacro. Set use_l2:=false to build the bare base. -->
+  <!-- Sensors, one xacro each in urdf/sensors/. Set use_<sensor>:=false to leave one out. -->
+
+  <!-- Unitree L2 LiDAR (mount, lidar and IMU frames) -->
   <xacro:arg name="use_l2" default="true"/>
   <xacro:if value="$(arg use_l2)">
     <xacro:include filename="$(find mecanum_description)/urdf/sensors/unitree_l2.xacro"/>
   </xacro:if>
+
+  <!-- RealSense D435i depth camera (body and optical frames) -->
+  <xacro:arg name="use_d435i" default="true"/>
+  <xacro:if value="$(arg use_d435i)">
+    <xacro:include filename="$(find mecanum_description)/urdf/sensors/realsense_d435i.xacro"/>
+  </xacro:if>
+
+  <!-- RPLIDAR C1 2D lidar (scan frame) -->
+  <xacro:arg name="use_lidar_2d" default="true"/>
+  <xacro:if value="$(arg use_lidar_2d)">
+    <xacro:include filename="$(find mecanum_description)/urdf/sensors/lidar_2d.xacro"/>
+  </xacro:if>
+
+  <!-- Four ultrasonic rangers (beam frames) -->
+  <xacro:arg name="use_ultrasonics" default="true"/>
+  <xacro:if value="$(arg use_ultrasonics)">
+    <xacro:include filename="$(find mecanum_description)/urdf/sensors/ultrasonics.xacro"/>
+  </xacro:if>
+
+  <!-- Four downward cliff ToF sensors (beam frames) -->
+  <xacro:arg name="use_cliff_tof" default="true"/>
+  <xacro:if value="$(arg use_cliff_tof)">
+    <xacro:include filename="$(find mecanum_description)/urdf/sensors/cliff_tof.xacro"/>
+  </xacro:if>
+
+  <!-- Front and rear bumper planks -->
+  <xacro:arg name="use_bumpers" default="true"/>
+  <xacro:if value="$(arg use_bumpers)">
+    <xacro:include filename="$(find mecanum_description)/urdf/sensors/bumpers.xacro"/>
+  </xacro:if>
+
+  <!-- Not modelled: the E-stop (rear face of the tall box), the arm (not in the CAD yet) and
+       the internal electronics. -->
 
 </robot>

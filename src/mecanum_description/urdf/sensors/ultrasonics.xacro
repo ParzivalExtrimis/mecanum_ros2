@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+<!--
+  Four waterproof ultrasonic rangers, DFRobot A02YYUW (BOM item 4): beam frames.
+
+  Included from mecanum.urdf.xacro when use_ultrasonics is true (the default).
+
+  Mount: a front pair facing +x and a rear pair facing -x, about 0.30 m above the floor (PDF
+  schedule). The rear pair is the main reverse sensor. Positions are the STEP bodies
+  (84.6 x 29.6 x 29 mm); the PDF assumed a smaller body (+-0.35, +-0.17).
+
+  Frames: ultrasonic_<pos>_link at the centre of the outward face, +x along the beam
+  (sensor_msgs/Range convention). The cone angle and range limits belong in the Range message,
+  not here.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:property name="ultrasonic_body_x" value="0.029"/>
+  <xacro:property name="ultrasonic_body_y" value="0.0846"/>
+  <xacro:property name="ultrasonic_body_z" value="0.0296"/>
+
+  <!-- pos: front_left, ...; x, y, z: outward-face centre in the parent frame; yaw: beam
+       direction (0 front, pi rear) -->
+  <xacro:macro name="ultrasonic" params="prefix parent pos x y z yaw">
+
+    <joint name="${prefix}ultrasonic_${pos}_joint" type="fixed">
+      <parent link="${prefix}${parent}"/>
+      <child link="${prefix}ultrasonic_${pos}_link"/>
+      <origin xyz="${x} ${y} ${z}" rpy="0 0 ${yaw}"/>
+    </joint>
+
+    <!-- Massless: counted in chassis_mass -->
+    <link name="${prefix}ultrasonic_${pos}_link">
+      <visual>
+        <origin xyz="${-ultrasonic_body_x/2} 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${ultrasonic_body_x} ${ultrasonic_body_y} ${ultrasonic_body_z}"/>
+        </geometry>
+        <material name="ultrasonic_ochre"/>
+      </visual>
+      <collision>
+        <origin xyz="${-ultrasonic_body_x/2} 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${ultrasonic_body_x} ${ultrasonic_body_y} ${ultrasonic_body_z}"/>
+        </geometry>
+      </collision>
+    </link>
+
+  </xacro:macro>
+
+  <!-- Poses in base_link (front pair 0.296 m, rear pair 0.298 m above the floor) -->
+  <xacro:ultrasonic prefix="$(arg prefix)" parent="base_link" pos="front_left"
+    x="0.408" y="0.1905" z="0.1937" yaw="0"/>
+  <xacro:ultrasonic prefix="$(arg prefix)" parent="base_link" pos="front_right"
+    x="0.408" y="-0.1905" z="0.1937" yaw="0"/>
+  <xacro:ultrasonic prefix="$(arg prefix)" parent="base_link" pos="rear_left"
+    x="-0.401" y="0.2105" z="0.1957" yaw="${pi}"/>
+  <xacro:ultrasonic prefix="$(arg prefix)" parent="base_link" pos="rear_right"
+    x="-0.401" y="-0.2105" z="0.1957" yaw="${pi}"/>
+
+</robot>

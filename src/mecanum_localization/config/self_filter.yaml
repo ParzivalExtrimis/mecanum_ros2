@@ -1,0 +1,23 @@
+# Robot self-filter (pcl_ros CropBox, negative): removes L2 returns that fall on the robot.
+#
+# The box is defined in base_footprint (z = 0 on the floor) and must cover the whole robot,
+# including every mount and sensor the L2 can see. Everything inside it is dropped; the cloud is
+# published back in l2_lidar so the LIO sees sensor-frame points.
+#
+# This is the single place to replace with a URDF-based self-filter once the arm is mounted
+# (an arm moves through this box and outside it).
+self_filter:
+  ros__parameters:
+    input_frame: base_footprint
+    output_frame: l2_lidar
+    negative: true          # keep points OUTSIDE the box
+    keep_organized: false
+    # The robot's extent from mecanum_description (base_footprint frame): x -0.404 (rear
+    # bumper) to 0.420 (2D lidar), y +-0.258 (wheels), z up to 0.832 (top of the L2). The
+    # upright L2 sees little of the robot: only the top of the tall box, in wide mode.
+    min_x: -0.43   # STAND-IN: robot extent + about 2.5 cm margin; check for self-hits in a real cloud
+    max_x: 0.45    # STAND-IN: as min_x
+    min_y: -0.29   # STAND-IN: as min_x
+    max_y: 0.29    # STAND-IN: as min_x
+    min_z: -0.05   # below the floor, so the box reaches down to it
+    max_z: 0.86    # STAND-IN: top of the L2 (0.832) + about 2.5 cm

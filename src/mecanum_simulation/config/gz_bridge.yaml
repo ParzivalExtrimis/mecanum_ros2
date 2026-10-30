@@ -1,6 +1,6 @@
 # ros_gz_bridge configuration for the mecanum simulation.
-# Wheel joint states and the ground-truth TF are deliberately NOT bridged (see
-# urdf/mecanum.gazebo.xacro).
+# The ground-truth TF is deliberately NOT bridged (see urdf/mecanum.gazebo.xacro). The wheels
+# need no bridge: gz_ros2_control talks to the controller manager inside Gazebo.
 
 - ros_topic_name: /clock
   gz_topic_name: /clock
@@ -8,31 +8,25 @@
   gz_type_name: gz.msgs.Clock
   direction: GZ_TO_ROS
 
-# Wheel speed commands (rad/s) from sim_motor_plant to the JointController of each wheel.
-- ros_topic_name: /sim/wheel_cmd/front_left
-  gz_topic_name: /model/mecanum/joint/front_left_wheel_joint/cmd_vel
-  ros_type_name: std_msgs/msg/Float64
-  gz_type_name: gz.msgs.Double
-  direction: ROS_TO_GZ
-- ros_topic_name: /sim/wheel_cmd/front_right
-  gz_topic_name: /model/mecanum/joint/front_right_wheel_joint/cmd_vel
-  ros_type_name: std_msgs/msg/Float64
-  gz_type_name: gz.msgs.Double
-  direction: ROS_TO_GZ
-- ros_topic_name: /sim/wheel_cmd/rear_left
-  gz_topic_name: /model/mecanum/joint/rear_left_wheel_joint/cmd_vel
-  ros_type_name: std_msgs/msg/Float64
-  gz_type_name: gz.msgs.Double
-  direction: ROS_TO_GZ
-- ros_topic_name: /sim/wheel_cmd/rear_right
-  gz_topic_name: /model/mecanum/joint/rear_right_wheel_joint/cmd_vel
-  ros_type_name: std_msgs/msg/Float64
-  gz_type_name: gz.msgs.Double
-  direction: ROS_TO_GZ
-
 # Ground truth for evaluation only (frames sim_gt_world / sim_gt_base, never in TF).
 - ros_topic_name: /sim/ground_truth/odom
   gz_topic_name: /sim/ground_truth/odom
   ros_type_name: nav_msgs/msg/Odometry
   gz_type_name: gz.msgs.Odometry
+  direction: GZ_TO_ROS
+
+# The robot's other sensors (D435i, 2D lidar, ultrasonics, cliff ToF, bumpers) are bridged in
+# docs/plan.md Phase 2, on the topics and frames of the plan's contract table.
+
+# Simulated Unitree L2, on the same topics as the real driver (mecanum_lidar).
+# gpu_lidar publishes its packed cloud on <sensor topic>/points; frames come from gz_frame_id.
+- ros_topic_name: /l2/points
+  gz_topic_name: /sim/l2/lidar/points
+  ros_type_name: sensor_msgs/msg/PointCloud2
+  gz_type_name: gz.msgs.PointCloudPacked
+  direction: GZ_TO_ROS
+- ros_topic_name: /l2/imu
+  gz_topic_name: /sim/l2/imu
+  ros_type_name: sensor_msgs/msg/Imu
+  gz_type_name: gz.msgs.IMU
   direction: GZ_TO_ROS

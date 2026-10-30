@@ -1,34 +1,56 @@
 <?xml version="1.0"?>
-<!-- Physical parameters of the mecanum robot. All units SI (m, kg, rad). -->
-<!-- Dimensions match the STL meshes in meshes/visual. -->
+<!-- Physical parameters of the robot. All units SI (m, kg, rad).
+
+     Source: the reference URDF refs/washroom_robot.urdf, generated from the STEP model
+     (wholerobotstepfile001.step, units mm, converted to metres there) and the sensor placement
+     PDF docs/Washroom_Robot_Prototype_Sensors_and_BOM.pdf. Where the two disagree the reference
+     URDF wins; its header lists each difference. test/test_reference_urdf.py checks that the
+     frames built from these values match the reference.
+
+     Frames: base_footprint on the floor below the wheel-rectangle centre; base_link directly
+     above it at wheel-axle height. Every pose below is relative to base_link.
+
+     Other packages consume these values:
+       - wheel_radius, front/rear_axle_x, wheel_y: wheel_radius, lx and ly in
+         mecanum_base/config/esp32_driver.yaml (checked by test_urdf_defaults.py)
+       - the body extent (including every sensor): the self-filter box in
+         mecanum_localization/config/self_filter.yaml and the Nav2 footprint
+       - masses and inertias: simulation dynamics only -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <!-- Chassis -->
-  <xacro:property name="chassis_length" value="0.605"/>
-  <xacro:property name="chassis_width" value="0.394"/>
-  <xacro:property name="chassis_height" value="0.064"/>
-  <xacro:property name="chassis_mass" value="5.0"/>
-  <!-- Height of the chassis centre above base_link (wheel axle height) -->
-  <xacro:property name="chassis_z_offset" value="0.008"/>
+  <!-- ===== Wheels (STEP bodies 'Folder 28*') ===== -->
+  <!-- STAND-IN: unloaded CAD radius; measure the loaded radius on the robot -->
+  <xacro:property name="wheel_radius" value="0.1025"/>
+  <xacro:property name="wheel_width" value="0.085"/>
+  <xacro:property name="wheel_hub_radius" value="0.05"/>
+  <!-- STAND-IN: no masses were supplied; 1.5 kg assumed per wheel (the drive motors are
+       counted in chassis_mass). Weigh one wheel with its hub. -->
+  <xacro:property name="wheel_mass" value="1.5"/>
+  <!-- Inertia of the STEP wheel solid scaled to wheel_mass (about the wheel centre) -->
+  <xacro:property name="wheel_ixx" value="0.00582886"/>
+  <xacro:property name="wheel_iyy" value="0.0100038"/>
+  <!-- Wheel centre of mass offset along the axle, toward the robot centreline -->
+  <xacro:property name="wheel_com_y" value="0.0003"/>
 
-  <!-- Wheels -->
-  <xacro:property name="wheel_radius" value="0.05"/>
-  <xacro:property name="wheel_width" value="0.08"/>
-  <xacro:property name="wheel_mass" value="0.3"/>
+  <!-- Wheel centres. lx = (front_axle_x - rear_axle_x) / 2 = 0.2360, ly = wheel_y = 0.2150.
+       The STEP puts the left wheels at y +0.2148 and the right ones at -0.2152 (0.2 mm off
+       centre); they are made symmetric here, as the kinematics assume. -->
+  <xacro:property name="front_axle_x" value="0.2363"/>
+  <xacro:property name="rear_axle_x" value="-0.2357"/>
+  <xacro:property name="wheel_y" value="0.2150"/>
 
-  <!-- Wheel placement relative to base_link (chassis centre). Axles are not symmetric
-       about the chassis centre; values taken from the axle bosses on the chassis mesh. -->
-  <xacro:property name="front_axle_x" value="0.216"/>
-  <xacro:property name="rear_axle_x" value="-0.235"/>
-  <xacro:property name="wheelbase" value="${front_axle_x - rear_axle_x}"/>
-  <!-- track = left/right wheel centre distance -->
-  <xacro:property name="track_width" value="0.414"/>
-
-  <!-- Meshes (already in metres, origin at the link frame) -->
-  <xacro:property name="mesh_dir" value="package://mecanum_description/meshes/visual"/>
-  <xacro:property name="chassis_mesh" value="${mesh_dir}/macchumwheel_body_001_nowheel.stl"/>
-  <!-- X-configuration: diagonal wheels share the same roller handedness -->
-  <xacro:property name="wheel_mesh_left_hand" value="${mesh_dir}/macchumwheelFL.stl"/>
-  <xacro:property name="wheel_mesh_right_hand" value="${mesh_dir}/macchumwheelbase_FR.stl"/>
+  <!-- ===== Body (STEP body 'Cover', rebuilt from boxes in mecanum_robot.xacro) ===== -->
+  <!-- Envelope relative to base_link: x -0.391..0.399, y -0.255..0.255,
+       z -0.0037..0.6344 (0.099..0.737 m above the floor). -->
+  <!-- STAND-IN: no masses were supplied. 25 kg = frame, panels, battery, drive motors,
+       electronics and sensors (except the L2's vendor mass), spread evenly over the envelope.
+       The real centre of mass is probably lower (battery, motors). Weigh the robot. -->
+  <xacro:property name="chassis_mass" value="25.0"/>
+  <xacro:property name="chassis_com_x" value="-0.065"/>
+  <xacro:property name="chassis_com_z" value="0.2426"/>
+  <xacro:property name="chassis_ixx" value="1.25341"/>
+  <xacro:property name="chassis_iyy" value="1.83996"/>
+  <xacro:property name="chassis_izz" value="1.69493"/>
+  <xacro:property name="chassis_ixz" value="0.331293"/>
 
 </robot>

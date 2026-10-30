@@ -1,39 +1,66 @@
 <?xml version="1.0"?>
-<!-- A single mecanum wheel: mesh visual, cylinder collision. -->
+<!-- A single mecanum wheel: link and continuous joint. -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
   <!--
     prefix:   robot-wide prefix (e.g. "" or "robot1_")
     name:     wheel position, e.g. "front_left"
     parent:   link the wheel attaches to
-    mesh:     visual mesh (roller handedness)
-    x, y, z:  wheel centre relative to parent
+    x, y:     wheel centre (tread mid-plane on the axle) in the parent frame
+    side:     1 for a left wheel, -1 for a right wheel
+
+    The joint axis is +y for all four wheels, so a positive joint velocity rolls the robot
+    forward on every wheel. The rollers are not modelled (the CAD has none): the roller
+    handedness (X layout) lives in mecanum_base/kinematics.py and the sim friction directions.
   -->
-  <xacro:macro name="mecanum_wheel" params="prefix name parent mesh x y z:=0.0">
+  <xacro:macro name="mecanum_wheel" params="prefix name parent x y side">
 
     <link name="${prefix}${name}_wheel_link">
+      <inertial>
+        <origin xyz="0 ${-side * wheel_com_y} 0" rpy="0 0 0"/>
+        <mass value="${wheel_mass}"/>
+        <inertia ixx="${wheel_ixx}" ixy="0" ixz="0" iyy="${wheel_iyy}" iyz="0"
+                 izz="${wheel_ixx}"/>
+      </inertial>
+      <!-- Tyre -->
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+        <material name="tyre_black"/>
+      </visual>
+      <!-- Hub -->
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_hub_radius}" length="${wheel_width + 0.002}"/>
+        </geometry>
+        <material name="hub_grey"/>
+      </visual>
+      <!-- White bar across the wheel face: shows the wheel turning in RViz -->
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <mesh filename="${mesh}"/>
+          <box size="0.014 ${wheel_width + 0.003} ${0.85 * 2 * wheel_radius}"/>
         </geometry>
-        <material name="dark_grey"/>
+        <material name="marker_white"/>
       </visual>
+      <!-- Exactly one unnamed collision: the Gazebo friction block in
+           mecanum_simulation/urdf/mecanum.gazebo.xacro merges into it by name
+           (<link>_collision), and test_urdf_defaults.py reads its radius. -->
       <collision>
         <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
         <geometry>
           <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
         </geometry>
       </collision>
-      <xacro:cylinder_inertia mass="${wheel_mass}" radius="${wheel_radius}" length="${wheel_width}">
-        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
-      </xacro:cylinder_inertia>
     </link>
 
     <joint name="${prefix}${name}_wheel_joint" type="continuous">
       <parent link="${prefix}${parent}"/>
       <child link="${prefix}${name}_wheel_link"/>
-      <origin xyz="${x} ${y} ${z}" rpy="0 0 0"/>
+      <origin xyz="${x} ${y} 0" rpy="0 0 0"/>
       <axis xyz="0 1 0"/>
     </joint>
 

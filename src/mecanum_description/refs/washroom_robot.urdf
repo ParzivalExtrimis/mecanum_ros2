@@ -1,0 +1,828 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<robot name="washroom_robot">
+  <!--
+  washroom_robot.urdf : ONE self-contained file. No meshes, no xacro: every shape is a box or cylinder
+  measured from the STEP. The CAD is almost entirely boxes and cylinders; only the wheel-hub profile and
+  the bumper edge fillets are simplified.
+
+  SOURCES
+    Geometry : wholerobotstepfile001.step  (Shapr3D 26.180.0.11926, exported 2026-10-26T20:46:53+05:30, units mm)
+    Meaning  : Washroom_Robot_Prototype_Sensors_and_BOM.pdf  (sensor placement + BOM, prices as of 7 Oct 2026)
+    Generator: build_urdf.py (re-run after CAD changes; it refuses to run if a body changes size/count)
+
+  FRAMES  (REP-103: x forward, y left, z up; metres, radians)
+    CAD to ROS: x = -Y_cad, y = +X_cad, z = Z_cad + 148.9 mm (lowest wheel points define the floor).
+    Forward = -Y_cad agrees with three separate cues: the L2 sits behind centre (PDF x -0.12), the D435i and
+    2D lidar sit on the -Y face, and the tall box (rear in the PDF) is at +Y.
+    base_link      ROOT, above the CAD origin (= wheel-rectangle centre within 0.3 mm) at axle height 0.1025 m.
+                   Odometry should therefore publish odom -> base_link.
+    base_footprint fixed child of base_link on the floor = the PDF schedule frame ('robot centre on the floor').
+
+  TREE (all joints fixed except the wheels)
+    base_link
+      +- base_footprint
+      +- chassis_link                       body envelope, carries the body mass
+      +- {front,rear}_{left,right}_wheel_link   continuous, axis +y, positive = rolls forward
+      +- unitree_l2_link
+      +- d435i_link
+      |    +- d435i_optical_frame           z forward, x right, y down
+      +- lidar_2d_link
+      +- ultrasonic_{front,rear}_{left,right}_link    +x along the beam
+      +- cliff_tof_{front,rear}_{left,right}_link     +x straight down
+      +- bumper_{front,rear}_link                     +x outward
+
+  SENSOR FRAMES vs PDF SCHEDULE  (base_footprint frame, m)
+    frame                        this URDF                PDF                  source of the URDF value
+    unitree_l2_link              (-0.100, 0.000, 0.799)   (-0.12, 0.00, 0.78)  x,y = STEP body; z = STEP box top 0.737 (PDF assumed 0.72) + 30 mm standoff + half of 65 mm
+    d435i_link                   (0.404, 0.000, 0.264)    (0.35, 0.00, 0.26)   front (glass) face of STEP body; STEP front face is at x 0.399, PDF assumed 0.35
+    lidar_2d_link                (0.400, 0.000, 0.130)    (0.37, 0.00, 0.13)   x,y = STEP body centre (protrudes 21 mm past the face); z = PDF scan plane
+    ultrasonic_front_left_link   (0.408, 0.191, 0.296)    (0.35, 0.17, 0.30)   STEP body, centre of outward face
+    ultrasonic_front_right_link  (0.408, -0.191, 0.296)   (0.35, -0.17, 0.30)  STEP body, centre of outward face
+    ultrasonic_rear_left_link    (-0.401, 0.211, 0.298)   (-0.35, 0.17, 0.30)  STEP body, centre of outward face
+    ultrasonic_rear_right_link   (-0.401, -0.211, 0.298)  (-0.35, -0.17, 0.30) STEP body, centre of outward face
+    cliff_tof_front_left_link    (0.354, 0.208, 0.119)    (0.33, 0.21, 0.08)   STEP body, centre of downward face
+    cliff_tof_front_right_link   (0.354, -0.208, 0.119)   (0.33, -0.21, 0.08)  STEP body, centre of downward face
+    cliff_tof_rear_left_link     (-0.354, 0.208, 0.119)   (-0.33, 0.21, 0.08)  STEP body, centre of downward face
+    cliff_tof_rear_right_link    (-0.354, -0.208, 0.119)  (-0.33, -0.21, 0.08) STEP body, centre of downward face
+    Why x differs: the PDF numbers assume a 0.70 x 0.50 x 0.72 m body; the STEP body is
+    0.79 x 0.51 x 0.737 m, so front/rear sensors sit ~5 cm further out.
+
+  ASSUMPTIONS  (no masses or densities were supplied; edit the <mass> tags, inertias scale linearly)
+    1. chassis_link 25.0 kg = frame, panels, battery, 4 drive motors, electronics AND all
+       sensors. Wheels 1.5 kg each. Total 31.0 kg.
+    2. Chassis inertia: that mass spread evenly over the outer envelope, COM (-0.065, 0.000, 0.345) m
+       above the floor. Rough: the real COM is probably lower (battery, motors). The CAD cover itself was not
+       used for mass because it is an irregular shell (1 mm right wall, 111 mm solid left wall, 41 mm top).
+    3. Wheel inertia: the STEP wheel solid scaled to 1.5 kg.
+    4. Sensor and bumper links are massless; no sensor specs (FOV, range, rate, optical centres) are encoded,
+       because the PDF does not state them. (MuJoCo infers ~2 kg for them from geometry unless
+       compiler inertiafromgeom is false; Gazebo lumps them as massless.)
+    5. L2 height follows the PDF 30 mm standoff rule, not the STEP (STEP has it sunk 40 mm into the box top).
+    6. D435i pitch (8 deg nose-down) is from the PDF; the STEP body is not pitched.
+    7. 2D-lidar scan height (0.13 m) is from the PDF; the STEP placeholder box is drawn on its side.
+
+  NOT MODELLED
+    - E-stop: the PDF puts it at the rear-face centre at 0.60 m; in this STEP that spot is inside the open rear notch.
+    - A 90x25x25 mm block (D435i-sized) buried inside the right-rear top corner at (-0.32, -0.20, 0.71): not in the PDF.
+    - Arm (not in the STEP), internal electronics (no frames needed), mecanum rollers.
+
+  CHECK ON THE ROBOT: total mass; L2 height and which way its x-axis points; D435i pitch; 2D-lidar scan height
+  and 0-degree direction; cliff ToF height above floor; front bumper vs lidar protrusion; loaded wheel radius.
+
+  MECANUM CONTROLLER NUMBERS: wheel radius 0.1025 m, half wheelbase lx 0.2360 m, half track ly 0.2150 m.
+
+  VIEW / CHECK
+    check_urdf washroom_robot.urdf
+    urdf_to_graphviz washroom_robot.urdf
+    ros2 launch urdf_tutorial display.launch.py model:=$PWD/washroom_robot.urdf
+-->
+  <!-- ===== Materials (sensor colours match the PDF callouts) ===== -->
+  <material name="cad_grey">
+    <color rgba="0.352 0.352 0.371 1"/>
+  </material>
+  <material name="tyre_black">
+    <color rgba="0.1 0.1 0.1 1"/>
+  </material>
+  <material name="hub_grey">
+    <color rgba="0.55 0.55 0.58 1"/>
+  </material>
+  <material name="marker_white">
+    <color rgba="0.92 0.92 0.92 1"/>
+  </material>
+  <material name="l2_purple">
+    <color rgba="0.48 0.45 0.85 1"/>
+  </material>
+  <material name="mount_white">
+    <color rgba="0.85 0.85 0.85 1"/>
+  </material>
+  <material name="d435i_green">
+    <color rgba="0.12 0.62 0.47 1"/>
+  </material>
+  <material name="lidar_orange">
+    <color rgba="0.85 0.37 0.19 1"/>
+  </material>
+  <material name="ultrasonic_ochre">
+    <color rgba="0.72 0.46 0.1 1"/>
+  </material>
+  <material name="tof_blue">
+    <color rgba="0.23 0.53 0.84 1"/>
+  </material>
+  <material name="bumper_red">
+    <color rgba="0.88 0.28 0.28 1"/>
+  </material>
+  <!-- ===== base_link: ROOT. Directly above the CAD origin / PDF 'robot centre', at wheel-axle height (0.1025 m). Frame only - no inertia here, so KDL/robot_state_publisher does not warn about an inertial root; the body mass lives in chassis_link (Gazebo lumps the fixed joint). ===== -->
+  <link name="base_link"/>
+  <!-- base_footprint: floor projection of base_link = the PDF's 'origin at robot centre on the floor' frame. -->
+  <link name="base_footprint"/>
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="base_footprint"/>
+    <origin xyz="0 0 -0.1025" rpy="0 0 0"/>
+  </joint>
+  <!-- ===== chassis_link: outer envelope of STEP body 'Cover' rebuilt from its planar faces as 18 boxes (rotated ones follow the 60 deg front slope and the 20 deg rear-notch floor and its pad; the underside slab is split to leave an open pocket under each cliff sensor, as the STEP body is open underneath). Same boxes are used for collision. Inertial = assumed mass spread uniformly over that envelope (ROUGH: real COM is probably lower). ===== -->
+  <link name="chassis_link">
+    <inertial>
+      <origin xyz="-0.065 0 0.2426" rpy="0 0 0"/>
+      <mass value="25.000"/>
+      <inertia ixx="1.25341" ixy="0" ixz="0.331293" iyy="1.83996" iyz="0" izz="1.69493"/>
+    </inertial>
+    <!-- underside slab 1/9 (leaves the cliff-sensor pockets open) -->
+    <visual>
+      <origin xyz="-0.3805 0 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.021 0.51 0.0521"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <!-- underside slab 2/9 (leaves the cliff-sensor pockets open) -->
+    <visual>
+      <origin xyz="-0.3535 -0.2449 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.033 0.0202 0.0521"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <!-- underside slab 3/9 (leaves the cliff-sensor pockets open) -->
+    <visual>
+      <origin xyz="-0.3535 0 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.033 0.3616 0.0521"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <!-- underside slab 4/9 (leaves the cliff-sensor pockets open) -->
+    <visual>
+      <origin xyz="-0.3535 0.2449 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.033 0.0202 0.0521"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <!-- underside slab 5/9 (leaves the cliff-sensor pockets open) -->
+    <visual>
+      <origin xyz="0 0 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.674 0.51 0.0521"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <!-- underside slab 6/9 (leaves the cliff-sensor pockets open) -->
+    <visual>
+      <origin xyz="0.3535 -0.2449 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.033 0.0202 0.0521"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <!-- underside slab 7/9 (leaves the cliff-sensor pockets open) -->
+    <visual>
+      <origin xyz="0.3535 0 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.033 0.3616 0.0521"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <!-- underside slab 8/9 (leaves the cliff-sensor pockets open) -->
+    <visual>
+      <origin xyz="0.3535 0.2449 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.033 0.0202 0.0521"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <!-- underside slab 9/9 (leaves the cliff-sensor pockets open) -->
+    <visual>
+      <origin xyz="0.3845 0 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.029 0.51 0.0521"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <!-- lower body (envelope of the open-bottom shell) -->
+    <visual>
+      <origin xyz="0.004 0 0.1446" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.79 0.51 0.1923"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <!-- raised deck -->
+    <visual>
+      <origin xyz="-0.0755 0 0.2831" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.6309 0.51 0.0846"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <!-- 60 deg slope deck->step -->
+    <visual>
+      <origin xyz="0.2438 0 0.2713" rpy="0 -0.523598775 0"/>
+      <geometry>
+        <box size="0.0473 0.51 0.0977"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <!-- tall box, front part -->
+    <visual>
+      <origin xyz="-0.1255 0 0.4799" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.167 0.51 0.309"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <!-- tall box, left rear ear -->
+    <visual>
+      <origin xyz="-0.3 0.1975 0.4799" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.182 0.115 0.309"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <!-- tall box, right rear ear -->
+    <visual>
+      <origin xyz="-0.3 -0.1975 0.4799" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.182 0.115 0.309"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <!-- rear notch, below floor -->
+    <visual>
+      <origin xyz="-0.3 0 0.4016" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.182 0.28 0.1523"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <!-- rear notch, 20 deg floor -->
+    <visual>
+      <origin xyz="-0.2885 0 0.4792" rpy="0 -0.349044398 0"/>
+      <geometry>
+        <box size="0.1937 0.28 0.0672"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <!-- rear notch floor, 2 mm raised pad -->
+    <visual>
+      <origin xyz="-0.2902 0 0.5149" rpy="0 -0.34906585 0"/>
+      <geometry>
+        <box size="0.125 0.223 0.003"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <collision>
+      <origin xyz="-0.3805 0 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.021 0.51 0.0521"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.3535 -0.2449 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.033 0.0202 0.0521"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.3535 0 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.033 0.3616 0.0521"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.3535 0.2449 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.033 0.0202 0.0521"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0 0 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.674 0.51 0.0521"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0.3535 -0.2449 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.033 0.0202 0.0521"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0.3535 0 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.033 0.3616 0.0521"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0.3535 0.2449 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.033 0.0202 0.0521"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0.3845 0 0.0224" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.029 0.51 0.0521"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0.004 0 0.1446" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.79 0.51 0.1923"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.0755 0 0.2831" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.6309 0.51 0.0846"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0.2438 0 0.2713" rpy="0 -0.523598775 0"/>
+      <geometry>
+        <box size="0.0473 0.51 0.0977"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.1255 0 0.4799" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.167 0.51 0.309"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.3 0.1975 0.4799" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.182 0.115 0.309"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.3 -0.1975 0.4799" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.182 0.115 0.309"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.3 0 0.4016" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.182 0.28 0.1523"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.2885 0 0.4792" rpy="0 -0.349044398 0"/>
+      <geometry>
+        <box size="0.1937 0.28 0.0672"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.2902 0 0.5149" rpy="0 -0.34906585 0"/>
+      <geometry>
+        <box size="0.125 0.223 0.003"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="chassis_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="chassis_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+  <!-- ===== Wheels: STEP bodies 'Folder 28*' (r = 102.5 mm, width 85.0 mm). continuous joints at the tread centre; axis +y for all four, so a POSITIVE joint velocity rolls the robot FORWARD on every wheel. Mecanum rollers are not in the CAD: roller handedness (X vs O layout) must be set in the drive controller, not here. White bar = rotation marker for RViz. ===== -->
+  <link name="front_left_wheel_link">
+    <inertial>
+      <origin xyz="0 -0.0003 0" rpy="0 0 0"/>
+      <mass value="1.500"/>
+      <inertia ixx="0.00582886" ixy="0" ixz="0" iyy="0.0100038" iyz="0" izz="0.00582886"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="1.570796327 0 0"/>
+      <geometry>
+        <cylinder radius="0.1025" length="0.085"/>
+      </geometry>
+      <material name="tyre_black"/>
+    </visual>
+    <visual>
+      <origin xyz="0 0 0" rpy="1.570796327 0 0"/>
+      <geometry>
+        <cylinder radius="0.05" length="0.087"/>
+      </geometry>
+      <material name="hub_grey"/>
+    </visual>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.014 0.088 0.1743"/>
+      </geometry>
+      <material name="marker_white"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.570796327 0 0"/>
+      <geometry>
+        <cylinder radius="0.1025" length="0.085"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="front_left_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="front_left_wheel_link"/>
+    <origin xyz="0.2363 0.2148 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+  <link name="front_right_wheel_link">
+    <inertial>
+      <origin xyz="0 0.0003 0" rpy="0 0 0"/>
+      <mass value="1.500"/>
+      <inertia ixx="0.00582886" ixy="0" ixz="0" iyy="0.0100038" iyz="0" izz="0.00582886"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="1.570796327 0 0"/>
+      <geometry>
+        <cylinder radius="0.1025" length="0.085"/>
+      </geometry>
+      <material name="tyre_black"/>
+    </visual>
+    <visual>
+      <origin xyz="0 0 0" rpy="1.570796327 0 0"/>
+      <geometry>
+        <cylinder radius="0.05" length="0.087"/>
+      </geometry>
+      <material name="hub_grey"/>
+    </visual>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.014 0.088 0.1743"/>
+      </geometry>
+      <material name="marker_white"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.570796327 0 0"/>
+      <geometry>
+        <cylinder radius="0.1025" length="0.085"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="front_right_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="front_right_wheel_link"/>
+    <origin xyz="0.2363 -0.2152 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+  <link name="rear_left_wheel_link">
+    <inertial>
+      <origin xyz="0 -0.0003 0" rpy="0 0 0"/>
+      <mass value="1.500"/>
+      <inertia ixx="0.00582886" ixy="0" ixz="0" iyy="0.0100038" iyz="0" izz="0.00582886"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="1.570796327 0 0"/>
+      <geometry>
+        <cylinder radius="0.1025" length="0.085"/>
+      </geometry>
+      <material name="tyre_black"/>
+    </visual>
+    <visual>
+      <origin xyz="0 0 0" rpy="1.570796327 0 0"/>
+      <geometry>
+        <cylinder radius="0.05" length="0.087"/>
+      </geometry>
+      <material name="hub_grey"/>
+    </visual>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.014 0.088 0.1743"/>
+      </geometry>
+      <material name="marker_white"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.570796327 0 0"/>
+      <geometry>
+        <cylinder radius="0.1025" length="0.085"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="rear_left_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="rear_left_wheel_link"/>
+    <origin xyz="-0.2357 0.2148 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+  <link name="rear_right_wheel_link">
+    <inertial>
+      <origin xyz="0 0.0003 0" rpy="0 0 0"/>
+      <mass value="1.500"/>
+      <inertia ixx="0.00582886" ixy="0" ixz="0" iyy="0.0100038" iyz="0" izz="0.00582886"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="1.570796327 0 0"/>
+      <geometry>
+        <cylinder radius="0.1025" length="0.085"/>
+      </geometry>
+      <material name="tyre_black"/>
+    </visual>
+    <visual>
+      <origin xyz="0 0 0" rpy="1.570796327 0 0"/>
+      <geometry>
+        <cylinder radius="0.05" length="0.087"/>
+      </geometry>
+      <material name="hub_grey"/>
+    </visual>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.014 0.088 0.1743"/>
+      </geometry>
+      <material name="marker_white"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.570796327 0 0"/>
+      <geometry>
+        <cylinder radius="0.1025" length="0.085"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="rear_right_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="rear_right_wheel_link"/>
+    <origin xyz="-0.2357 -0.2152 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+  <!-- ===== Unitree L2 (owned). x/y from STEP body (75x75x65); z from PDF rule 'box top on 30 mm standoff': CAD box top 0.7369 + 0.030 + half height. The STEP has the L2 sunk 40 mm INTO the box top, which contradicts the PDF, so the PDF mounting wins (the white standoff is drawn with the L2's footprint; its real shape is unknown). Frame = housing centre (PDF gives no optical centre); upright, x forward - confirm against Unitree's point-cloud axes before trusting yaw. 'Negative-angle mode' is a driver setting. Massless: mass is inside chassis_link. ===== -->
+  <link name="unitree_l2_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.075 0.075 0.065"/>
+      </geometry>
+      <material name="l2_purple"/>
+    </visual>
+    <visual>
+      <origin xyz="0 0 -0.0475" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.075 0.075 0.03"/>
+      </geometry>
+      <material name="mount_white"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 -0.015" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.075 0.075 0.095"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="unitree_l2_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="unitree_l2_link"/>
+    <origin xyz="-0.1 0 0.6969" rpy="0 0 0"/>
+  </joint>
+  <!-- ===== RealSense D435i (owned). STEP body 90x25x25 centred on the front face; frame at the centre of its front face. PDF 'pitched -8 deg' = optical axis 8 deg BELOW horizontal -> URDF pitch +0.139626 rad (positive pitch about +y tips +x down). STEP body itself is not pitched. realsense2_camera with camera_name:=d435i hangs its own depth/colour/IMU frames off d435i_link; those internal offsets (imager positions) are not in the PDF, so they are not modelled here. ===== -->
+  <link name="d435i_link">
+    <visual>
+      <origin xyz="-0.0125 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.025 0.09 0.025"/>
+      </geometry>
+      <material name="d435i_green"/>
+    </visual>
+    <collision>
+      <origin xyz="-0.0125 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.025 0.09 0.025"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="d435i_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="d435i_link"/>
+    <origin xyz="0.404 0 0.1614" rpy="0 0.13962634 0"/>
+  </joint>
+  <!-- Optical frame (REP-103 camera convention): z forward, x right, y down. -->
+  <link name="d435i_optical_frame"/>
+  <joint name="d435i_optical_joint" type="fixed">
+    <parent link="d435i_link"/>
+    <child link="d435i_optical_frame"/>
+    <origin xyz="0 0 0" rpy="-1.570796327 0 -1.570796327"/>
+  </joint>
+  <!-- ===== 2D lidar (SLAMTEC RPLIDAR C1 per BOM). x/y = STEP body centre, z = PDF scan plane 0.13 m. The STEP placeholder is 55.6 wide x 41.3 deep x 55.6 tall, i.e. drawn on its side; kept as drawn for geometry, but the frame follows the PDF: horizontal scan, z up, 0 deg = +x (verify the C1's zero direction on the unit). 200 deg slot -> limit angles in the driver. ===== -->
+  <link name="lidar_2d_link">
+    <visual>
+      <origin xyz="0 0 -0.0078" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0413 0.0556 0.0556"/>
+      </geometry>
+      <material name="lidar_orange"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 -0.0078" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0413 0.0556 0.0556"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="lidar_2d_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_2d_link"/>
+    <origin xyz="0.3997 0 0.0275" rpy="0 0 0"/>
+  </joint>
+  <!-- ===== Ultrasonic x4 (DFRobot A02YYUW per BOM). STEP bodies 84.6x29.6x29 at z~0.30. Frame at the centre of the outward face, +x along the beam (sensor_msgs/Range convention): front pair faces +x, rear pair -x. Cone angle etc. belong in the Range message, not the URDF. ===== -->
+  <link name="ultrasonic_front_left_link">
+    <visual>
+      <origin xyz="-0.0145 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.029 0.0846 0.0296"/>
+      </geometry>
+      <material name="ultrasonic_ochre"/>
+    </visual>
+    <collision>
+      <origin xyz="-0.0145 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.029 0.0846 0.0296"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="ultrasonic_front_left_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="ultrasonic_front_left_link"/>
+    <origin xyz="0.408 0.1905 0.1937" rpy="0 0 0"/>
+  </joint>
+  <link name="ultrasonic_front_right_link">
+    <visual>
+      <origin xyz="-0.0145 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.029 0.0846 0.0296"/>
+      </geometry>
+      <material name="ultrasonic_ochre"/>
+    </visual>
+    <collision>
+      <origin xyz="-0.0145 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.029 0.0846 0.0296"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="ultrasonic_front_right_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="ultrasonic_front_right_link"/>
+    <origin xyz="0.408 -0.1905 0.1937" rpy="0 0 0"/>
+  </joint>
+  <link name="ultrasonic_rear_left_link">
+    <visual>
+      <origin xyz="-0.0145 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.029 0.0846 0.0296"/>
+      </geometry>
+      <material name="ultrasonic_ochre"/>
+    </visual>
+    <collision>
+      <origin xyz="-0.0145 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.029 0.0846 0.0296"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="ultrasonic_rear_left_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="ultrasonic_rear_left_link"/>
+    <origin xyz="-0.401 0.2105 0.1957" rpy="0 0 3.141592654"/>
+  </joint>
+  <link name="ultrasonic_rear_right_link">
+    <visual>
+      <origin xyz="-0.0145 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.029 0.0846 0.0296"/>
+      </geometry>
+      <material name="ultrasonic_ochre"/>
+    </visual>
+    <collision>
+      <origin xyz="-0.0145 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.029 0.0846 0.0296"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="ultrasonic_rear_right_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="ultrasonic_rear_right_link"/>
+    <origin xyz="-0.401 -0.2105 0.1957" rpy="0 0 3.141592654"/>
+  </joint>
+  <!-- ===== Cliff ToF x4 (VL53L1X per BOM). STEP bodies 50x29.6x29 just ahead of / behind each wheel, in line with it. Frame at the centre of the downward face, +x pointing straight down (PDF). NOTE: STEP puts them ~0.12 m up, 2 cm inside the open bottom of the body (kept, with a pocket in chassis_link so the floor is visible); the PDF says 0.08 m. ===== -->
+  <link name="cliff_tof_front_left_link">
+    <visual>
+      <origin xyz="-0.0148 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0296 0.05 0.029"/>
+      </geometry>
+      <material name="tof_blue"/>
+    </visual>
+    <collision>
+      <origin xyz="-0.0148 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0296 0.05 0.029"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="cliff_tof_front_left_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="cliff_tof_front_left_link"/>
+    <origin xyz="0.3535 0.2078 0.0169" rpy="0 1.570796327 0"/>
+  </joint>
+  <link name="cliff_tof_front_right_link">
+    <visual>
+      <origin xyz="-0.0148 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0296 0.05 0.029"/>
+      </geometry>
+      <material name="tof_blue"/>
+    </visual>
+    <collision>
+      <origin xyz="-0.0148 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0296 0.05 0.029"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="cliff_tof_front_right_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="cliff_tof_front_right_link"/>
+    <origin xyz="0.3535 -0.2078 0.0169" rpy="0 1.570796327 0"/>
+  </joint>
+  <link name="cliff_tof_rear_left_link">
+    <visual>
+      <origin xyz="-0.0148 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0296 0.05 0.029"/>
+      </geometry>
+      <material name="tof_blue"/>
+    </visual>
+    <collision>
+      <origin xyz="-0.0148 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0296 0.05 0.029"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="cliff_tof_rear_left_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="cliff_tof_rear_left_link"/>
+    <origin xyz="-0.3535 0.2078 0.0169" rpy="0 1.570796327 0"/>
+  </joint>
+  <link name="cliff_tof_rear_right_link">
+    <visual>
+      <origin xyz="-0.0148 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0296 0.05 0.029"/>
+      </geometry>
+      <material name="tof_blue"/>
+    </visual>
+    <collision>
+      <origin xyz="-0.0148 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0296 0.05 0.029"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="cliff_tof_rear_right_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="cliff_tof_rear_right_link"/>
+    <origin xyz="-0.3535 -0.2078 0.0169" rpy="0 1.570796327 0"/>
+  </joint>
+  <!-- ===== Bumper planks (front/rear) on microswitches, modelled fixed. STEP bars 510x25x30 under the body. Frame at plank centre, +x outward. NOTE: in the STEP the front plank is only 5 mm proud of the body and the 2D lidar sticks out 16 mm FURTHER than it - the PDF intends the plank to hit first. ===== -->
+  <link name="bumper_front_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.025 0.51 0.03"/>
+      </geometry>
+      <material name="bumper_red"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.025 0.51 0.03"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="bumper_front_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="bumper_front_link"/>
+    <origin xyz="0.3915 0 -0.0261" rpy="0 0 0"/>
+  </joint>
+  <link name="bumper_rear_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.025 0.51 0.03"/>
+      </geometry>
+      <material name="bumper_red"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.025 0.51 0.03"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="bumper_rear_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="bumper_rear_link"/>
+    <origin xyz="-0.3915 0 -0.0261" rpy="0 0 3.141592654"/>
+  </joint>
+</robot>

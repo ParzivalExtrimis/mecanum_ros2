@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Run the motion test: forward, strafe left, rotate, one at a time."""
+"""Run the motion test: wheel-mapping steps (axes) or an odometry loop or corridor run."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -26,10 +26,16 @@ def generate_launch_description():
         'use_sim_time': ('false', 'Use the simulation clock'),
         'measure_odom_topic': ('', 'Odometry used to measure each step; empty = no '
                                'measurement. /sim/ground_truth/odom in sim, /odom with LIO'),
-        'cmd_vel_stamped': ('false', 'Publish TwistStamped instead of Twist'),
+        'cmd_vel_stamped': ('true', 'Publish TwistStamped (the sim drive controller); false '
+                            'for the open-loop esp32_driver on hardware'),
         'linear_speed': ('0.15', 'Forward and strafe speed (m/s)'),
         'angular_speed': ('0.5', 'Rotation speed (rad/s)'),
-        'move_duration': ('3.0', 'Seconds per step'),
+        'move_duration': ('3.0', 'Seconds per step (axes pattern)'),
+        'pattern': ('axes', 'axes (wheel mapping), loop (closed rectangle) or corridor '
+                    '(forward and back)'),
+        'loop_length': ('4.0', 'Forward length of a loop or corridor lap (m)'),
+        'loop_width': ('2.0', 'Strafe width of a loop lap (m)'),
+        'laps': ('1', 'Number of loop or corridor laps'),
     }
     declared = [DeclareLaunchArgument(name, default_value=default, description=text)
                 for name, (default, text) in args.items()]

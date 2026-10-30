@@ -10,19 +10,22 @@
      "<link>_collision"; the block is then merged into that collision and keeps the
      gz:expressed_in attribute. (A bare <fdir1> under <gazebo reference> loses the attribute.)
      X-roller layout: front_left and rear_right rollers along (1, -1); front_right and
-     rear_left along (1, 1).
+     rear_left along (1, 1). This matches mecanum_base/kinematics.py.
+     STAND-IN: the CAD has no rollers, so the X layout is assumed; check the roller handedness
+     on the real wheels. Each wheel link must keep exactly one unnamed collision
+     (mecanum_wheel.xacro), or this friction block no longer merges and the wheels silently
+     lose their mecanum behaviour.
 
-  2. One JointController (velocity mode) per wheel. Its gz topic is the default
-     /model/mecanum/joint/<joint>/cmd_vel (gz.msgs.Double, rad/s), bridged from
-     /sim/wheel_cmd/<wheel> and driven by mecanum_simulation/sim_motor_plant.
+  2. The drive: ros2_control, not in this file. mecanum_sim.urdf.xacro includes
+     mecanum_controllers/urdf/mecanum.ros2_control.xacro with hardware=sim, which adds the
+     gz_ros2_control plugin. It commands the wheel joint velocities and reads their measured
+     positions and velocities from physics (ideal encoders) for joint_state_broadcaster and
+     mecanum_drive_controller.
 
   3. Ground truth: OdometryPublisher on gz topic /sim/ground_truth/odom, bridged to the ROS
      topic of the same name. Evaluation only: its frame labels (sim_gt_world, sim_gt_base) are
      not in the TF tree, its gz TF topic is never bridged, and nothing uses it for control or
      odometry.
-
-  Wheel joint states are deliberately not published: the real motors have no encoders, and
-  joint_state_publisher reports zero wheel angles in sim and on hardware alike.
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" xmlns:gz="http://gazebosim.org/schema">
 
@@ -44,19 +47,108 @@
         </surface>
       </collision>
     </gazebo>
-    <gazebo>
-      <plugin filename="gz-sim-joint-controller-system"
-              name="gz::sim::systems::JointController">
-        <joint_name>$(arg prefix)${wheel}_wheel_joint</joint_name>
-        <initial_velocity>0.0</initial_velocity>
-      </plugin>
-    </gazebo>
   </xacro:macro>
 
   <xacro:sim_mecanum_wheel wheel="front_left" fdir="1 -1 0"/>
   <xacro:sim_mecanum_wheel wheel="front_right" fdir="1 1 0"/>
   <xacro:sim_mecanum_wheel wheel="rear_left" fdir="1 1 0"/>
   <xacro:sim_mecanum_wheel wheel="rear_right" fdir="1 -1 0"/>
+
+  <!-- 4. Simulated Unitree L2: a gpu_lidar on l2_lidar and an IMU on l2_imu, bridged to the
+       same topics and frames as the real driver (mecanum_lidar): /l2/points in l2_lidar and
+       /l2/imu in l2_imu. Requires the Sensors (ogre2) and Imu systems in the world.
+       Differences from the real L2: Gazebo renders each sweep instantaneously, so the cloud has
+       no per-point "time" field and no motion distortion; and it is a regular 360 x 32 grid
+       instead of the L2's non-repetitive pattern.
+       The L2's field of view, in its own frame, is the hemisphere on its +Z (dome) side:
+       elevation 0..90 deg in standard mode (factory default, work-mode bit 0 = 0) or
+       -6..90 deg in wide mode (bit 0 = 1). The robot's upright mount uses wide mode (sensor
+       placement PDF: "negative-angle mode"), so it is the default here. The pose follows
+       l2_lidar / l2_imu from the URDF. -->
+  <xacro:arg name="sim_l2_wide_fov" default="true"/>
+  <xacro:if value="$(arg use_l2)">
+  <xacro:property name="sim_l2_min_elevation"
+    value="${radians(-6.0) if '$(arg sim_l2_wide_fov)' == 'true' else 0.0}"/>
+
+  <gazebo reference="$(arg prefix)l2_lidar">
+    <sensor name="l2_lidar" type="gpu_lidar">
+      <gz_frame_id>$(arg prefix)l2_lidar</gz_frame_id>
+      <topic>/sim/l2/lidar</topic>
+      <!-- 5.55 Hz circumferential scan rate and 0.05..30 m range: L2 datasheet.
+           One message = one full sweep. -->
+      <update_rate>5.55</update_rate>
+      <always_on>true</always_on>
+      <visualize>false</visualize>
+      <lidar>
+        <scan>
+          <!-- STAND-IN: the L2's scan pattern is non-repetitive; 360 x 32 samples per sweep at
+               5.55 Hz gives ~64k points/s, the datasheet's effective point rate. Compare with a
+               real L2 cloud (mecanum_lidar bench test) and adjust. -->
+          <horizontal>
+            <samples>360</samples>
+            <resolution>1</resolution>
+            <min_angle>${-pi}</min_angle>
+            <max_angle>${pi}</max_angle>
+          </horizontal>
+          <vertical>
+            <samples>32</samples>
+            <resolution>1</resolution>
+            <min_angle>${sim_l2_min_elevation}</min_angle>
+            <max_angle>${pi / 2}</max_angle>
+          </vertical>
+        </scan>
+        <range>
+          <min>0.05</min>
+          <max>30.0</max>
+          <resolution>0.0045</resolution>
+        </range>
+        <noise>
+          <!-- STAND-IN: the datasheet gives accuracy <= 2.0 cm, not a noise model; 0.01 m
+               Gaussian is assumed. Measure the spread on a flat wall with the real L2. -->
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
+        </noise>
+      </lidar>
+    </sensor>
+  </gazebo>
+
+  <xacro:macro name="sim_imu_noise" params="stddev">
+    <noise type="gaussian">
+      <mean>0.0</mean>
+      <stddev>${stddev}</stddev>
+    </noise>
+  </xacro:macro>
+
+  <gazebo reference="$(arg prefix)l2_imu">
+    <sensor name="l2_imu" type="imu">
+      <gz_frame_id>$(arg prefix)l2_imu</gz_frame_id>
+      <topic>/sim/l2/imu</topic>
+      <!-- STAND-IN: the L2 IMU output rate is not in the official datasheet (250 Hz is the
+           most quoted value); read the rate from the mecanum_lidar status line on hardware -->
+      <update_rate>250</update_rate>
+      <always_on>true</always_on>
+      <!-- STAND-IN: L2 IMU noise is unknown; typical consumer MEMS values assumed. Record the
+           IMU at rest with the real L2 and use its standard deviations. -->
+      <imu>
+        <angular_velocity>
+          <x><xacro:sim_imu_noise stddev="0.002"/></x>
+          <y><xacro:sim_imu_noise stddev="0.002"/></y>
+          <z><xacro:sim_imu_noise stddev="0.002"/></z>
+        </angular_velocity>
+        <linear_acceleration>
+          <x><xacro:sim_imu_noise stddev="0.02"/></x>
+          <y><xacro:sim_imu_noise stddev="0.02"/></y>
+          <z><xacro:sim_imu_noise stddev="0.02"/></z>
+        </linear_acceleration>
+      </imu>
+    </sensor>
+  </gazebo>
+
+  </xacro:if>
+
+  <!-- The robot's other sensors (D435i, 2D lidar, ultrasonics, cliff ToF, bumpers) are added
+       here in docs/plan.md Phase 2, on their URDF frames, and bridged in config/gz_bridge.yaml. -->
 
   <gazebo>
     <plugin filename="gz-sim-odometry-publisher-system"

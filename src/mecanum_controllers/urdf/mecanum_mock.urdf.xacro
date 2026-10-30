@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!--
+  Dry-run entry point: the unmodified robot description plus ros2_control on mock hardware.
+  Used by controllers.launch.py hardware:=mock and the mock kinematics test.
+-->
+<robot name="mecanum" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find mecanum_description)/urdf/mecanum.urdf.xacro"/>
+  <xacro:include filename="$(find mecanum_controllers)/urdf/mecanum.ros2_control.xacro"/>
+
+  <xacro:mecanum_ros2_control prefix="$(arg prefix)" hardware="mock"/>
+
+</robot>

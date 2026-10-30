@@ -1,0 +1,106 @@
+<?xml version="1.0" ?>
+<!--
+  corridor.sdf: long, featureless corridor for the LIO degeneracy check (phase 4).
+
+  Not a site model. A straight 2 m wide, 70 m long corridor with a 2.4 m ceiling and nothing
+  else: the walls, floor and ceiling constrain sideways, vertical and rotational motion, but
+  nothing constrains motion along the corridor while both end walls are beyond the L2's 30 m
+  range. That is the worst case for scan matching, made worse by the ~45% of L2 points that hit
+  the floor.
+
+  Layout (metres, world frame, z up):
+    corridor   x -35..35, y -2..0      end walls at x = +-35 (centred on the restroom spawn line)
+    spawn      the default (0, -1) facing +x, the corridor centre line:
+                 ros2 launch mecanum_bringup robot.launch.py \
+                   world:=$(ros2 pkg prefix mecanum_simulation)/share/mecanum_simulation/worlds/corridor.sdf
+  Driving within x -5..5 keeps both end walls more than 30 m away.
+-->
+<sdf version="1.9">
+  <world name="corridor">
+
+    <physics name="2ms" type="ignored">
+      <max_step_size>0.002</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system"
+            name="gz::sim::systems::SceneBroadcaster"/>
+    <!-- Sensor rendering (simulated L2 gpu_lidar) and IMU sensors -->
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+
+    <scene>
+      <ambient>0.6 0.6 0.6 1</ambient>
+      <background>0.8 0.85 0.9 1</background>
+    </scene>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>1 1 1 1</diffuse>
+      <specular>0.3 0.3 0.3 1</specular>
+      <direction>-0.4 0.2 -0.9</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
+          <surface>
+            <friction>
+              <!-- STAND-IN: real floor friction is unknown (tiles, wet floors); measure the
+                   force to slide the robot sideways, or tune until sim slip matches the
+                   real robot. Value mirrors Gazebo's mecanum_drive demo. -->
+              <ode><mu>50</mu></ode>
+            </friction>
+          </surface>
+        </collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
+          <material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse><specular>0.1 0.1 0.1 1</specular></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="corridor">
+      <static>true</static>
+      <link name="wall_south">
+        <pose>0 -2.05 1.2 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>70.2 0.1 2.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>70.2 0.1 2.4</size></box></geometry><material><ambient>0.85 0.85 0.82 1</ambient><diffuse>0.85 0.85 0.82 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <link name="wall_north">
+        <pose>0 0.05 1.2 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>70.2 0.1 2.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>70.2 0.1 2.4</size></box></geometry><material><ambient>0.85 0.85 0.82 1</ambient><diffuse>0.85 0.85 0.82 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <link name="wall_west">
+        <pose>-35.05 -1 1.2 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>0.1 2.2 2.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.1 2.2 2.4</size></box></geometry><material><ambient>0.85 0.85 0.82 1</ambient><diffuse>0.85 0.85 0.82 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+      <link name="wall_east">
+        <pose>35.05 -1 1.2 0 0 0</pose>
+        <collision name="collision"><geometry><box><size>0.1 2.2 2.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.1 2.2 2.4</size></box></geometry><material><ambient>0.85 0.85 0.82 1</ambient><diffuse>0.85 0.85 0.82 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+      </link>
+    </model>
+
+    <model name="ceiling">
+      <static>true</static>
+      <pose>0 -1 2.45 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>70.2 2.2 0.1</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>70.2 2.2 0.1</size></box></geometry>
+          <material><ambient>0.92 0.92 0.92 1</ambient><diffuse>0.92 0.92 0.92 1</diffuse><specular>0.1 0.1 0.1 1</specular></material>
+        </visual>
+      </link>
+    </model>
+
+  </world>
+</sdf>
