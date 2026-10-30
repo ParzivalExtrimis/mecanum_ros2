@@ -1,7 +1,7 @@
 # mecanum_interfaces
 
-Message definitions for the mecanum base. Action definitions for the task and mission
-executive are added in phase 8.
+Message definitions for the mecanum base. Safety interfaces are added in Phase 4 and the task
+and mission actions in Phase 7 of [docs/plan.md](../../docs/plan.md).
 
 | Message | Used on | Purpose |
 |---|---|---|

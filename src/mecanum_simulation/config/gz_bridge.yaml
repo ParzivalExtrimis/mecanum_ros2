@@ -37,8 +37,8 @@
   gz_type_name: gz.msgs.Odometry
   direction: GZ_TO_ROS
 
-# REWRITE: add bridges for the new model's additional sensors (see REWRITE.md), on the same
-# topics and frames as their hardware drivers.
+# The robot's other sensors (D435i, 2D lidar, ultrasonics, cliff ToF, bumpers) are bridged in
+# docs/plan.md Phase 2, on the topics and frames of the plan's contract table.
 
 # Simulated Unitree L2, on the same topics as the real driver (mecanum_lidar).
 # gpu_lidar publishes its packed cloud on <sensor topic>/points; frames come from gz_frame_id.

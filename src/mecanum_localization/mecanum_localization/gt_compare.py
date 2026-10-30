@@ -198,8 +198,8 @@ class GtCompare(Node):
         self.declare_parameter('gt_topic', '/sim/ground_truth/odom')
         self.declare_parameter('report_period', 10.0)
         self.declare_parameter('duration', 0.0)
-        # STAND-IN: drift targets from docs/plan.md phase 4, not derived from a requirement yet.
-        self.declare_parameter('max_drift_percent', 1.0)
+        # STAND-IN: drift targets from docs/plan.md Phase 3, not derived from a requirement yet.
+        self.declare_parameter('max_drift_percent', 2.0)
         self.declare_parameter('max_yaw_error_deg', 2.0)
         self.declare_parameter('jump_threshold', 0.2)
         self.declare_parameter('csv_path', '')

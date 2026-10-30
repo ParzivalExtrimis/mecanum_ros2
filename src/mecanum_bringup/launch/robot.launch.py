@@ -107,7 +107,8 @@ def generate_launch_description():
             launch_arguments={'use_sim_time': sim}.items(),
             condition=IfCondition(LaunchConfiguration('use_l2'))),
 
-        # LIO odometry: the only source of odom -> base_footprint (no encoders).
+        # LIO odometry: the source of odom -> base_footprint until the EKF (docs/plan.md
+        # Phase 3) takes it over on wheel odometry.
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(loc_share, 'launch', 'lio.launch.py')),
             launch_arguments={'use_sim_time': sim}.items(),

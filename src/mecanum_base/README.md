@@ -1,12 +1,14 @@
 # mecanum_base
 
-This package holds the drive node, mecanum kinematics and the motion test for the
-**encoderless** mecanum base.
+This package holds the drive node, mecanum kinematics and the motion test for the mecanum
+base.
 
-The drive is open-loop by design. This package publishes no odometry and no joint states.
-Odometry comes from LiDAR-inertial odometry only. See
-[decision 0001](../../docs/decisions/0001-open-loop-drive-without-ros2-control.md), and
-[encoder_upgrade.md](../../docs/encoder_upgrade.md) for the planned move to ros2_control.
+The drive is open-loop. This package publishes no odometry and no joint states. It was
+designed when the motors had no encoders; see
+[decision 0001](../../docs/decisions/0001-open-loop-drive-without-ros2-control.md). The new
+motors have position and velocity encoders, and plan Phase 1
+([docs/plan.md](../../docs/plan.md)) moves the drive to ros2_control, following
+[encoder_upgrade.md](../../docs/encoder_upgrade.md). `kinematics.py` and `motion_test` stay.
 
 ## Data flow
 
@@ -45,11 +47,8 @@ RL = (vx + vy - (lx+ly) wz) / r      RR = (vx - vy + (lx+ly) wz) / r
 
 The geometry (`wheel_radius`, `lx`, `ly`) comes from `mecanum_description` and is set in
 `config/esp32_driver.yaml`. The node has no built-in defaults for it. `test/test_urdf_defaults.py`
-checks the YAML against the URDF.
-
-> **REWRITE (branch `feature/model-v2`):** the previous model's geometry was removed from the
-> YAML, so the driver refuses to start until the new URDF exists and the three values are set
-> from it. `test_urdf_defaults.py` is skipped until then. See the root `REWRITE.md`.
+checks the YAML against the URDF. The current values are `wheel_radius` 0.1025 m, `lx`
+0.2360 m and `ly` 0.2150 m.
 
 The formulas rotate about the centre of the wheel group. If the wheel centres are offset from
 `base_link`, the offset is ignored for open-loop control.
@@ -63,9 +62,9 @@ direction = sign * sign(omega)
 
 The calibration is set per wheel in `config/wheel_calibration.yaml`. Each wheel has a
 motor ID, sign, scale, deadband and max value. All of these are stand-ins until the firmware
-and motors exist; see `STANDINS.md`. The calibration tool, added in phase 5, fits scale and
-deadband from LIO measurements. Open-loop calibration drifts with battery voltage and floor
-condition, so re-run it when those change.
+and motors exist; see `STANDINS.md`. The open-loop calibration tool of the previous plan is
+not planned any more: with encoders, wheel speed is closed-loop (ideally on the ESP32), and
+these values move into the ros2_control hardware plugin (`docs/encoder_upgrade.md`).
 
 ## Nodes
 
@@ -93,14 +92,14 @@ With `return_to_start:=true`, the default, each step is followed by the opposite
 the test can be repeated in place. It needs about `linear_speed x move_duration` of free
 space in front and to the left, plus room to turn on the spot. Yaw is unwrapped, so turns
 beyond 180° are judged correctly. The travel and rotation percentages are reported but not
-judged, because they depend on calibration. For example, the simulation rotates at 110% of
-the commanded rate; see `mecanum_simulation/README.md`.
+judged, because they depend on calibration; see the measured figures in
+`mecanum_simulation/README.md`.
 
 If `measure_odom_topic` is set, the test measures each step and prints PASS or FAIL for
 direction and cross-axis drift. Use `/sim/ground_truth/odom` in simulation, and `/odom` on
-hardware once LIO runs.
+hardware.
 
-`pattern` selects other scripts, used to exercise LIO in phase 4:
+`pattern` selects other scripts, used to exercise odometry (LIO, wheel odometry, the EKF):
 
 | `pattern` | Script | Length with the defaults |
 |---|---|---|
@@ -110,8 +109,7 @@ hardware once LIO runs.
 
 `laps` repeats the script. In `loop` and `corridor`, each segment has a target distance or
 angle. With `measure_odom_topic` set, a segment ends when the measured progress reaches the
-target, so calibration errors, such as the simulation's 110% rotation, do not walk the robot
-into the walls. A segment that takes more than twice its nominal time stops the test with a
+target, so calibration errors do not walk the robot into the walls. A segment that takes more than twice its nominal time stops the test with a
 failure. Without odometry, each segment runs for its nominal time.
 
 ## Usage

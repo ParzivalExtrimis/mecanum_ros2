@@ -8,6 +8,15 @@ track's decisions and shortcuts are recorded where the hardware work will meet t
 findings are kept in [section 6](#6-paused-work-3h-and-4h) and in the procedure documents, so
 they can resume without redoing anything.
 
+**Superseded strategy (2026-10-27).** The robot model was replaced (model v2: the L2 upright on
+the robot's top, plus a D435i, a 2D lidar, ultrasonics, cliff sensors and bumpers), and the new
+motors have encoders. `docs/plan.md` was rewritten as an end-to-end simulation build with a new
+odometry, mapping and navigation strategy, and it no longer keeps this register up to date.
+This file is kept for its hardware facts, measurements and paused work. The stages in
+section 5 follow the previous plan's phases; rewrite them from the new plan's sensor contract
+and sim-only shortcuts when hardware is planned again. Assumptions that the new model or the
+encoders made obsolete are marked "Superseded" in section 3.
+
 The stages here are a starting point, not a commitment. The sim track will make branching
 decisions, for example on the LIO method, and some of them will change these stages. The
 document is built so that such a change stays local:
@@ -46,11 +55,15 @@ At the end of each sim phase, and whenever a sim-only shortcut is taken:
 
 ### Available
 
-- **Unitree L2** on the CAD mast (810 mm pole, 30° bracket, cable 22.9° clockwise from
-  above), over Ethernet: L2 at 192.168.1.62, host 192.168.1.2 on `enp2s0`, `connection:=udp`,
-  work mode 0. USB-UART crashed the laptop's USB controller and is a fallback only.
+- **Unitree L2,** over Ethernet: L2 at 192.168.1.62, host 192.168.1.2 on `enp2s0`,
+  `connection:=udp`, work mode 0 (the new mount wants work mode 1, wide FOV). USB-UART crashed
+  the laptop's USB controller and is a fallback only. The robot model v2 puts it upright on a
+  30 mm standoff on the top of the tall box, bottom face 0.767 m above the floor. The 3H/4H data
+  below were recorded on the previous model's mast (810 mm pole, 30° bracket, inverted).
+- **RealSense D435i** (owned) and **Jetson Orin Nano Super** (owned), per the sensor placement
+  and BOM document (`docs/Washroom_Robot_Prototype_Sensors_and_BOM.pdf`).
 - **The robot base,** pushable by hand with unpowered motors. Whether it slides sideways on its
-  rollers is not yet checked.
+  rollers is not yet checked. The new motors have position and velocity encoders.
 - **The development laptop,** which runs everything for now.
 
 ### Not available yet
@@ -58,17 +71,19 @@ At the end of each sim phase, and whenever a sim-only shortcut is taken:
 | Item | Blocks |
 |---|---|
 | ESP32 firmware protocol (framing, rates, timeout, units, motor IDs, watchdog) | 5H, 7H-b, 8H |
-| Encoders and ESP32 state reporting | The encoder upgrade (`docs/encoder_upgrade.md`) |
-| Onboard computer (model, CPU architecture, OS) | Untethered runs |
-| E-stop, or a known way to cut motor power | Any driving |
+| ESP32 state reporting of the new encoders | The encoder upgrade (`docs/encoder_upgrade.md`) on hardware |
+| The BOM parts: RPLIDAR C1, ultrasonics, cliff ToF, bumper switches, E-stop, drive relay, sensor hub | Their drivers; any driving (E-stop) |
+| Onboard computer OS and ROS distro on the Jetson Orin Nano Super | Untethered runs |
 | Physical dock and its design | 8H |
 | Arm specification | The dock accuracy target, the arm self-filter |
 | Real site floor plan | The site map and mission poses (`STANDINS.md`) |
 
 ### Measured so far (provisional)
 
-From one static recording (`lio_4h_stage2_start`, 2026-10-15), before the mount check. Values
-that depend on the mount are provisional until 3H stage 2 passes.
+From one static recording (`lio_4h_stage2_start`, 2026-10-15), before the mount check, with
+the previous model's mast. The rows that depend on the mount (floor and IMU gravity through the
+URDF, points outside the self-filter box) do not apply to the new mount; the sensor's own values
+(rates, noise, points) do.
 
 | Quantity | Measured | Sim assumption | Confidence in the value |
 |---|---|---|---|
@@ -97,7 +112,8 @@ The hardware stages, procedures and tools depend on these. Changing one is a rev
 | Drive input | `/cmd_vel` (Twist) into `esp32_driver`; zero on timeout | 5H, 7H-b, 8H |
 | Hardware launch | `mecanum_bringup hardware_sensors.launch.py` with `lio:=`, `lio_config:=`, `replay:=` | 3H, 4H |
 | Recording | `ros2 bag record /l2/points /l2/imu /odom /lio/raw_odom /tf_static`, started before LIO | 4H onward; replayable through `replay:=true` |
-| Mount | REWRITE: the previous mount's xacro args (`l2_mast_*`, `l2_bracket_yaw`) were removed on `feature/model-v2`; the new mount's pose goes in `unitree_l2.xacro` (see `REWRITE.md`) | 3H; frames, self-filter and sim follow |
+| Mount | The properties `l2_mount_x/y/z` and `l2_cable_yaw` in `mecanum_description/urdf/sensors/unitree_l2.xacro`: upright, (−0.100, 0, 0.767) m in `base_footprint`, cable to the rear (stand-in) | 3H; frames, self-filter and sim follow |
+| Other sensors | The sensor contract in `docs/plan.md` (topics and frames of the D435i, 2D lidar, ultrasonics, cliff ToF, bumpers, E-stop) | Their future drivers |
 
 ## 3. Assumptions and risks
 
@@ -106,19 +122,19 @@ it is wrong, and when to re-score it.
 
 | ID | Assumption | Evidence so far | Confidence | If wrong | Stages | Re-score at |
 |---|---|---|---|---|---|---|
-| A1 | **LIO from the L2 alone gives usable odometry, with rko_lio.** | Sim: rko_lio misses motion along a corridor (fixed scan grid). Real, still: diverges with 18-line clouds, holds with 36 (0.014 m after 5 min). Real motion untested. rko_lio matches points to points and is sensitive to the scan pattern in both cases. | **Low** for rko_lio specifically; **Medium** for "some LIO behind `/odom`". | Swap the LIO behind the adapter (for example a point-to-plane LIO), or feed it differently (full sweeps, floor removal). The `/odom` contract, procedures, tools and recordings survive. | 4H, 5H, 6H, 7H, 8H | Phase 4 decision; 4H |
-| A2 | **LIO-only odometry is enough for control:** about 5 to 12 Hz, without wheel odometry. | MPPI and the velocity smoother not yet run on it. | Medium | Raise the LIO rate (IMU-rate output), or bring the encoder upgrade forward (EKF, ros2_control). | 5H, 7H-b, 8H | Phase 7 |
+| A1 | **Superseded (2026-10-27):** odometry is now wheel odometry fused with the IMUs in an EKF, with LIO optional (plan Phase 3). Previously: **LIO from the L2 alone gives usable odometry, with rko_lio.** | Sim: rko_lio misses motion along a corridor (fixed scan grid). Real, still: diverges with 18-line clouds, holds with 36 (0.014 m after 5 min). Real motion untested. rko_lio matches points to points and is sensitive to the scan pattern in both cases. | **Low** for rko_lio specifically; **Medium** for "some LIO behind `/odom`". | Swap the LIO behind the adapter (for example a point-to-plane LIO), or feed it differently (full sweeps, floor removal). The `/odom` contract, procedures, tools and recordings survive. | 4H, 5H, 6H, 7H, 8H | Phase 4 decision; 4H |
+| A2 | **Superseded (2026-10-27):** wheel odometry and the EKF run at 50 Hz. Previously: **LIO-only odometry is enough for control:** about 5 to 12 Hz, without wheel odometry. | MPPI and the velocity smoother not yet run on it. | Medium | Raise the LIO rate (IMU-rate output), or bring the encoder upgrade forward (EKF, ros2_control). | 5H, 7H-b, 8H | Phase 7 |
 | A3 | **The simulated L2 represents the real one well enough** for LIO, costmaps and the blind zone. | Real pattern: about 39 meridian lines per revolution, precessing; sim: a fixed 360 × 32 grid. Noise 5 to 8 times lower in sim. | Low (as of now) | Sim results for LIO and costmaps do not transfer; re-tune on hardware. | 4H, 6H, 7H | Phase 4 decision |
-| A4 | **The real mount matches the URDF** closely enough that only xacro args change. | Provisional, previous mast: floor 8 cm low and 1.9° tilt; IMU 3.8° tilt. REWRITE: re-score for the new mount. | Medium | Re-measure, then shim the bracket or change xacro args. Self-filter, scan band and costmap heights re-tuned. Architecture unaffected. | 3H, then all | 3H stage 2 |
-| A5 | **The L2 alone covers rear safety,** with the visibility model and the 150 to 210° pole shadow. | Sim box tests match the model. Real shadow unmeasured. REWRITE: model and shadow are the previous mast's; the new model's additional sensors may change this. | Medium | Reverse motion restricted further, or a rear sensor added: a new sensor, self-filter and costmap source. | 3H, 7H-b, 8H | Phase 7 |
-| A6 | **Open-loop drive through the ESP32,** no ros2_control (decision 0001); the firmware takes wheel commands and stops on link loss. | Firmware protocol unknown. | Medium | If the firmware runs closed-loop wheel speeds or reports encoders, move to ros2_control earlier (`docs/encoder_upgrade.md`). The `/cmd_vel` contract survives. | 5H, 7H-b, 8H | When the protocol is known |
-| A7 | **Open-loop calibration from LIO odometry** gives commanded and achieved velocity within tolerance on the real floor. | Sim only, with an ideal plant and dry friction. Restroom floors can be wet. | Low | Closed-loop speed control (encoders) or online velocity correction. | 5H, 7H-b, 8H | Phase 5 |
+| A4 | **The real mount matches the URDF** closely enough that only xacro properties change. | New mount (upright on a standoff) unmeasured. Its height is a stand-in: the STEP and the PDF disagree by 40 mm. The previous mast's provisional errors (floor 8 cm low, 1.9° tilt) do not carry over. | Medium | Re-measure with the ceiling check, then shim the standoff or change `l2_mount_*` / `l2_cable_yaw`. Self-filter and costmap heights re-tuned. Architecture unaffected. | 3H, then all | 3H stage 2 |
+| A5 | **The rear ultrasonics cover rear safety** in the near field, with the L2 beyond about 3 m. | The upright L2 sees nothing low within about 3 m in any direction, and the 2D lidar sees only the front 200°. Not yet simulated (plan Phases 2 and 6). | Medium | Reverse motion restricted further, or another rear sensor. | 7H-b, 8H | Plan Phase 6 |
+| A6 | **Superseded (2026-10-27):** the motors have encoders; the drive moves to ros2_control (plan Phase 1). Previously: **Open-loop drive through the ESP32,** no ros2_control (decision 0001); the firmware takes wheel commands and stops on link loss. | Firmware protocol unknown. | Medium | If the firmware runs closed-loop wheel speeds or reports encoders, move to ros2_control earlier (`docs/encoder_upgrade.md`). The `/cmd_vel` contract survives. | 5H, 7H-b, 8H | When the protocol is known |
+| A7 | **Superseded (2026-10-27):** wheel speed is closed-loop with encoders; no open-loop calibration phase. Previously: **Open-loop calibration from LIO odometry** gives commanded and achieved velocity within tolerance on the real floor. | Sim only, with an ideal plant and dry friction. Restroom floors can be wet. | Low | Closed-loop speed control (encoders) or online velocity correction. | 5H, 7H-b, 8H | Phase 5 |
 | A8 | **The onboard computer can run the stack** (L2 driver, LIO, slam_toolbox or AMCL, Nav2 with MPPI and the voxel layer). | rko_lio used 6 to 15% of one laptop core. Nav2 not yet measured. | Medium | A bigger computer, or lighter components (for example a 2D costmap). The vendored L2 SDK supports aarch64. | All untethered work | Phase 7 |
 | A9 | **The L2 link is reliable for a full mission,** and the stack survives a dropout. | Ethernet stream stopped once for 23 min after 15.5 min. LIO did not recover. Serial stopped after about 7 s. | Low | Driver reconnect logic; LIO reset and the adapter re-zeroing; mission abort on sensor loss. Possibly a hardware cause: cable, power, network config. | 4H onward | Before 4H resumes |
 | A10 | **Host-clock stamping is accurate enough** (`use_system_timestamp: true`; the cloud stamp is the sweep start, IMU stamped on receipt). | Replay with stamps moved to the sweep end changed nothing while still. Motion untested. | Medium | Hardware time sync, or a measured offset. | 4H | 4H stage 2 |
-| A11 | **2D mapping on the 0.10 to 0.50 m band of the cloud** gives a good restroom map. | Sim only. Restrooms have mirrors, glass and shiny tiles, which the sim does not model. | Medium | Different band, filters for reflections, or 3D mapping. | 6H, 7H | Phase 6 |
+| A11 | **2D mapping on the 0.10 to 0.50 m band of the cloud** gives a good restroom map. Superseded (2026-10-27): the map comes from the 2D lidar (plan Phase 5); the same glass, mirror and tile risk applies to it. | Sim only. Restrooms have mirrors, glass and shiny tiles, which the sim does not model. | Medium | Different band, filters for reflections, or 3D mapping. | 6H, 7H | Phase 6 |
 | A12 | **Pose-only docking** (opennav_docking with `SimpleNonChargingDock`, no dock perception) is precise enough for the arm. | Dock design and the arm's tolerance unknown. | Low | A dock detector (a tag or a shape), a new perception input. | 8H | Phase 8 |
-| A13 | **A CropBox self-filter is enough** until the arm arrives. | Sim: removes all self-hits. Real: about 75 points per cloud just outside the box, cause unknown. | Medium | URDF-based self-filter earlier. | 3H, 4H, 7H | 3H stage 2 |
+| A13 | **A CropBox self-filter is enough** until the arm arrives. | Sim, new mount: 0.6% of the points hit the robot (the top of the tall box), all removed. The previous mast's 75 real points per cloud outside the box do not carry over. | High until the arm arrives | URDF-based self-filter earlier. | 3H, 4H, 7H | 3H stage 2 |
 | A14 | **The laptop and later the onboard computer can share the L2 subnet** (192.168.1.0/24) with site Wi-Fi. | NetworkManager profile with a /32 route works on the laptop. | High | Re-address the L2 (needs a one-time serial write). | All | Onboard computer choice |
 
 ## 4. Sim-only shortcuts
@@ -143,7 +159,7 @@ robot pushed by hand. Every stage writes or extends a procedure in
 `docs/hardware_<topic>_test.md` (prerequisites, numbered stages, acceptance, results log),
 replaces measured stand-ins in `STANDINS.md`, and stops for the owner's review.
 
-### 3H: the L2 on the mast
+### 3H: the L2 on the robot
 
 - **Confidence: High** for the procedure and tools. **Medium** overall, because of A4, A5 and
   A13.
@@ -155,10 +171,9 @@ replaces measured stand-ins in `STANDINS.md`, and stops for the owner's review.
 - **Open work.**
   1. Stage 1: set `cloud_scan_num` for full sweeps (about 39) and the 0.05 to 30 m range in
      `l2.yaml`; confirm one revolution per cloud at about 5.5 Hz. **4H depends on this.**
-  2. Stage 2: the mount check. Resolve the provisional floor and IMU tilt.
-  3. Stage 3: sim against real, including the blind zone and pole shadow.
+  2. Stage 2: the mount check on the new mount (ceiling plane, wall heading).
+  3. Stage 3: sim against real, including the edge of the field of view.
 - **Acceptance.** The mount check within its tolerances; no points on the robot.
-- **Architecture-sensitive.** A rear shadow much wider than modelled (A5).
 
 ### 4H: LIO with the robot pushed by hand
 
@@ -207,7 +222,7 @@ replaces measured stand-ins in `STANDINS.md`, and stops for the owner's review.
 - **Depends on.** Phase 6, 4H; contracts: scan, odometry; A1, A4, A11.
 - **Steps.** `mapping.launch.py` gains a `sim:=false` path that reuses the hardware launch.
   Map the room by pushing (or driving, after 5H). Check tape-measured distances, and look for
-  ghost walls from the robot, the mast, glass and mirrors. Keep the real map separate from the
+  ghost walls from the robot itself, glass and mirrors. Keep the real map separate from the
   sim map.
 - **Acceptance.** Distances within about 5 cm (stand-in).
 
@@ -262,12 +277,14 @@ Kept so that the work resumes where it stopped.
     point-to-point matching follows them.
   - The replay scripts are in `build/scratch_4h/` (not tracked): `replay.sh`, relays that
     merge clouds or replace the IMU, and `summarize.py`.
-- **To resume.** 3H stage 1 (`cloud_scan_num`), then the 4H static test, then the 2 m push.
-  Check the L2 link first (A9).
+- **To resume.** 3H stage 1 (`cloud_scan_num`, work mode 1), then the 4H static test, then
+  the 2 m push. Check the L2 link first (A9). The recording above is from the previous mast;
+  its LIO findings on scan lines still apply to the sensor, but its mount numbers do not.
 
 ## 7. Change log
 
 | Date | Change |
 |---|---|
 | 2026-10-16 | Created from the hardware steps in `docs/plan.md`. 3H and 4H paused, with the first 4H results. Assumptions A1 to A14 and shortcuts S1 to S7 recorded. |
-| 2026-10-27 | Branch `feature/model-v2`: the robot model is being replaced (new meshes, geometry and additional sensors). The previous model's meshes, dimensions and L2 mast were removed from the URDF and the dependent configs; see `REWRITE.md`. The Mount contract, A4 and A5 need re-scoring for the new model, and the 3H/4H mount data describe the previous mast. |
+| 2026-10-27 | Branch `feature/model-v2`: the robot model is being replaced (new meshes, geometry and additional sensors). The previous model's meshes, dimensions and L2 mast were removed from the URDF and the dependent configs. The Mount contract, A4 and A5 need re-scoring for the new model, and the 3H/4H mount data describe the previous mast. |
+| 2026-10-27 | Model v2 written from the reference URDF (`mecanum_description/refs/washroom_robot.urdf`): the L2 upright at 0.767 m, the D435i, 2D lidar, ultrasonics, cliff ToF and bumpers. The motors have encoders. `docs/plan.md` rewritten as an end-to-end simulation build; this register is no longer updated per phase. Updated: hardware facts, the Mount contract (and a new Other sensors contract), A4, A5, A13. Superseded: A1, A2, A6, A7, A11. `docs/hardware_l2_test.md` and `docs/hardware_lio_test.md` updated for the upright mount. |

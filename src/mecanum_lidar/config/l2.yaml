@@ -17,12 +17,15 @@ l2_driver:
     #   bit 3: 0 Ethernet, 1 serial (takes effect after a power cycle)
     #   bit 4: 0 spin up at power-on, 1 wait for a start command
     # -1 leaves the stored mode unchanged. The factory mode is 0.
+    # STAND-IN: the robot's upright mount asks for the wide (negative-angle) FOV, bit 0 = 1
+    # (work_mode 1 over Ethernet), so the L2 reaches below its own horizon (-6 deg). Set it once
+    # when the L2 is mounted; it is left unchanged here because it rewrites the stored mode.
     work_mode: -1
 
     # Scans accumulated into each published cloud (vendor default).
     cloud_scan_num: 18
     # Returns outside [range_min, range_max] m are dropped by the SDK. These are the vendor
-    # launch values, i.e. no filtering; the self-filter comes in phase 3.
+    # launch values, i.e. no filtering; the self-filter (mecanum_localization) removes the robot.
     range_min: 0.0
     range_max: 100.0
     # true: stamp with this computer's clock (needed for TF and LIO). false: the L2's own clock.

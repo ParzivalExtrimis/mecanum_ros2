@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<!--
+  Front and rear bumper planks on microswitches (BOM item 6): plank frames.
+
+  Included from mecanum.urdf.xacro when use_bumpers is true (the default).
+
+  Mount: floating planks across the full width, 0.04..0.10 m above the floor, meant to stand
+  3 cm proud of the faces so they hit before the lidar (PDF schedule). Modelled as fixed links;
+  the switch travel is not modelled. Frames: bumper_<pos>_link at the plank centre, +x outward.
+
+  NOTE: in the STEP the front plank (face at x = 0.404 m) is only 5 mm proud of the body; the
+  2D lidar (0.420 m) and the front ultrasonics (0.408 m) stick out further than it. The rear
+  plank (-0.404 m) is 3 mm proud of the rear ultrasonics. See docs/plan.md, Phase 4.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:property name="bumper_depth" value="0.025"/>
+  <xacro:property name="bumper_width" value="0.51"/>
+  <xacro:property name="bumper_height" value="0.03"/>
+  <!-- STAND-IN: STEP plank position; the PDF wants the planks 3 cm proud of the faces -->
+  <xacro:property name="bumper_x" value="0.3915"/>
+  <!-- Plank centre 0.076 m above the floor -->
+  <xacro:property name="bumper_z" value="-0.0261"/>
+
+  <xacro:macro name="bumper" params="prefix parent pos x z yaw">
+
+    <joint name="${prefix}bumper_${pos}_joint" type="fixed">
+      <parent link="${prefix}${parent}"/>
+      <child link="${prefix}bumper_${pos}_link"/>
+      <origin xyz="${x} 0 ${z}" rpy="0 0 ${yaw}"/>
+    </joint>
+
+    <!-- Massless: counted in chassis_mass -->
+    <link name="${prefix}bumper_${pos}_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${bumper_depth} ${bumper_width} ${bumper_height}"/>
+        </geometry>
+        <material name="bumper_red"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${bumper_depth} ${bumper_width} ${bumper_height}"/>
+        </geometry>
+      </collision>
+    </link>
+
+  </xacro:macro>
+
+  <xacro:bumper prefix="$(arg prefix)" parent="base_link" pos="front"
+    x="${bumper_x}" z="${bumper_z}" yaw="0"/>
+  <xacro:bumper prefix="$(arg prefix)" parent="base_link" pos="rear"
+    x="${-bumper_x}" z="${bumper_z}" yaw="${pi}"/>
+
+</robot>

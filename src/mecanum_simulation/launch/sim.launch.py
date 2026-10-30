@@ -16,7 +16,8 @@
 Start Gazebo with the restroom world and spawn the mecanum base.
 
 Starts: Gazebo (gz sim), robot_state_publisher (sim xacro), joint_state_publisher (zero wheel
-angles, no encoders), the spawner, ros_gz_bridge and the simulated ESP32 (sim_motor_plant).
+angles until ros2_control, docs/plan.md Phase 1), the spawner, ros_gz_bridge and the simulated
+ESP32 (sim_motor_plant).
 The drive node itself is started by mecanum_bringup/robot.launch.py.
 """
 
@@ -84,7 +85,8 @@ def generate_launch_description():
             output='screen',
             parameters=[{'robot_description': robot_description, 'use_sim_time': True}],
         ),
-        # No encoders: wheel joints are published at zero angle, identically on hardware.
+        # The open-loop drive reads no wheel state, so the wheel joints are published at zero
+        # angle. Phase 1 of docs/plan.md replaces this with joint_state_broadcaster.
         Node(
             package='joint_state_publisher',
             executable='joint_state_publisher',

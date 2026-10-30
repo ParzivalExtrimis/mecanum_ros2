@@ -16,27 +16,30 @@
 r"""
 Check the Unitree L2 mount against the URDF, and the L2's output against the sim assumptions.
 
-Run it with the robot standing still on a flat, level floor, the L2 driver (or the simulation)
-publishing /l2/points and /l2/imu, and robot_state_publisher publishing the URDF TF. It
-collects data for --duration seconds and reports:
+Run it with the robot standing still on a flat, level floor under a flat ceiling, the L2
+driver (or the simulation) publishing /l2/points and /l2/imu, and robot_state_publisher
+publishing the URDF TF. It collects data for --duration seconds and reports:
 
-1. Floor fit: the floor seen through the URDF transform should be the plane z = 0 in
-   base_footprint. A tilted or offset floor means the real mount differs from the URDF. The
-   tool reports the L2's real height and tilt, and its roll/pitch error.
+1. Plane fit (--plane ceiling, the default, or floor): a horizontal plane seen through the
+   URDF transform should be level in base_footprint. A tilted plane means the real mount
+   differs from the URDF; the tool reports the L2's tilt and its roll/pitch error. The robot's
+   L2 stands upright at 0.80 m, so it sees the ceiling, but the floor only from about 7 m out
+   (wide mode). The ceiling also gives the L2's height when --ceiling-height is tape-measured;
+   the floor gives it directly.
 2. IMU gravity: the mean accelerometer reading in l2_imu, against the URDF prediction. It gives
-   the L2's tilt from vertical and its rotation about its own axis (the l2_mount -> l2_lidar
-   yaw).
+   the L2's tilt from vertical, and, on a tilted mount only, its rotation about its own axis
+   (the l2_mount -> l2_lidar yaw).
 3. Wall (optional, --wall-side left|right): with the robot parked parallel to a straight wall,
-   the wall's direction gives the heading error of the whole mount, and its offset the
-   distance to the wall (compare with a tape measure).
+   the wall's direction gives the heading error of the whole mount, and so the l2_lidar yaw on
+   an upright mount. Its offset is the distance to the wall (compare with a tape measure).
 4. Cloud stream: rate, points per cloud, azimuth coverage per cloud (one full sweep = 360 deg
    in the simulation), the per-point "time" field, and the share of points on the robot.
-5. Noise: floor-plane residual (range noise) and IMU standard deviations, for STANDINS.md.
+5. Noise: plane residual (range noise) and IMU standard deviations, for STANDINS.md.
 
 Usage (hardware, after ros2 launch mecanum_lidar l2.launch.py robot_model:=true rviz:=false):
-    tools/l2_mount_check.py --duration 20 --wall-side right
-Simulation:
-    tools/l2_mount_check.py --use-sim-time --wall-side right
+    tools/l2_mount_check.py --duration 20 --wall-side right --ceiling-height 2.70
+Simulation (restroom world, ceiling 2.4 m):
+    tools/l2_mount_check.py --use-sim-time --wall-side right --ceiling-height 2.4
 """
 
 import argparse
@@ -101,22 +104,23 @@ def rotation_between(a, b):
     return np.eye(3) + s * kx + (1 - c) * (kx @ kx)
 
 
-def floor_correction(normal, d, sensor_pos, sensor_rot):
+def plane_correction(normal, d, sensor_pos, sensor_rot):
     """
-    Infer the real sensor pose from a floor plane measured through the URDF transform.
+    Infer the real sensor pose from a horizontal plane measured through the URDF transform.
 
-    normal, d: plane n.p = d in base_footprint, computed with the URDF sensor pose.
-    sensor_pos, sensor_rot: URDF position and rotation (columns = sensor axes) in base_footprint.
-    Returns (real height above the floor, real rotation, correction rotation).
+    normal, d: plane n.p = d in base_footprint (normal toward +z), computed with the URDF sensor
+    pose. sensor_pos, sensor_rot: URDF position and rotation (columns = sensor axes) in
+    base_footprint. Returns (signed distance of the sensor above the plane: positive above a
+    floor, negative below a ceiling; real rotation; correction rotation).
     """
     corr = rotation_between(np.asarray(normal, float), np.array([0.0, 0.0, 1.0]))
-    height = float(np.asarray(normal) @ np.asarray(sensor_pos) - d)
-    return height, corr @ sensor_rot, corr
+    offset = float(np.asarray(normal) @ np.asarray(sensor_pos) - d)
+    return offset, corr @ sensor_rot, corr
 
 
 def tilt_from_vertical(rot):
-    """Angle (deg) between the sensor's +Z axis and straight down, for a column-axes matrix."""
-    return math.degrees(math.acos(max(-1.0, min(1.0, -rot[2, 2]))))
+    """Angle (deg) between the sensor's Z axis and the vertical (up or down), column axes."""
+    return math.degrees(math.acos(max(-1.0, min(1.0, abs(rot[2, 2])))))
 
 
 def roll_pitch(corr):
@@ -127,15 +131,15 @@ def roll_pitch(corr):
 
 def gravity_angles(acc):
     """
-    Tilt (deg, sensor +Z from straight down) and spin (deg) of the sensor from gravity.
+    Tilt (deg, sensor Z from the vertical, up or down) and spin (deg) of the sensor from gravity.
 
     acc is the mean accelerometer reading (specific force, pointing up) in the sensor frame.
-    The spin is the rotation of the sensor about its own +Z axis, measured from the
-    orientation whose +X points uphill. On a mount tilted toward +X, as the previous mast was,
-    it equals the l2_mount -> l2_lidar yaw.
+    The spin is the rotation of the sensor about its own Z axis, measured from the
+    orientation whose +X points uphill. It is defined only on a tilted mount (it is noise on an
+    upright or inverted one); there it equals the l2_mount -> l2_lidar yaw.
     """
     a = np.asarray(acc, float) / np.linalg.norm(acc)
-    tilt = math.degrees(math.acos(max(-1.0, min(1.0, -a[2]))))
+    tilt = math.degrees(math.acos(max(-1.0, min(1.0, abs(a[2])))))
     spin = math.degrees(math.atan2(-a[1], a[0]))
     return tilt, spin
 
@@ -191,8 +195,6 @@ def cloud_xyz(msg):
 
 def load_crop_box():
     """Self-filter box from mecanum_localization's installed config (or None)."""
-    # REWRITE: None until self_filter.yaml has a box for the new model again, so the
-    # on-robot checks below are skipped.
     try:
         from ament_index_python.packages import get_package_share_directory
         import yaml
@@ -229,9 +231,13 @@ def main(argv=None):
                         help='a straight wall parallel to the robot on this side')
     parser.add_argument('--wall-distance', type=float, default=None,
                         help='tape-measured distance (m) from the robot centreline to the wall')
-    # REWRITE: 0.4 m clears the previous robot's footprint; re-check for the new model.
-    parser.add_argument('--floor-radius', type=float, nargs=2, default=(0.4, 3.0),
-                        help='horizontal range (m) of floor points used for the fit')
+    parser.add_argument('--plane', choices=['ceiling', 'floor'], default='ceiling',
+                        help='horizontal plane to fit (the upright L2 hardly sees the floor)')
+    parser.add_argument('--ceiling-height', type=float, default=None,
+                        help='tape-measured ceiling height (m) above the floor at the robot')
+    parser.add_argument('--plane-radius', type=float, nargs=2, default=None,
+                        help='horizontal range (m) of plane points used for the fit; default '
+                        '0..3 for the ceiling, 0.5..10 for the floor')
     args = parser.parse_args(argv)
 
     import rclpy
@@ -303,31 +309,50 @@ def main(argv=None):
     def row(name, measured, expected, ok, note=''):
         rows.append((verdict(ok), name, measured, expected, note))
 
-    # 1. Floor
+    # 1. Horizontal plane: the ceiling (above the L2) or the floor
     horiz = np.hypot(pts_b[:, 0], pts_b[:, 1])
     box = load_crop_box()
-    cand = (np.abs(pts_b[:, 2]) < 0.10) & (horiz > args.floor_radius[0]) \
-        & (horiz < args.floor_radius[1])
+    radius = args.plane_radius or ((0.0, 3.0) if args.plane == 'ceiling' else (0.5, 10.0))
+    near = (horiz > radius[0]) & (horiz < radius[1])
+    if args.plane == 'floor':
+        plane_z = 0.0
+    elif args.ceiling_height is not None:
+        plane_z = args.ceiling_height
+    else:
+        # The ceiling is the highest dense layer above the L2.
+        high = near & (pts_b[:, 2] > s_pos[2] + 0.5)
+        plane_z = float(np.percentile(pts_b[high, 2], 90)) if high.sum() else None
+    cand = near & (np.abs(pts_b[:, 2] - plane_z) < 0.10) if plane_z is not None \
+        else np.zeros(len(pts_b), dtype=bool)
     if box is not None:
         cand &= ~in_box(pts_b, box)
     if cand.sum() < 100:
-        print(f'Only {int(cand.sum())} floor points near z = 0: the mount may be far off, or the '
-              'floor is not visible. Check in RViz.')
-        floor = None
+        print(f'Only {int(cand.sum())} {args.plane} points: the mount may be far off, or the '
+              f'{args.plane} is not visible. Check in RViz.')
+        plane = None
     else:
         n, d, sigma, used = fit_plane(pts_b[cand])
-        height, real_rot, corr = floor_correction(n, d, s_pos, s_rot)
+        offset, real_rot, corr = plane_correction(n, d, s_pos, s_rot)
         roll_e, pitch_e = roll_pitch(corr)
         urdf_tilt, real_tilt = tilt_from_vertical(s_rot), tilt_from_vertical(real_rot)
-        floor = (sigma, used)
-        row('L2 height above floor [m]', f'{height:.3f}', f'{s_pos[2]:.3f}',
-            abs(height - s_pos[2]) <= 0.01, 'tol 1 cm')
+        plane = (sigma, used)
+        if args.plane == 'floor':
+            row('L2 height above floor [m]', f'{offset:.3f}', f'{s_pos[2]:.3f}',
+                abs(offset - s_pos[2]) <= 0.01, 'tol 1 cm')
+        elif args.ceiling_height is not None:
+            height = args.ceiling_height + offset
+            row('L2 height above floor [m]', f'{height:.3f}', f'{s_pos[2]:.3f}',
+                abs(height - s_pos[2]) <= 0.02,
+                f'tol 2 cm; ceiling {-offset:.3f} m above the L2')
+        else:
+            row('L2 distance to ceiling [m]', f'{-offset:.3f}', '(tape)', True,
+                'pass --ceiling-height to check the L2 height')
         row('L2 tilt from vertical [deg]', f'{real_tilt:.2f}', f'{urdf_tilt:.2f}',
-            abs(real_tilt - urdf_tilt) <= 0.5, 'tol 0.5 deg; from the floor')
+            abs(real_tilt - urdf_tilt) <= 0.5, f'tol 0.5 deg; from the {args.plane}')
         row('mount roll error [deg]', f'{roll_e:+.2f}', '0.00', abs(roll_e) <= 0.5,
-            '+ = floor seen rising to the right')
+            f'+ = {args.plane} seen rising to the right')
         row('mount pitch error [deg]', f'{pitch_e:+.2f}', '0.00', abs(pitch_e) <= 0.5,
-            '+ = floor seen rising ahead')
+            f'+ = {args.plane} seen rising ahead')
 
     # 2. IMU gravity
     acc = np.mean(imu_acc, axis=0)
@@ -339,18 +364,20 @@ def main(argv=None):
         abs(np.linalg.norm(acc) - G) < 0.3, '~1.0 would mean units of g')
     row('IMU tilt from vertical [deg]', f'{m_tilt:.2f}', f'{e_tilt:.2f}',
         abs(m_tilt - e_tilt) <= 1.0, 'tol 1 deg; includes floor slope')
-    row('L2 spin about own axis [deg]', f'{m_spin:+.2f}', f'{e_spin:+.2f}',
-        abs(spin_err) <= 2.0, f'= l2_lidar yaw on the mount; error {spin_err:+.2f}')
+    if e_tilt > 5.0:
+        row('L2 spin about own axis [deg]', f'{m_spin:+.2f}', f'{e_spin:+.2f}',
+            abs(spin_err) <= 2.0, f'= l2_lidar yaw on the mount; error {spin_err:+.2f}')
+    else:
+        row('L2 spin about own axis [deg]', 'n/a', 'n/a', True,
+            'mount not tilted: read the yaw from the wall check')
 
     # 3. Wall
     if args.wall_side != 'none':
         sign = 1.0 if args.wall_side == 'left' else -1.0
-        # Side walls are seen from the floor up to the L2's height (the edge of its field of
-        # view runs through the horizontal there); 0.5-0.9 m avoids most furniture.
-        # REWRITE: the band and |y| > 0.35 m fit the previous L2 height (0.93 m) and robot
-        # width; re-check for the new mount.
-        band = (pts_b[:, 2] > 0.5) & (pts_b[:, 2] < 0.9) & (pts_b[:, 0] > -1.0) \
-            & (pts_b[:, 0] < 2.0) & (sign * pts_b[:, 1] > 0.35) & (sign * pts_b[:, 1] < 4.0)
+        # The upright L2 sees side walls from its own height (0.80 m) up; 0.9-2.0 m avoids
+        # most furniture and stays below the ceiling. |y| > 0.30 m clears the robot.
+        band = (pts_b[:, 2] > 0.9) & (pts_b[:, 2] < 2.0) & (pts_b[:, 0] > -1.0) \
+            & (pts_b[:, 0] < 2.0) & (sign * pts_b[:, 1] > 0.30) & (sign * pts_b[:, 1] < 4.0)
         if band.sum() < 30:
             row('wall heading [deg]', 'no wall points', '0.00', False,
                 f'nothing found on the {args.wall_side}')
@@ -381,8 +408,7 @@ def main(argv=None):
         on_robot = float(in_box(pts_b, box).mean())
         near = float((in_box(pts_b, box, grow=0.10) & ~in_box(pts_b, box)
                       & (pts_b[:, 2] > 0.05)).mean())
-        # REWRITE: ~25% was measured with the previous model in sim; re-measure.
-        row('points on the robot', f'{on_robot:.1%}', '~25% (sim)', True,
+        row('points on the robot', f'{on_robot:.1%}', '~0.6% (sim)', True,
             'removed by the self-filter')
         row('points just outside the box', f'{near:.2%}', '~0', near < 0.005,
             'self-hits the box misses, or real objects within 10 cm')
@@ -395,9 +421,9 @@ def main(argv=None):
         True, f'bias {np.linalg.norm(gyro.mean(axis=0)):.4f} rad/s')
     row('accel std [m/s^2]', ' '.join(f'{v:.3f}' for v in np.std(imu_acc, axis=0)),
         '0.02 (sim)', True, '')
-    if floor is not None:
-        row('floor residual [m]', f'{floor[0]:.4f}', '0.01 (sim noise)', True,
-            f'{floor[1]} floor points')
+    if plane is not None:
+        row(f'{args.plane} residual [m]', f'{plane[0]:.4f}', '0.01 (sim noise)', True,
+            f'{plane[1]} {args.plane} points')
 
     print(f'\nL2 frame {lidar_frame}, IMU frame {on_imu.frame}, {len(clouds)} clouds, '
           f'{len(imu_acc)} IMU samples\n')

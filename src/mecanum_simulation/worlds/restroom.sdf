@@ -15,9 +15,11 @@
                partitions from z 0.15 to 1.9 m
     toilet_1   against the east wall at y = 3.075, bowl front edge at x = 6.34
 
-  Ceiling: 2.4 m, a separate static model "ceiling" so it can be hidden in the Gazebo GUI
-  (Entity tree > ceiling > right-click > View > Transparent) to look at the robot from above.
-  The simulated L2 sees it; gpu_lidar renders visuals, so the ceiling has a visual.
+  Viewing: the world is open on top in the Gazebo GUI, and the four outer walls are
+  translucent, so the robot can be watched from any angle. Both use the visual's
+  <transparency>, which only the GUI camera honours: gpu_lidar ignores it, so the simulated
+  sensors still see the outer walls and the 2.4 m ceiling (a separate static model, "ceiling",
+  with a fully transparent visual). The inner walls and fixtures are opaque.
 -->
 <sdf version="1.9">
   <world name="restroom">
@@ -72,26 +74,26 @@
 
     <model name="building">
       <static>true</static>
-      <!-- outer walls -->
+      <!-- outer walls: translucent in the GUI only (see the header) -->
       <link name="wall_south">
         <pose>3.0 -2.05 1.2 0 0 0</pose>
         <collision name="collision"><geometry><box><size>8.2 0.1 2.4</size></box></geometry></collision>
-        <visual name="visual"><geometry><box><size>8.2 0.1 2.4</size></box></geometry><material><ambient>0.85 0.85 0.82 1</ambient><diffuse>0.85 0.85 0.82 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+        <visual name="visual"><geometry><box><size>8.2 0.1 2.4</size></box></geometry><material><ambient>0.55 0.75 0.85 1</ambient><diffuse>0.55 0.75 0.85 1</diffuse><specular>0.1 0.1 0.1 1</specular></material><transparency>0.65</transparency></visual>
       </link>
       <link name="wall_north">
         <pose>3.0 4.05 1.2 0 0 0</pose>
         <collision name="collision"><geometry><box><size>8.2 0.1 2.4</size></box></geometry></collision>
-        <visual name="visual"><geometry><box><size>8.2 0.1 2.4</size></box></geometry><material><ambient>0.85 0.85 0.82 1</ambient><diffuse>0.85 0.85 0.82 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+        <visual name="visual"><geometry><box><size>8.2 0.1 2.4</size></box></geometry><material><ambient>0.55 0.75 0.85 1</ambient><diffuse>0.55 0.75 0.85 1</diffuse><specular>0.1 0.1 0.1 1</specular></material><transparency>0.65</transparency></visual>
       </link>
       <link name="wall_west">
         <pose>-1.05 1.0 1.2 0 0 0</pose>
         <collision name="collision"><geometry><box><size>0.1 6.0 2.4</size></box></geometry></collision>
-        <visual name="visual"><geometry><box><size>0.1 6.0 2.4</size></box></geometry><material><ambient>0.85 0.85 0.82 1</ambient><diffuse>0.85 0.85 0.82 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+        <visual name="visual"><geometry><box><size>0.1 6.0 2.4</size></box></geometry><material><ambient>0.55 0.75 0.85 1</ambient><diffuse>0.55 0.75 0.85 1</diffuse><specular>0.1 0.1 0.1 1</specular></material><transparency>0.65</transparency></visual>
       </link>
       <link name="wall_east">
         <pose>7.05 1.0 1.2 0 0 0</pose>
         <collision name="collision"><geometry><box><size>0.1 6.0 2.4</size></box></geometry></collision>
-        <visual name="visual"><geometry><box><size>0.1 6.0 2.4</size></box></geometry><material><ambient>0.85 0.85 0.82 1</ambient><diffuse>0.85 0.85 0.82 1</diffuse><specular>0.1 0.1 0.1 1</specular></material></visual>
+        <visual name="visual"><geometry><box><size>0.1 6.0 2.4</size></box></geometry><material><ambient>0.55 0.75 0.85 1</ambient><diffuse>0.55 0.75 0.85 1</diffuse><specular>0.1 0.1 0.1 1</specular></material><transparency>0.65</transparency></visual>
       </link>
       <!-- restroom south wall with a 0.9 m doorway at x 3.0..3.9 -->
       <link name="restroom_wall_south_a">
@@ -171,7 +173,8 @@
     </model>
 
 
-    <!-- STAND-IN: ceiling height 2.4 m is typical for a restroom; use the real site's value -->
+    <!-- STAND-IN: ceiling height 2.4 m is typical for a restroom; use the real site's value.
+         Invisible in the GUI (transparency 1), still seen by the simulated sensors. -->
     <model name="ceiling">
       <static>true</static>
       <pose>3.0 1.0 2.45 0 0 0</pose>
@@ -180,6 +183,7 @@
         <visual name="visual">
           <geometry><box><size>8.2 6.2 0.1</size></box></geometry>
           <material><ambient>0.92 0.92 0.92 1</ambient><diffuse>0.92 0.92 0.92 1</diffuse><specular>0.1 0.1 0.1 1</specular></material>
+          <transparency>1.0</transparency>
         </visual>
       </link>
     </model>

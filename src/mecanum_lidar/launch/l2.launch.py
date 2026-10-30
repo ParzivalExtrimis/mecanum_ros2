@@ -90,7 +90,7 @@ def generate_launch_description():
             output='screen',
             parameters=[{'robot_description': robot_description}],
             condition=IfCondition(robot_model)),
-        # The wheels have no encoders; this publishes zero angles so their TF exists.
+        # No drive runs here; this publishes zero wheel angles so their TF exists.
         Node(
             package='joint_state_publisher',
             executable='joint_state_publisher',

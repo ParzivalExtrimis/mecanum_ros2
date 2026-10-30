@@ -22,12 +22,6 @@ import pytest
 import xacro
 import yaml
 
-# REWRITE: the URDF is a frame skeleton and esp32_driver.yaml has no geometry until the new
-# model is written (see REWRITE.md). Remove this skip once both carry the new values. If the new
-# wheel collision is not a cylinder, change the radius lookup in urdf_geometry().
-pytestmark = pytest.mark.skip(
-    reason='robot model is being rewritten (REWRITE.md): no wheel geometry in the URDF yet')
-
 CONFIG = os.path.join(os.path.dirname(__file__), '..', 'config', 'esp32_driver.yaml')
 
 

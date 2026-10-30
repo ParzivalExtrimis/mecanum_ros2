@@ -4,17 +4,21 @@
 
   Included from mecanum.urdf.xacro when use_l2 is true (the default).
 
-  REWRITE: the previous mast was removed for the new model (see REWRITE.md): the l2_mast link
-  and joint, the pole and bracket meshes, the mast pose args (l2_mast_x/y/z/yaw), the CAD face
-  offset (l2_face_x/y/z), the 30 deg bracket tilt, the cable direction (l2_bracket_yaw) and the
-  mast mass. Only vendor facts of the L2 itself are kept below. Add the new mount's links, meshes
-  and pose when the new geometry is written.
+  Mount: upright on a 30 mm standoff on the top of the tall box, behind the robot centre
+  (PDF schedule: "box top on 30 mm standoff, upright, negative-angle mode"). The STEP model has
+  the L2 sunk 40 mm into the box top, which contradicts the PDF; the PDF mounting is used. The
+  standoff is drawn with the L2's footprint; its real shape is unknown.
+
+  Field of view: the hemisphere on the L2's +Z (dome) side, so upright it sees up and around:
+  elevation 0..90 deg in standard mode, -6..90 deg in negative-angle (wide) mode, which the PDF
+  asks for. From 0.80 m it sees the walls above the robot and the ceiling; in wide mode it
+  reaches 0.45 m-high objects only beyond about 3.1 m. It sees almost none of the robot.
 
   Frames (all fixed joints, published by robot_state_publisher):
-    <parent> -> l2_mount   centre of the L2's bottom mounting face, z normal to it into the
-                           sensor (dome). REWRITE: pose on the new mount.
-    l2_mount -> l2_lidar   vendor point-cloud frame. REWRITE: rotation about z that sets the
-                           cable outlet direction on the new mount.
+    <parent> -> l2_mount   centre of the L2's bottom mounting face (the standoff top), z up into
+                           the dome. 0.767 m above the floor; the housing centre (the reference
+                           URDF's unitree_l2_link) is 32.5 mm above it, at 0.799 m.
+    l2_mount -> l2_lidar   vendor point-cloud frame, rotated about z by l2_cable_yaw.
     l2_lidar -> l2_imu     vendor IMU frame: axes parallel to l2_lidar, origin at
                            (-0.007698, -0.014655, 0.00667) m in l2_lidar.
   Vendor frame definition (unilidar_sdk2 README): origin at the centre of the bottom mounting
@@ -32,30 +36,61 @@
   <xacro:property name="l2_imu_y" value="-0.014655"/>
   <xacro:property name="l2_imu_z" value="0.00667"/>
 
+  <!-- Mount pose in base_link. x, y from the STEP body. z = STEP box top (0.7369 m above the
+       floor) + 30 mm standoff - wheel_radius.
+       STAND-IN: the height follows the PDF standoff rule, not the STEP; measure the mounted
+       L2 bottom face height. -->
+  <xacro:property name="l2_mount_x" value="-0.100"/>
+  <xacro:property name="l2_mount_y" value="0.0"/>
+  <xacro:property name="l2_mount_z" value="${0.7369 + 0.030 - wheel_radius}"/>
+  <xacro:property name="l2_standoff_height" value="0.030"/>
+  <!-- STAND-IN: cable direction unknown. 0 = vendor +X forward, cable outlet to the rear.
+       Read it on the robot (vendor +X points away from the cable) and set the yaw from
+       above, counter-clockwise positive. -->
+  <xacro:property name="l2_cable_yaw" value="0.0"/>
+
   <xacro:macro name="unitree_l2" params="prefix parent">
 
     <joint name="${prefix}l2_mount_joint" type="fixed">
       <parent link="${prefix}${parent}"/>
       <child link="${prefix}l2_mount"/>
-      <!-- REWRITE: origin removed. Set the L2's bottom mounting face pose on the new mount
-           (position, tilt, z into the dome). -->
+      <origin xyz="${l2_mount_x} ${l2_mount_y} ${l2_mount_z}" rpy="0 0 0"/>
     </joint>
 
-    <!-- Sensor mass only. REWRITE: add the L2 body visual/collision, unless the new mount's
-         meshes already contain it. -->
+    <!-- L2 body above the mounting face and the standoff below it. Mass: the L2 only (the
+         standoff is counted in chassis_mass). -->
     <link name="${prefix}l2_mount">
       <xacro:box_inertia mass="${l2_mass}" x="${l2_body_size}" y="${l2_body_size}"
         z="${l2_body_height}">
         <origin xyz="0 0 ${l2_body_height/2}" rpy="0 0 0"/>
       </xacro:box_inertia>
+      <visual>
+        <origin xyz="0 0 ${l2_body_height/2}" rpy="0 0 0"/>
+        <geometry>
+          <box size="${l2_body_size} ${l2_body_size} ${l2_body_height}"/>
+        </geometry>
+        <material name="l2_purple"/>
+      </visual>
+      <visual>
+        <origin xyz="0 0 ${-l2_standoff_height/2}" rpy="0 0 0"/>
+        <geometry>
+          <box size="${l2_body_size} ${l2_body_size} ${l2_standoff_height}"/>
+        </geometry>
+        <material name="mount_white"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${(l2_body_height - l2_standoff_height)/2}" rpy="0 0 0"/>
+        <geometry>
+          <box size="${l2_body_size} ${l2_body_size} ${l2_body_height + l2_standoff_height}"/>
+        </geometry>
+      </collision>
     </link>
 
     <!-- Point cloud frame (vendor lidar frame) -->
     <joint name="${prefix}l2_lidar_joint" type="fixed">
       <parent link="${prefix}l2_mount"/>
       <child link="${prefix}l2_lidar"/>
-      <!-- REWRITE: rotation removed. Rotate about z so vendor +X points away from the cable
-           outlet as mounted on the new robot. -->
+      <origin xyz="0 0 0" rpy="0 0 ${l2_cable_yaw}"/>
     </joint>
     <link name="${prefix}l2_lidar"/>
 
@@ -69,7 +104,6 @@
 
   </xacro:macro>
 
-  <!-- REWRITE: parent is base_link until the new mount's links exist -->
   <xacro:unitree_l2 prefix="$(arg prefix)" parent="base_link"/>
 
 </robot>

@@ -1,34 +1,95 @@
 <?xml version="1.0"?>
-<!-- Robot body: base_footprint, base_link (chassis) and the four wheels. -->
-<!-- REWRITE: frame skeleton only. The previous model's chassis mesh, collision box, inertia,
-     wheel meshes and wheel positions were removed (see REWRITE.md). The link and joint names are
-     kept because other packages use them. Rename them only together with REWRITE.md
-     "Kept, re-check after the rewrite". -->
+<!-- Robot body: base_footprint, base_link, chassis_link and the four wheels. -->
+<!-- The link and joint names are used by other packages (mecanum_base WHEEL_NAMES, the Gazebo
+     friction and bridge topics, the LIO, self-filter and scan configs, the RViz files). Rename
+     them only everywhere at once. -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- One box of the body envelope, used for both visual and collision -->
+  <xacro:macro name="chassis_box" params="xyz rpy:='0 0 0' size">
+    <visual>
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+      <geometry>
+        <box size="${size}"/>
+      </geometry>
+      <material name="cad_grey"/>
+    </visual>
+    <collision>
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+      <geometry>
+        <box size="${size}"/>
+      </geometry>
+    </collision>
+  </xacro:macro>
 
   <xacro:macro name="mecanum_robot" params="prefix">
 
-    <!-- Ground-projected robot frame (REP-105) -->
+    <!-- Ground-projected robot frame (REP-105), below the wheel-rectangle centre -->
     <link name="${prefix}base_footprint" />
 
     <joint name="${prefix}base_joint" type="fixed">
       <parent link="${prefix}base_footprint" />
       <child link="${prefix}base_link" />
-      <!-- REWRITE: origin removed. Lift base_link to the new wheel axle height (z = wheel
-           radius) so base_footprint stays on the floor. -->
+      <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0" />
     </joint>
 
-    <!-- base_link sits at wheel axle height -->
-    <!-- REWRITE: visual, collision and inertial removed. Add them from the new chassis meshes
-         (meshes/visual, meshes/collision), including the new geometry meshes. -->
+    <!-- base_link sits at wheel axle height. Frame only: the body mass is in chassis_link, so
+         robot_state_publisher does not warn about an inertial root (Gazebo lumps the fixed
+         joint). -->
     <link name="${prefix}base_link" />
 
-    <!-- REWRITE: wheel meshes and positions removed. Pass the new wheel meshes and the wheel
-         centres (front/rear axle x, +-track/2) once mecanum_params.xacro defines them. -->
-    <xacro:mecanum_wheel prefix="${prefix}" name="front_left" parent="base_link" />
-    <xacro:mecanum_wheel prefix="${prefix}" name="front_right" parent="base_link" />
-    <xacro:mecanum_wheel prefix="${prefix}" name="rear_left" parent="base_link" />
-    <xacro:mecanum_wheel prefix="${prefix}" name="rear_right" parent="base_link" />
+    <!-- Outer envelope of the STEP body 'Cover', rebuilt from its planar faces as 18 boxes.
+         The rotated ones follow the 60 deg front slope and the 20 deg rear-notch floor and its
+         pad. The underside slab is split to leave an open pocket under each cliff sensor, as
+         the STEP body is open underneath. The wheel-hub profile and the bumper edge fillets
+         are simplified. -->
+    <link name="${prefix}chassis_link">
+      <inertial>
+        <origin xyz="${chassis_com_x} 0 ${chassis_com_z}" rpy="0 0 0"/>
+        <mass value="${chassis_mass}"/>
+        <inertia ixx="${chassis_ixx}" ixy="0" ixz="${chassis_ixz}" iyy="${chassis_iyy}"
+                 iyz="0" izz="${chassis_izz}"/>
+      </inertial>
+      <!-- Underside slab, 9 parts around the four cliff-sensor pockets -->
+      <xacro:chassis_box xyz="-0.3805 0 0.0224" size="0.021 0.51 0.0521"/>
+      <xacro:chassis_box xyz="-0.3535 -0.2449 0.0224" size="0.033 0.0202 0.0521"/>
+      <xacro:chassis_box xyz="-0.3535 0 0.0224" size="0.033 0.3616 0.0521"/>
+      <xacro:chassis_box xyz="-0.3535 0.2449 0.0224" size="0.033 0.0202 0.0521"/>
+      <xacro:chassis_box xyz="0 0 0.0224" size="0.674 0.51 0.0521"/>
+      <xacro:chassis_box xyz="0.3535 -0.2449 0.0224" size="0.033 0.0202 0.0521"/>
+      <xacro:chassis_box xyz="0.3535 0 0.0224" size="0.033 0.3616 0.0521"/>
+      <xacro:chassis_box xyz="0.3535 0.2449 0.0224" size="0.033 0.0202 0.0521"/>
+      <xacro:chassis_box xyz="0.3845 0 0.0224" size="0.029 0.51 0.0521"/>
+      <!-- Lower body (envelope of the open-bottom shell) -->
+      <xacro:chassis_box xyz="0.004 0 0.1446" size="0.79 0.51 0.1923"/>
+      <!-- Raised deck (the arm will stand here) -->
+      <xacro:chassis_box xyz="-0.0755 0 0.2831" size="0.6309 0.51 0.0846"/>
+      <!-- 60 deg slope from the deck down to the front step -->
+      <xacro:chassis_box xyz="0.2438 0 0.2713" rpy="0 -0.523598775 0" size="0.0473 0.51 0.0977"/>
+      <!-- Tall box: front part and the two rear ears around the rear notch -->
+      <xacro:chassis_box xyz="-0.1255 0 0.4799" size="0.167 0.51 0.309"/>
+      <xacro:chassis_box xyz="-0.3 0.1975 0.4799" size="0.182 0.115 0.309"/>
+      <xacro:chassis_box xyz="-0.3 -0.1975 0.4799" size="0.182 0.115 0.309"/>
+      <!-- Rear notch: below its floor, the 20 deg floor, and the 2 mm raised pad on it -->
+      <xacro:chassis_box xyz="-0.3 0 0.4016" size="0.182 0.28 0.1523"/>
+      <xacro:chassis_box xyz="-0.2885 0 0.4792" rpy="0 -0.349044398 0" size="0.1937 0.28 0.0672"/>
+      <xacro:chassis_box xyz="-0.2902 0 0.5149" rpy="0 -0.34906585 0" size="0.125 0.223 0.003"/>
+    </link>
+
+    <joint name="${prefix}chassis_joint" type="fixed">
+      <parent link="${prefix}base_link" />
+      <child link="${prefix}chassis_link" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
+    </joint>
+
+    <xacro:mecanum_wheel prefix="${prefix}" name="front_left" parent="base_link"
+      x="${front_axle_x}" y="${wheel_y}" side="1" />
+    <xacro:mecanum_wheel prefix="${prefix}" name="front_right" parent="base_link"
+      x="${front_axle_x}" y="${-wheel_y}" side="-1" />
+    <xacro:mecanum_wheel prefix="${prefix}" name="rear_left" parent="base_link"
+      x="${rear_axle_x}" y="${wheel_y}" side="1" />
+    <xacro:mecanum_wheel prefix="${prefix}" name="rear_right" parent="base_link"
+      x="${rear_axle_x}" y="${-wheel_y}" side="-1" />
 
   </xacro:macro>
 

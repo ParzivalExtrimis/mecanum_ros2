@@ -1,6 +1,6 @@
 # Debug view of what the drive node actually sent, one entry per wheel.
-# Published on <driver>/wheel_commands. This is NOT feedback and NOT odometry: the motors
-# have no encoders, and every value here is a command.
+# Published on <driver>/wheel_commands. This is NOT feedback and NOT odometry: the open-loop
+# driver reads no encoders, and every value here is a command.
 
 std_msgs/Header header
 

@@ -1,6 +1,8 @@
 # 0001: Open-loop drive through a Python driver node, without ros2_control
 
-- **Status:** accepted
+- **Status:** superseded (2026-10-27). The new motors have position and velocity encoders, so
+  the drive moves to ros2_control in Phase 1 of [`plan.md`](../plan.md); a decision record
+  0002 is written when that phase is done. The open-loop driver stays in service until then.
 - **Date:** 2026-10-01
 - **Revisit when:** the ESP32 firmware reports measured wheel position or velocity. See
   [encoder_upgrade.md](../encoder_upgrade.md).

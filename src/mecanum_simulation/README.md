@@ -4,9 +4,11 @@ This package is the Gazebo Harmonic (gz-sim 8) simulation of the mecanum base. I
 the restroom test world, the simulation-only additions to the robot description, the ros_gz
 bridge and a simulated ESP32 with its motors.
 
-The simulation is as blind as the real robot. Wheel joint states are never published or
-used for odometry, because the real motors have no encoders. See
-[decision 0001](../../docs/decisions/0001-open-loop-drive-without-ros2-control.md).
+The drive is simulated open-loop, as decided when the motors had no encoders
+([decision 0001](../../docs/decisions/0001-open-loop-drive-without-ros2-control.md)): wheel joint
+states are never published or used for odometry. The new motors have encoders, and plan
+Phase 1 ([docs/plan.md](../../docs/plan.md)) replaces this drive with ros2_control and
+gz_ros2_control, which publish measured wheel states.
 
 ## Data flow
 
@@ -51,8 +53,8 @@ omega = sign * direction * (value - deadband) / scale,   |omega| <= max_omega
 ```
 
 The default `config/sim_plant.yaml` is ideal and matches the driver's stand-in calibration.
-Changing scale, deadband, sign or wiring injects realistic errors, which tests the motion test
-and the calibration tool. `watchdog_timeout`, the simulated firmware watchdog, is off by
+Changing scale, deadband, sign or wiring injects realistic errors, which tests the motion
+test. `watchdog_timeout`, the simulated firmware watchdog, is off by
 default. Whether the real firmware has one is unknown.
 
 ## World: `worlds/restroom.sdf`
@@ -68,14 +70,18 @@ with z up, in metres:
 | Stall | x 5.4 to 7, y 2.2 to 4, open towards -x. Partitions leave a 0.15 m floor gap. |
 | `toilet_1` | Against the east wall at y = 3.075. The bowl's front edge is at x = 6.34. |
 
-A 2.4 m ceiling is a separate model, `ceiling`. The simulated L2 sees it. To look at the robot
-from above in the Gazebo GUI, make it transparent: in the entity tree, right-click `ceiling`,
-then choose View > Transparent.
+The world is open on top in the Gazebo GUI, and the four outer walls are translucent (tinted
+blue), so the robot can be watched from above and from outside. The inner walls and fixtures
+are opaque. Only the GUI is affected: the visual's `<transparency>` is ignored by `gpu_lidar`,
+so the simulated sensors still see the outer walls and a 2.4 m ceiling. The ceiling is a
+separate model, `ceiling`, with a fully transparent visual. Checked headless on 2026-10-27:
+still 11,520 points per sweep, about half of them on the ceiling.
 
 ## World: `worlds/corridor.sdf`
 
-A test world for the LIO degeneracy check in phase 4, not a site model. It is a straight,
-featureless corridor, 2 m wide and 70 m long, with a 2.4 m ceiling: x −35 to 35, y −2 to 0.
+A test world for the odometry degeneracy check (plan Phase 3), not a site model. It is a
+straight, featureless corridor, 2 m wide and 70 m long, with a 2.4 m ceiling: x −35 to 35,
+y −2 to 0.
 The default spawn (0, −1) is on its centre line, facing along it.
 
 The walls, floor and ceiling pin down sideways, vertical and rotational motion. Nothing pins
@@ -105,16 +111,19 @@ in three ways:
 - **Full sweeps.** One message is a full sweep. The real driver's 18-scan clouds may be partial;
   this is checked in the hardware phase.
 
-Measured in the restroom world at spawn:
+The L2 stands upright on the robot's top, in wide mode by default (`sim_l2_wide_fov` is
+`true`), as the sensor placement PDF asks.
 
-> **REWRITE (branch `feature/model-v2`):** measured with the previous model and L2 mast. Redo
-> after the new URDF exists. See the root `REWRITE.md`.
+Measured in the restroom world at spawn (2026-10-27), with `tools/l2_mount_check.py`:
 
 | Quantity | Value |
 |---|---|
-| Points on the robot itself | 25% of each raw cloud, removed by the self-filter |
-| Floor points | About 45% of the raw cloud |
-| IMU at rest | (4.52, −1.88, −8.49) m/s², as predicted by the URDF orientation |
+| Points per sweep | 11,520: every ray hits something under the ceiling |
+| Points on the robot itself | 0.6% of each raw cloud (the top of the tall box), removed by the self-filter |
+| Floor points | 0.2% of the raw cloud: the floor is in view only beyond about 7.3 m |
+| Points below the L2's own height | 6% |
+| Ceiling | Fitted 1.633 m above the L2 (ceiling 2.40 m), tilt 0.01° |
+| IMU at rest | (0, 0, +9.80) m/s², as predicted by the upright URDF orientation |
 
 ## Usage
 
@@ -139,33 +148,28 @@ ros2 launch mecanum_simulation sim.launch.py gui:=false
 | `use_l2` | `true` | Include the L2 in the model |
 | `plant_file` | `config/sim_plant.yaml` | Plant model; swap it to inject motor errors |
 
-## Measured behaviour (phase 2, ideal plant)
+## Measured behaviour (ideal plant)
 
-These figures come from the motion test and probes against `/sim/ground_truth/odom`:
-
-> **REWRITE (branch `feature/model-v2`):** measured with the previous model's wheels (cylinder
-> collision, 9.5 mm wheel-centre offset). Redo after the new URDF exists.
+These figures come from the motion test (`motion_test.launch.py`, default `axes` pattern)
+against `/sim/ground_truth/odom`, with the robot model of 2026-10-27 (31.2 kg, 0.1025 m
+wheels):
 
 | Motion | Result |
 |---|---|
-| Forward 0.15 to 0.25 m/s | 100% of commanded travel, cross-axis drift below 0.1% |
-| Strafe left 0.15 to 0.25 m/s | 100% of commanded travel, cross-axis drift below 0.1% |
-| Rotation 0.3 to 0.8 rad/s | **110.2%** of commanded rate at every speed |
-| Translation during a rotation | 1.4 cm over about 95° |
-| Stop after `cmd_vel` stops | 0.34 s |
+| Forward 0.15 m/s, 3 s | 98% of commanded travel, cross-axis drift 0.0% |
+| Strafe left 0.15 m/s, 3 s | 98% of commanded travel, cross-axis drift 0.1% |
+| Rotation 0.5 rad/s, 3 s | 99% of commanded rate |
+| Translation during a rotation | 5.6 cm over 85°: over the motion test's 5 cm limit, so the test stops there |
 
-- **Rotation is 10% fast.** The effective lever arm is 0.04 m shorter than lx + ly, which is
-  half the wheel width. The cylinder collision most likely touches the floor near a rim edge
-  instead of at the wheel mid-plane. A sphere collision would avoid this. The gazebo merge
-  mechanism cannot replace the geometry, so that change would go in the wheel xacro of
-  `mecanum_description` itself; it is an option for phase 5.
-  - Real mecanum wheels also rotate at a rate different from the ideal, because the contact
-    point moves along each roller.
-  - The phase 5 calibration fits a per-axis scale, which covers both cases.
-- **Translation during a rotation is expected.** The kinematics rotate about the wheel centre,
-  which is 9.5 mm behind `base_link`.
-- **The stop time adds up as expected.** It is `cmd_timeout` of 0.25 s, plus one 50 ms
-  control period, plus about 40 ms of bridge and physics latency.
+- **The rotation rate is right.** The previous model rotated at 110% of command; with the
+  new wheels it is 99%. The plan's ros2_control phase measures it again from wheel odometry.
+- **The robot walks during a rotation.** The wheel rectangle is centred on `base_link`
+  (0.3 mm off), so the kinematics are not the cause. The likely cause is the body's centre of
+  mass, 6.5 cm behind the centre and 0.35 m up (a stand-in), loading the wheels unevenly while
+  the anisotropic friction turns it. It is to be investigated in plan Phase 1, where wheel
+  odometry and the EKF must cope with it.
+- **Stop time.** It is `cmd_timeout` of 0.25 s, plus one 50 ms control period, plus bridge and
+  physics latency.
 
 ## Known issues
 

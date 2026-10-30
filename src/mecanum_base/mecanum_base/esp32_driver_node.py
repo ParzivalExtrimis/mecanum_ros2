@@ -15,9 +15,9 @@
 """
 ESP32 drive node: cmd_vel -> mecanum inverse kinematics -> per-motor ESP32 commands.
 
-Open-loop by design: the motors have no encoders, so this node publishes no odometry and
-no joint states. Odometry comes from LiDAR-inertial odometry only. See
-docs/decisions/0001-open-loop-drive-without-ros2-control.md.
+Open-loop: this node reads no encoders, so it publishes no odometry and no joint states.
+It was designed when the motors had no encoders (docs/decisions/0001, now superseded); the
+new motors have them, and docs/plan.md Phase 1 replaces this drive with ros2_control.
 
 Safety: commands are sent at a fixed rate; zeros are sent when no cmd_vel arrives within
 ``cmd_timeout``, after any exception in the control loop, and on shutdown (SIGINT/SIGTERM).
@@ -42,8 +42,6 @@ from rclpy.signals import SignalHandlerOptions
 # Geometry from mecanum_description/urdf/mecanum_params.xacro. There are no code defaults:
 # config/esp32_driver.yaml must set all three, and test/test_urdf_defaults.py checks it against
 # the URDF.
-# REWRITE: the previous model's defaults were removed (see REWRITE.md); set the YAML values from
-# the new URDF.
 GEOMETRY_PARAMETERS = ('wheel_radius', 'lx', 'ly')
 
 
@@ -83,7 +81,7 @@ class Esp32DriverNode(Node):
         if missing:
             raise ValueError(
                 f'geometry parameters not set: {", ".join(missing)}. Set them in '
-                'config/esp32_driver.yaml from the robot URDF (see REWRITE.md).')
+                'config/esp32_driver.yaml from the robot URDF.')
         geometry = MecanumGeometry(
             lx=self._float('lx'), ly=self._float('ly'),
             wheel_radius=self._float('wheel_radius'))

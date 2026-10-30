@@ -10,10 +10,11 @@
      "<link>_collision"; the block is then merged into that collision and keeps the
      gz:expressed_in attribute. (A bare <fdir1> under <gazebo reference> loses the attribute.)
      X-roller layout: front_left and rear_right rollers along (1, -1); front_right and
-     rear_left along (1, 1).
-     REWRITE: the fdir values below assume the previous wheels' roller handedness. Check them
-     against the new wheel meshes. The new wheel links need exactly one unnamed collision each,
-     or this friction block no longer merges and the wheels lose their mecanum behaviour.
+     rear_left along (1, 1). This matches mecanum_base/kinematics.py.
+     STAND-IN: the CAD has no rollers, so the X layout is assumed; check the roller handedness
+     on the real wheels. Each wheel link must keep exactly one unnamed collision
+     (mecanum_wheel.xacro), or this friction block no longer merges and the wheels silently
+     lose their mecanum behaviour.
 
   2. One JointController (velocity mode) per wheel. Its gz topic is the default
      /model/mecanum/joint/<joint>/cmd_vel (gz.msgs.Double, rad/s), bridged from
@@ -24,8 +25,9 @@
      not in the TF tree, its gz TF topic is never bridged, and nothing uses it for control or
      odometry.
 
-  Wheel joint states are deliberately not published: the real motors have no encoders, and
-  joint_state_publisher reports zero wheel angles in sim and on hardware alike.
+  Wheel joint states are not published: the open-loop drive reads no wheel state, and
+  joint_state_publisher reports zero wheel angles. The new motors have encoders; Phase 1 of
+  docs/plan.md moves the drive to gz_ros2_control and joint_state_broadcaster.
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" xmlns:gz="http://gazebosim.org/schema">
 
@@ -69,10 +71,10 @@
        instead of the L2's non-repetitive pattern.
        The L2's field of view, in its own frame, is the hemisphere on its +Z (dome) side:
        elevation 0..90 deg in standard mode (factory default, work-mode bit 0 = 0) or
-       -6..90 deg in wide mode (bit 0 = 1). -->
-  <!-- The sensor model below is the L2's own and carries over to the new model; its pose
-       follows l2_lidar / l2_imu from the URDF. -->
-  <xacro:arg name="sim_l2_wide_fov" default="false"/>
+       -6..90 deg in wide mode (bit 0 = 1). The robot's upright mount uses wide mode (sensor
+       placement PDF: "negative-angle mode"), so it is the default here. The pose follows
+       l2_lidar / l2_imu from the URDF. -->
+  <xacro:arg name="sim_l2_wide_fov" default="true"/>
   <xacro:if value="$(arg use_l2)">
   <xacro:property name="sim_l2_min_elevation"
     value="${radians(-6.0) if '$(arg sim_l2_wide_fov)' == 'true' else 0.0}"/>
@@ -154,8 +156,8 @@
 
   </xacro:if>
 
-  <!-- REWRITE: add Gazebo sensors for the new model's additional sensors here, on their URDF
-       frames, and bridge them in config/gz_bridge.yaml (see REWRITE.md). -->
+  <!-- The robot's other sensors (D435i, 2D lidar, ultrasonics, cliff ToF, bumpers) are added
+       here in docs/plan.md Phase 2, on their URDF frames, and bridged in config/gz_bridge.yaml. -->
 
   <gazebo>
     <plugin filename="gz-sim-odometry-publisher-system"

@@ -103,11 +103,13 @@ def generate_launch_description():
                     + [('robot_model', 'false'), ('rviz', 'false')]),
             ]),
 
-        # REWRITE: include the hardware drivers of the new model's additional sensors here, next
-        # to the L2 driver above (see REWRITE.md).
+        # The other sensors of the robot (D435i, 2D lidar, ultrasonics, cliff ToF, bumpers) have
+        # no hardware drivers yet: the current plan (docs/plan.md) is simulation only. Add each
+        # driver here next to the L2 driver, wrapped in GroupAction(scoped=True), on the topics
+        # and frames of the plan's contract table.
 
-        # URDF TF, including the L2 mount. The wheels have no encoders; joint_state_publisher
-        # publishes zero angles so their TF exists.
+        # URDF TF, including the L2 mount. No drive runs here, so joint_state_publisher
+        # publishes zero wheel angles so their TF exists.
         Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',

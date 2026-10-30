@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+<!--
+  Intel RealSense D435i depth camera (owned): body link and optical frame.
+
+  Included from mecanum.urdf.xacro when use_d435i is true (the default).
+
+  Mount: centred on the front face under a printed visor lip, facing +x, pitched 8 deg
+  nose-down (PDF schedule). The STEP body (90 x 25 x 25 mm) is not pitched; the pitch is the
+  PDF's.
+
+  Frames (fixed joints, published by robot_state_publisher):
+    <parent> -> d435i_link            centre of the camera's front (glass) face, x forward,
+                                      0.264 m above the floor
+    d435i_link -> d435i_optical_frame REP-103 camera convention: z forward, x right, y down
+  On hardware, realsense2_camera with camera_name:=d435i hangs its own depth, colour and IMU
+  frames off d435i_link. Those internal offsets (imager positions) are not modelled here.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:property name="d435i_body_x" value="0.025"/>
+  <xacro:property name="d435i_body_y" value="0.09"/>
+  <xacro:property name="d435i_body_z" value="0.025"/>
+  <!-- Pose in base_link: front face of the STEP body (0.264 m above the floor) -->
+  <xacro:property name="d435i_x" value="0.404"/>
+  <xacro:property name="d435i_z" value="0.1614"/>
+  <!-- STAND-IN: PDF "pitched -8 deg" (optical axis 8 deg below horizontal); positive pitch
+       about +y tips +x down. Measure on the robot. -->
+  <xacro:property name="d435i_pitch" value="${radians(8.0)}"/>
+
+  <xacro:macro name="realsense_d435i" params="prefix parent">
+
+    <joint name="${prefix}d435i_joint" type="fixed">
+      <parent link="${prefix}${parent}"/>
+      <child link="${prefix}d435i_link"/>
+      <origin xyz="${d435i_x} 0 ${d435i_z}" rpy="0 ${d435i_pitch} 0"/>
+    </joint>
+
+    <!-- Massless: the camera's mass is counted in chassis_mass -->
+    <link name="${prefix}d435i_link">
+      <visual>
+        <origin xyz="${-d435i_body_x/2} 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${d435i_body_x} ${d435i_body_y} ${d435i_body_z}"/>
+        </geometry>
+        <material name="d435i_green"/>
+      </visual>
+      <collision>
+        <origin xyz="${-d435i_body_x/2} 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${d435i_body_x} ${d435i_body_y} ${d435i_body_z}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="${prefix}d435i_optical_joint" type="fixed">
+      <parent link="${prefix}d435i_link"/>
+      <child link="${prefix}d435i_optical_frame"/>
+      <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+    </joint>
+    <link name="${prefix}d435i_optical_frame"/>
+
+  </xacro:macro>
+
+  <xacro:realsense_d435i prefix="$(arg prefix)" parent="base_link"/>
+
+</robot>

@@ -1,10 +1,10 @@
 # mecanum_localization
 
 This package holds the perception and localization for the mecanum base:
-- **Phase 3:** the L2 self-filter and the cloud-to-scan conversion.
-- **Phase 4:** LIO (rko_lio) and its planar odometry adapter, plus `gt_compare` to measure
-  drift in simulation.
-- **Later:** slam_toolbox mapping in phase 6, and slam_toolbox or AMCL localization in phase 7.
+- **Built:** the L2 self-filter, the cloud-to-scan conversion, LIO (rko_lio) and its planar
+  odometry adapter, plus `gt_compare` to measure drift in simulation.
+- **Planned** ([docs/plan.md](../../docs/plan.md)): the EKF in Phase 3, slam_toolbox mapping in
+  Phase 5, and AMCL or slam_toolbox localization in Phase 6.
 
 It uses upstream nodes where they exist. Topics are identical with the real L2 driver,
 `mecanum_lidar`, and the simulated L2 in `mecanum_simulation`.
@@ -14,9 +14,9 @@ It uses upstream nodes where they exist. Topics are identical with the real L2 d
 ```
 /l2/points            PointCloud2, l2_lidar       real driver or Gazebo
   -> self_filter      pcl_ros CropBox (negative): drop points on the robot
-/l2/points_filtered   PointCloud2, l2_lidar       -> LIO (phase 4), costmaps (phase 7)
+/l2/points_filtered   PointCloud2, l2_lidar       -> LIO, costmaps (plan Phase 6)
   -> cloud_to_scan    pointcloud_to_laserscan: fold a height band into a 2D scan
-/scan                 LaserScan, base_footprint   -> slam_toolbox / AMCL (phases 6, 7)
+/scan                 LaserScan, base_footprint   until the 2D lidar takes /scan (plan Phase 2)
 
 /l2/points_filtered + /l2/imu
   -> rko_lio          lidar-inertial odometry, 3D, frame lio_odom; its TF goes to /lio/tf_unused
@@ -27,16 +27,20 @@ It uses upstream nodes where they exist. Topics are identical with the real L2 d
 
 TF ownership: the adapter is the only publisher of `odom -> base_footprint`. rko_lio has no
 switch to turn its TF off, so `lio.launch.py` remaps its `/tf` to `/lio/tf_unused`; `lio_odom`
-never appears in the TF tree. There are no encoders, so wheel commands are never odometry.
+never appears in the TF tree. Wheel commands are never odometry. From plan Phase 3 the EKF
+owns `odom -> base_footprint`, and the adapter runs with `publish_tf:=false` on `/lio/odom`.
 
 ## Self-filter: `config/self_filter.yaml`
 
-The L2 sees parts of the robot itself. The filter drops every point inside a box in
-`base_footprint` that covers the whole robot.
+The filter drops every point inside a box in `base_footprint` that covers the whole robot:
+x −0.43 to 0.45 m, y ±0.29 m, z −0.05 to 0.86 m. That is the robot's extent from
+`mecanum_description` plus about 2.5 cm (a stand-in margin):
+- x from −0.404 m at the rear bumper to 0.420 m at the 2D lidar;
+- y ±0.258 m at the wheels;
+- z up to 0.832 m at the top of the L2.
 
-> **REWRITE (branch `feature/model-v2`):** the previous model's box (x ±0.33 m, y ±0.27 m,
-> z -0.05 to 1.00 m) was removed from the YAML. Until the new URDF sets it again, pcl_ros uses
-> its default ±1 m cube. See the root `REWRITE.md`.
+The upright L2 sits above everything else on the robot, so it sees little of it: only the top
+of the tall box, at grazing angles in wide mode.
 
 The filter transforms the cloud into `base_footprint`, crops it, and publishes it back in
 `l2_lidar`. LIO therefore sees sensor-frame points.
@@ -47,32 +51,19 @@ This one node is the place to swap in a URDF-based self-filter once the arm is m
 
 - **Band.** Points between 0.10 and 0.50 m above the floor, a stand-in, become a 360° scan in
   `base_footprint` at 0.5° resolution.
-> **REWRITE (branch `feature/model-v2`):** the rear-coverage model, the pole shadow and the
-> measurements below describe the previous L2 mast (0.93 m up, tilted 30°, pole behind the L2).
-> Redo them for the new mount.
-
-- **Rear coverage is limited.** In its own frame the L2 sees the hemisphere on its dome side.
-  Tilted 30° forward, a point at horizontal distance r and azimuth φ from the L2 (φ = 0 ahead)
-  is in view only if its height z satisfies:
+- **The L2 covers the band only far away.** The L2 stands upright with its mounting face
+  0.767 m above the floor, and sees the hemisphere above its own horizon, plus 6° below it in
+  wide mode. A point at horizontal distance r from the L2 is in view only if its height z
+  satisfies, in every direction:
   ```
-  z ≤ 0.93 + r · tan(30°) · cos φ
+  z ≥ 0.767 − r · tan(6°)      (wide mode; z ≥ 0.767 in standard mode)
   ```
-  Ahead, it sees up to 30° above the horizontal. To the sides, it sees everything up to its own
-  height of 0.93 m. Toward the rear, the limit drops with distance, so **low, near objects are
-  visible and tall or far ones are not**. Straight back, the floor leaves the view about 1.6 m
-  from the L2; at 45° rear-left or rear-right, about 2.3 m.
-- **Pole shadow.** The pole stands 66 mm behind the L2. It blocks a sector about **60° wide
-  straight back**, roughly 150° to 210° azimuth around the L2. Nothing there is ever visible.
-- **Measured in sim with a 0.3 m box at 45° rear-right:**
-
-  | Distance from the L2 | Result |
-  |---|---|
-  | 1.0 m | Fully visible and in `/scan` |
-  | 2.0 m | Lowest 0.21 m visible; in `/scan` |
-  | 2.6 m | Invisible |
-  | 1.0 m straight back | Invisible, because of the pole shadow |
-
-  Phase 7 accounts for this in its rear safety design.
+  The top of the band (0.50 m) comes into view about 2.5 m out, and the floor about 7.3 m out.
+  **Near the robot this scan is empty.** In the new strategy (plan, "Sensor roles") the 2D lidar
+  provides `/scan`, and this node stays only for comparison.
+- **Upper structure.** Above 0.77 m the L2 sees all around, with no shadow from the robot: the
+  walls, partitions, door frames, counters and the ceiling. That is its role in the costmaps
+  (plan Phase 6).
 
 ## LIO: `config/rko_lio.yaml`, `launch/lio.launch.py`
 
@@ -126,7 +117,7 @@ Pairs `/odom` with `/sim/ground_truth/odom`, interpolated at each estimate's sta
 relative to the first estimate. It reports the path length, final and maximum position error
 (also as a percentage of the path), yaw error, RMS error, mean twist error and jumps, every
 `report_period` seconds and on exit (`duration`, or Ctrl-C / SIGTERM). The run passes when the
-final and the maximum position error are under `max_drift_percent` (1%) of the path, the yaw
+final and the maximum position error are under `max_drift_percent` (2%) of the path, the yaw
 error is under `max_yaw_error_deg` (2°), and there are no jumps. Both targets are stand-ins.
 `csv_path` writes the paired trajectory.
 
@@ -137,7 +128,11 @@ ros2 launch mecanum_base motion_test.launch.py use_sim_time:=true pattern:=loop 
   measure_odom_topic:=/sim/ground_truth/odom
 ```
 
-## Phase 4 results in simulation (2026-10-15): targets not met
+## LIO results with the previous robot model (2026-10-15): targets not met
+
+These runs used the previous model, whose L2 hung inverted on a mast and saw mostly the floor.
+They are kept as a reference. Plan Phase 3 re-evaluates LIO on the upright L2, as an optional
+input to the EKF.
 
 | Run | Path | Result |
 |---|---|---|

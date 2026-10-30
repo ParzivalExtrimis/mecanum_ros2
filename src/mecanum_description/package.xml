@@ -3,7 +3,7 @@
 <package format="3">
   <name>mecanum_description</name>
   <version>0.0.1</version>
-  <description>URDF/xacro description, meshes and visualization launch files for a 4-wheel mecanum robot.</description>
+  <description>URDF/xacro description, meshes and visualization launch files for the 4-wheel mecanum washroom robot and its sensors.</description>
   <maintainer email="claude.raseksha@gmail.com">hegde-aryan</maintainer>
   <license>Apache-2.0</license>
 
@@ -17,8 +17,10 @@
   <exec_depend>rviz2</exec_depend>
   <exec_depend>xacro</exec_depend>
 
+  <test_depend>ament_cmake_pytest</test_depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+  <test_depend>python3-pytest</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

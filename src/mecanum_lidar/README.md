@@ -126,10 +126,9 @@ the room fills in. What to check:
    reading positive.
 3. **Frame direction.** The red axis (+X) should point away from the cable outlet. Objects in
    front of that side should appear along the red axis. The URDF's `l2_mount -> l2_lidar`
-   rotation assumes this convention.
-   **REWRITE (branch `feature/model-v2`):** the cable direction of the previous mount (22.9°
-   clockwise from above, `l2_bracket_yaw`) was removed with it. Set the new mount's rotation in
-   `unitree_l2.xacro`; see the root `REWRITE.md`.
+   rotation assumes this convention. On the robot that rotation is `l2_cable_yaw` in
+   `unitree_l2.xacro`, a stand-in of 0 (cable toward the rear). Read the cable direction on the
+   mounted L2 and set it.
 4. **Cover dirt** should stay near 0 %. A high value means the dome needs cleaning.
 
 You can also check the rates with `ros2 topic hz /l2/points` and `ros2 topic hz /l2/imu`.
@@ -146,13 +145,11 @@ ros2 launch mecanum_lidar l2.launch.py robot_model:=true fixed_frame:=base_footp
 ```
 
 This also starts robot_state_publisher and joint_state_publisher with the full robot description.
-In RViz, tick **RobotModel**. The floor points should lie on the grid (z = 0) and walls should be
-vertical. If they are not, the mounted L2 does not match the mount in
-`mecanum_description/urdf/sensors/unitree_l2.xacro`. Check the mount position, its tilt and the
-cable direction.
-
-> **REWRITE (branch `feature/model-v2`):** the URDF has no L2 mount pose until the new model is
-> written, so this check is not meaningful yet. See the root `REWRITE.md`.
+In RViz, tick **RobotModel**. The L2 stands upright on the robot's top at 0.80 m, so it sees
+the walls above the robot and the ceiling, and the floor only far away. The ceiling should be
+level and the walls vertical and straight. If they are not, the mounted L2 does not match the
+mount in `mecanum_description/urdf/sensors/unitree_l2.xacro`. Check the mount height, its tilt
+and the cable direction; `tools/l2_mount_check.py` measures them.
 
 Leave `robot_model:=false` when another launch file already publishes the robot description.
 

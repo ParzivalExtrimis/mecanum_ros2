@@ -12,13 +12,12 @@ self_filter:
     output_frame: l2_lidar
     negative: true          # keep points OUTSIDE the box
     keep_organized: false
-    # REWRITE: the previous model's box was removed (see REWRITE.md). Until it is set again,
-    # pcl_ros uses its built-in default, a +-1 m cube around base_footprint, which matches no
-    # robot. Set it from the new URDF: the chassis and wheel extent plus a margin, and z from
-    # below the floor to above the highest part of the robot.
-    # min_x:
-    # max_x:
-    # min_y:
-    # max_y:
-    # min_z:
-    # max_z:
+    # The robot's extent from mecanum_description (base_footprint frame): x -0.404 (rear
+    # bumper) to 0.420 (2D lidar), y +-0.258 (wheels), z up to 0.832 (top of the L2). The
+    # upright L2 sees little of the robot: only the top of the tall box, in wide mode.
+    min_x: -0.43   # STAND-IN: robot extent + about 2.5 cm margin; check for self-hits in a real cloud
+    max_x: 0.45    # STAND-IN: as min_x
+    min_y: -0.29   # STAND-IN: as min_x
+    max_y: 0.29    # STAND-IN: as min_x
+    min_z: -0.05   # below the floor, so the box reaches down to it
+    max_z: 0.86    # STAND-IN: top of the L2 (0.832) + about 2.5 cm

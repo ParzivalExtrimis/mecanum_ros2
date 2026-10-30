@@ -12,8 +12,8 @@ here once the real value is known.
 | `src/mecanum_base/config/esp32_driver.yaml` | `max_vx`, `max_vy`, `max_wz` | `0.3` m/s, `0.3` m/s, `0.8` rad/s | Raise them step by step during hardware tests while stopping, tracking and LIO quality stay good. |
 | `src/mecanum_base/config/wheel_calibration.yaml` | `wheels.<wheel>.motor_id` | `0`, `1`, `2`, `3` for FL, FR, RL, RR | Take them from the rewritten firmware. Otherwise run `motion_test` on blocks and note which wheel each ID drives. |
 | `src/mecanum_base/config/wheel_calibration.yaml` | `wheels.<wheel>.sign` | `1` | Run `motion_test`. Flip the sign of any wheel that turns backward on the forward step. |
-| `src/mecanum_base/config/wheel_calibration.yaml` | `wheels.<wheel>.scale` | `0.0666667` value per rad/s, assuming value 1.0 equals 15 rad/s | Run the calibration tool in phase 5 with LIO running. |
-| `src/mecanum_base/config/wheel_calibration.yaml` | `wheels.<wheel>.deadband` | `0.0` | Run the calibration tool. It finds the smallest value that makes the wheel turn. |
+| `src/mecanum_base/config/wheel_calibration.yaml` | `wheels.<wheel>.scale` | `0.0666667` value per rad/s, assuming value 1.0 equals 15 rad/s | On hardware, command a few values and read the wheel speed from the encoders. Needed only by the open-loop driver; ros2_control (plan Phase 1) closes the loop on the encoders. |
+| `src/mecanum_base/config/wheel_calibration.yaml` | `wheels.<wheel>.deadband` | `0.0` | On hardware, raise the command until the encoders report motion. Open-loop driver only, as `scale`. |
 | `src/mecanum_base/config/wheel_calibration.yaml` | `wheels.<wheel>.max_value` | `1.0`, a normalized 0 to 1 value | Take the value range and units from the rewritten firmware's protocol. |
 | `src/mecanum_interfaces/msg/MotorCommands.msg` | `value` units, `motor_id` mapping | Normalized 0 to 1. IDs 0 to 3. | Same as `max_value` and `motor_id` above. The real ESP32 protocol replaces this message on hardware. |
 | `src/mecanum_simulation/config/sim_plant.yaml` | `plant.<wheel>.max_omega` | `15.0` rad/s, about 143 rpm | Use the motor and gearbox no-load speed from the datasheet, or measure the wheel speed at full command with the wheels off the ground. |
@@ -27,14 +27,27 @@ here once the real value is known.
 | `src/mecanum_simulation/urdf/mecanum.gazebo.xacro` | L2 IMU noise | σ 0.002 rad/s gyro, σ 0.02 m/s² accelerometer | Record the IMU at rest for a few minutes and take the standard deviations. |
 | `src/mecanum_simulation/worlds/restroom.sdf` | Ceiling height | 2.4 m | Use the real site's ceiling height. |
 | `src/mecanum_localization/config/cloud_to_scan.yaml` | `min_height`, `max_height` | 0.10 m, 0.50 m | Tune on the real site, for example for low fixtures and the toilet bowl height. |
-| `src/mecanum_localization/config/rko_lio.yaml` | `min_range`, `max_range`, `voxel_size` | 0.3 m, 30 m, 0.25 m: indoor guesses | Tune in phase 4H on the real robot: loop drift, corridor and static drift. |
-| `src/mecanum_localization/mecanum_localization/lio_odom_adapter.py` | `pose_covariance_diagonal`, `twist_covariance_diagonal` | x, y 0.0025 m²; yaw 0.0012 rad²; vx, vy, wz 0.0025 | Set from the drift measured in phase 4H. They matter once an EKF or AMCL uses them. |
-| `src/mecanum_localization/mecanum_localization/gt_compare.py` | `max_drift_percent`, `max_yaw_error_deg` | 1% of the path, 2° | The phase 4 targets from `docs/plan.md`. Replace them with what docking and navigation actually need. |
+| `src/mecanum_localization/config/rko_lio.yaml` | `min_range`, `max_range`, `voxel_size` | 0.3 m, 30 m, 0.25 m: indoor guesses | Re-tune in simulation for the upright L2 in plan Phase 3 (candidate E3); on hardware, in stage 4H of `docs/hardware_lio_test.md`. |
+| `src/mecanum_localization/mecanum_localization/lio_odom_adapter.py` | `pose_covariance_diagonal`, `twist_covariance_diagonal` | x, y 0.0025 m²; yaw 0.0012 rad²; vx, vy, wz 0.0025 | Set from the drift measured in plan Phase 3 (sim) and stage 4H (hardware). They matter once the EKF uses LIO (candidate E3). |
+| `src/mecanum_localization/mecanum_localization/gt_compare.py` | `max_drift_percent`, `max_yaw_error_deg` | 2% of the path, 2° | The plan Phase 3 targets. Replace them with what docking and navigation actually need. |
 
-## Removed with the previous robot model
+### Robot model (model v2)
 
-On branch `feature/model-v2` the robot model is being replaced. The previous model's stand-ins
-and provisional design choices were removed with its geometry: the description dimensions and
-masses, the L2 mast mass, the mast position, the L2 cable direction and the self-filter box
-margins. They are listed, with how each was to be measured, in [`REWRITE.md`](REWRITE.md). Add
-new rows here for the new model's uncertain values when its URDF is written.
+The model follows the reference URDF `src/mecanum_description/refs/washroom_robot.urdf`. Its
+geometry comes from the STEP model; the values below are the ones the STEP and the sensor
+placement PDF do not settle.
+
+| File | Parameter | Placeholder | How to obtain the real value |
+|---|---|---|---|
+| `src/mecanum_description/urdf/mecanum_params.xacro` | `chassis_mass`, chassis inertial origin and tensor | 25 kg at (−0.065, 0, 0.243) m in `base_link`, from the STEP solid at uniform density | Weigh the robot. Find the centre of mass by weighing each wheel (four scales, or one scale per corner in turn). |
+| `src/mecanum_description/urdf/mecanum_params.xacro` | `wheel_mass` | 1.5 kg per wheel; the drive motors are in the chassis | Weigh one wheel with its hub off the robot. |
+| `src/mecanum_description/urdf/mecanum_params.xacro` (and `wheel_radius` in `esp32_driver.yaml`) | `wheel_radius` | 0.1025 m, the unloaded CAD radius | Measure the axle height with the robot loaded, or drive a measured 5 m straight line and divide by the encoder angle. |
+| `src/mecanum_simulation/urdf/mecanum.gazebo.xacro` | roller friction directions (`fdir1`) | X layout: front-left and rear-right rollers along (1, −1) in the base frame, front-right and rear-left along (1, 1), matching `kinematics.py` | The CAD has no rollers. Look at the wheels from above: the rollers on the top of the four wheels form an X. A wrong layout makes the strafe step of `motion_test` go the wrong way. |
+| `src/mecanum_description/urdf/sensors/unitree_l2.xacro` | `l2_mount_z` | Bottom face 0.767 m above the floor: the STEP box top plus the PDF's 30 mm standoff. The STEP sinks the L2 40 mm into the box. | Measure the height of the mounted L2's bottom face. |
+| `src/mecanum_description/urdf/sensors/unitree_l2.xacro` | `l2_cable_yaw` | 0: vendor +X forward, cable outlet to the rear | Read the cable outlet direction on the robot; vendor +X points away from it. The yaw is counter-clockwise from above. |
+| `src/mecanum_lidar/config/l2.yaml` | `work_mode` (wide FOV, bit 0) | Left at `-1` (keep the device setting); the upright mount needs bit 0 = 1. The simulation uses wide mode (`sim_l2_wide_fov` true). | Set `work_mode: 1` when the L2 is mounted, after checking the other bits on the unit (see `docs/hardware_l2_test.md` step 1.1). |
+| `src/mecanum_description/urdf/sensors/realsense_d435i.xacro` | `d435i_pitch` | 8° down, from the PDF | Measure the bracket angle, or fit the floor plane in the D435i depth cloud. |
+| `src/mecanum_description/urdf/sensors/lidar_2d.xacro` | `lidar_2d_z`, scan 0° direction | Scan plane 0.130 m above the floor (PDF); 0° along `lidar_2d_link` +x, forward | Measure the C1's optical centre height. Check its 0° mark on the unit, and look at `/scan` against a known wall. |
+| `src/mecanum_description/urdf/sensors/cliff_tof.xacro` | `cliff_tof_z` | 0.119 m above the floor (STEP); the PDF says 0.08 m | Measure the mounted sensor height. Phase 4's cliff threshold depends on it. |
+| `src/mecanum_description/urdf/sensors/bumpers.xacro` | `bumper_x` | Plank faces at ±0.404 m, as in the STEP. The 2D lidar (0.420 m) and the front ultrasonics (0.408 m) stick out further, so the plank cannot hit first; the PDF wants the planks 3 cm proud. | Plan Phase 4, decision D2. Then measure the real planks. |
+| `src/mecanum_localization/config/self_filter.yaml` | crop box | x −0.43 to 0.45 m, y ±0.29 m, z −0.05 to 0.86 m: the robot extent plus about 2.5 cm | Check a real L2 cloud for points on the robot (`tools/l2_mount_check.py`, "points on the robot"). |

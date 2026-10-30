@@ -1,30 +1,38 @@
 # mecanum_ros2
 
-A ROS 2 navigation stack for a 4-wheel mecanum base. The robot navigates from a start pose to a
-named staging pose, performs a precise final approach (dock), runs a task, and returns home.
-A toilet-cleaning arm will be mounted later. It is not part of the robot yet, but the design
-leaves room for it.
+A ROS 2 navigation stack for a washroom robot on a 4-wheel mecanum base. The robot navigates
+from a start pose to a named staging pose, performs a precise final approach (dock) at the
+toilet, runs a task, and returns home. A toilet-cleaning arm will be mounted later. It is not
+part of the robot yet, but the design leaves room for it.
 
-The build is **simulation-first**. The motor firmware is being rewritten and the LiDAR is not
-mounted yet. Everything is developed and tested in Gazebo. Hardware then replaces two pieces:
-the motor transport and the LiDAR driver.
+The build is **simulation only** for now: everything is developed and tested in Gazebo, end to
+end. The plan is in [docs/plan.md](docs/plan.md).
 
-## Hardware facts
+## Robot facts
 
-- **Base:** four mecanum wheels in an X-roller layout. The motors have **no encoders**, so
-  there is no wheel feedback.
+The robot model is in `mecanum_description`, built from the reference URDF
+`src/mecanum_description/refs/washroom_robot.urdf` and the sensor placement and BOM document
+[docs/Washroom_Robot_Prototype_Sensors_and_BOM.pdf](docs/Washroom_Robot_Prototype_Sensors_and_BOM.pdf).
+
+- **Base:** a 0.79 × 0.51 m body, 0.74 m tall, on four 0.205 m mecanum wheels in an X-roller
+  layout (wheelbase 0.472 m, track 0.430 m). The motors have **position and velocity
+  encoders**. The drive still runs open-loop until it moves to ros2_control (plan Phase 1).
 - **Motor control:** an ESP32 on the network, with each motor individually addressable. The
   protocol is pending the firmware rewrite.
-- **LiDAR:** Unitree L2 4D LiDAR with a 360°×96° field of view, a 5.55 Hz sweep and a
-  built-in 6-axis IMU.
-- **Onboard computer:** a Jetson; the model and OS are to be confirmed.
-- **Odometry:** LiDAR-inertial odometry (LIO) is the **only** source. Wheel commands are never
-  published as odometry.
+- **Sensors:**
+  - **Unitree L2 4D LiDAR,** upright on the top of the robot at 0.80 m, with a built-in 6-axis
+    IMU;
+  - **RealSense D435i** depth camera, at the front, pitched 8° down;
+  - **RPLIDAR C1** 2D lidar, at 0.13 m in a 200° front slot;
+  - **four ultrasonic rangers,** two facing forward and two facing back;
+  - **four downward cliff ToF sensors;**
+  - **front and rear bumper planks;**
+  - **an E-stop.**
+- **Onboard computer:** a Jetson Orin Nano Super.
+- **Odometry:** wheel odometry fused with the IMUs in an EKF (plan Phase 3). Wheel commands are
+  never published as odometry.
 
 Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
-
-On branch `feature/model-v2` the robot model is being replaced. The previous meshes and
-geometry were removed, and what must be rewritten is listed in [REWRITE.md](REWRITE.md).
 
 ## Platform
 
@@ -38,42 +46,47 @@ geometry were removed, and what must be rewritten is listed in [REWRITE.md](REWR
 
 | Package | Status | Responsibility |
 |---|---|---|
-| `mecanum_description` | done: base; phase 1: L2 sensor frames added | URDF/xacro, meshes, test display launch |
-| `mecanum_simulation` | done, phase 2 | Gazebo world, sim-only xacro (mecanum friction, wheel controllers, ground truth), bridge, simulated ESP32 and motors |
-| `mecanum_base` | done, phase 2; calibration tool in phase 5 | ESP32 driver node, mecanum kinematics, motion test |
-| `mecanum_interfaces` | messages done, phase 2; actions in phase 8 | Motor command and debug messages, plus task and mission actions later |
-| `mecanum_lidar` | driver done, hardware test pending | Unitree L2 driver (`/l2/points`, `/l2/imu`, no TF) on the vendored SDK, bench-test launch, RViz config |
-| `mecanum_localization` | self-filter and cloud-to-scan done, phase 3; LIO, SLAM in phases 4 and 6 | Self-filter, cloud-to-scan, LIO and its odom adapter, slam_toolbox, AMCL |
-| `mecanum_navigation` | planned, phase 7 | Nav2 parameters, collision monitor, docking, keepout mask, maps |
-| `mecanum_mission` | planned, phase 8 | Mission executive and placeholder task server |
-| `mecanum_bringup` | `robot.launch.py` done, phase 2 | Top-level launch files and RViz configs |
+| `mecanum_description` | done: model v2 with all sensor frames (plan Phase 0) | URDF/xacro, reference URDF, test display launch |
+| `mecanum_simulation` | open-loop drive and L2 done; ros2_control in Phase 1, the other sensors in Phase 2 | Gazebo worlds, sim-only xacro (mecanum friction, wheel controllers, sensors, ground truth), bridge, simulated ESP32 and motors |
+| `mecanum_base` | done (open-loop driver) | ESP32 driver node, mecanum kinematics, motion test |
+| `mecanum_controllers` | planned, Phase 1 | ros2_control xacro, `mecanum_drive_controller` and `joint_state_broadcaster` config |
+| `mecanum_interfaces` | messages done; safety and mission interfaces in Phases 4 and 7 | Motor command and debug messages, plus safety, task and mission interfaces later |
+| `mecanum_lidar` | driver done, hardware test paused | Unitree L2 driver (`/l2/points`, `/l2/imu`, no TF) on the vendored SDK, bench-test launch, RViz config |
+| `mecanum_localization` | self-filter, cloud-to-scan, LIO pipeline done; EKF and SLAM in Phases 3 and 5 | Self-filter, cloud-to-scan, LIO and its odom adapter, EKF, slam_toolbox, AMCL |
+| `mecanum_safety` | planned, Phase 4 | Safety supervisor: cliffs, bumpers, E-stop, sensor loss |
+| `mecanum_navigation` | planned, Phase 6 | Nav2 parameters, collision monitor, docking, keepout mask, maps |
+| `mecanum_mission` | planned, Phase 7 | Mission executive and placeholder task server |
+| `mecanum_bringup` | `robot.launch.py` done | Top-level launch files and RViz configs |
 
 ## Design decisions
 
 - **[0001: Open-loop drive without ros2_control](docs/decisions/0001-open-loop-drive-without-ros2-control.md).**
-  The motors have no encoders. A Python driver node with pluggable transports therefore owns
-  the drive, and odometry comes from LIO only.
-- **[Encoder upgrade guide](docs/encoder_upgrade.md).** These are the steps to move to
-  ros2_control once the ESP32 reports measured wheel state: `mecanum_controllers`,
-  `mecanum_hardware`, stamped `cmd_vel` and an EKF.
+  Superseded: it was made when the motors had no encoders. The new motors have them, and plan
+  Phase 1 moves the drive to ros2_control.
+- **[Encoder upgrade guide](docs/encoder_upgrade.md).** The steps to move to ros2_control with
+  measured wheel state: `mecanum_controllers`, `mecanum_hardware`, stamped `cmd_vel` and an
+  EKF. Plan Phase 1 follows its simulation steps.
 
 ## TF tree
 
 Each link has exactly one publisher.
 
 ```
-map -> odom -> base_footprint -> base_link -> {wheels, l2_mount -> l2_lidar -> l2_imu}
+map -> odom -> base_footprint -> base_link -> {chassis_link, wheels, l2_mount -> l2_lidar -> l2_imu,
+                                               d435i_link -> d435i_optical_frame, lidar_2d_link,
+                                               ultrasonic_*, cliff_tof_*, bumper_*}
 ```
 
 | Transform | Publisher |
 |---|---|
-| `map -> odom` | slam_toolbox or AMCL, never both (phase 6 onward) |
-| `odom -> base_footprint` | LIO odom adapter only (phase 4 onward) |
+| `map -> odom` | AMCL or slam_toolbox, never both (plan Phase 5 onward) |
+| `odom -> base_footprint` | today the LIO odom adapter; the EKF from plan Phase 3 |
 | `base_footprint` and below | robot_state_publisher from the URDF |
 
-The wheel joints are continuous but have no encoders, so joint_state_publisher publishes zero
-angles for them. The L2 driver (`mecanum_lidar`) publishes no TF. LIO packages broadcast their
-own TF, which is remapped away in launch files.
+Until the drive moves to ros2_control (plan Phase 1), joint_state_publisher publishes zero
+angles for the wheel joints; afterwards `joint_state_broadcaster` publishes the measured ones.
+The L2 driver (`mecanum_lidar`) publishes no TF. LIO packages broadcast their own TF, which is
+remapped away in launch files.
 
 ## Build
 
@@ -85,7 +98,7 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-These apt packages are needed from phase 3 onward:
+These apt packages are needed for perception, LIO, mapping and navigation:
 
 ```bash
 sudo apt install ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-nav2-simple-commander \
@@ -101,24 +114,22 @@ sudo apt install ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-nav2-sim
 ros2 launch mecanum_description display.launch.py
 ```
 
-> **REWRITE (branch `feature/model-v2`):** the robot model is being replaced. The previous
-> meshes, dimensions and L2 mast (810 mm pole, 30° bracket, cable at 22.9°) were removed, and
-> the URDF is a frame skeleton until the new meshes and geometry are written. Everything removed,
-> and everything that must change afterwards, is listed in [`REWRITE.md`](REWRITE.md).
-
-The L2 frames are included by default. The URDF can be generated directly with xacro:
+All sensor frames are included by default; each has a `use_<sensor>` xacro arg (see
+`src/mecanum_description/README.md`). The URDF can be generated directly with xacro:
 
 ```bash
 xacro $(ros2 pkg prefix mecanum_description)/share/mecanum_description/urdf/mecanum.urdf.xacro
-xacro .../mecanum.urdf.xacro use_l2:=false                              # bare base
+xacro .../mecanum.urdf.xacro use_l2:=false use_d435i:=false   # without some sensors
 ```
 
-**Converting CAD exports.** CAD exports are usually in millimetres, in the CAD assembly frame.
-`tools/cad_stl_to_ros.py` converts them in place to metres in a link frame, given the CAD point
-that becomes the link origin (`--origin`) and the axis mapping (`--axes`). The script refuses
-files it has already converted.
+[docs/cad_vs_urdf.png](docs/cad_vs_urdf.png) compares the CAD model with the URDF.
 
-### Simulation: drive the base (phase 2)
+**Converting CAD exports.** The model is built from primitives and has no meshes. If meshes are
+added, `tools/cad_stl_to_ros.py` converts STL exports in place from millimetres in the CAD
+frame to metres in a link frame, given the CAD point that becomes the link origin (`--origin`)
+and the axis mapping (`--axes`). The script refuses files it has already converted.
+
+### Simulation: drive the base
 
 ```bash
 ros2 launch mecanum_bringup robot.launch.py              # Gazebo GUI + robot + driver
@@ -139,7 +150,7 @@ ros2 launch mecanum_base motion_test.launch.py use_sim_time:=true \
   measure_odom_topic:=/sim/ground_truth/odom
 ```
 
-### Simulation: L2 sensor and perception (phase 3)
+### Simulation: L2 sensor and perception
 
 `robot.launch.py` also starts the simulated L2 and the perception pipeline. The topics are the
 same as with the real driver:
@@ -149,25 +160,17 @@ same as with the real driver:
 | `/l2/points` | Raw cloud, one full sweep at 5.55 Hz |
 | `/l2/imu` | IMU at 250 Hz |
 | `/l2/points_filtered` | Cloud without the robot body |
-| `/scan` | 2D scan from the 0.10 to 0.50 m band |
+| `/scan` | 2D scan from the 0.10 to 0.50 m band of the L2 cloud (until the 2D lidar arrives in plan Phase 2) |
 
 ```bash
 ros2 launch mecanum_bringup robot.launch.py rviz:=true   # RViz shows clouds and scan
 ```
 
-> **REWRITE (branch `feature/model-v2`):** this paragraph describes the previous L2 mast. Redo
-> it for the new mount.
-
-The L2 hangs inverted, tilted 30° forward, so it sees well ahead and to the sides. Behind the
-robot it has two limits:
-- **Pole shadow.** The pole, 66 mm behind the L2, blocks a sector about 60° wide straight back.
-  Nothing there is visible at any distance or height.
-- **Field-of-view edge.** Elsewhere toward the rear, the L2 only sees below a line that drops
-  with distance. Low, near objects are visible; tall or far ones are not. At 45° rear-left or
-  rear-right, a 0.3 m box is fully visible at 1 m, partly visible at 2 m, and invisible beyond
-  about 2.3 m.
-
-See `src/mecanum_localization/README.md` and `docs/hardware_l2_test.md`.
+The L2 stands upright on the top of the robot, at 0.80 m, in wide mode (−6° to 90° elevation).
+It sees all around, but upward: the walls above the robot and the ceiling. It reaches low
+objects only from about 3 m out, so it is not a near-field obstacle sensor; the 2D lidar, the
+D435i and the ultrasonics take that role (plan, "Sensor roles"). It sees almost none of the
+robot itself. See `src/mecanum_localization/README.md`.
 
 To dry-run the driver without any simulator, using the mock transport:
 
@@ -206,25 +209,24 @@ tools/lio_marks.py      # press Enter at each tape mark to log /odom
 
 ### Mapping, navigation and mission runs
 
-The exact launch sequences will be added here as phases 6 to 8 land.
+The exact launch sequences will be added here as plan Phases 5 to 8 land.
 
 ## Development phases
 
-Development runs in simulation; the plan is in [docs/plan.md](docs/plan.md). Each phase ends
-with `colcon build`, `colcon test`, and a checkpoint before the next phase starts. Hardware work
-is planned separately in [docs/hardware_transition.md](docs/hardware_transition.md), which
-starts when the sim track is complete. It records the assumptions, sim-only shortcuts and
-confidence of each hardware stage. The hardware steps 3H and 4H had started and are paused.
+Development runs in simulation only; the plan is in [docs/plan.md](docs/plan.md). Each phase
+ends with `colcon build`, `colcon test`, and a checkpoint before the next phase starts. The
+first plan (phases 1 to 4, for the previous robot model) built the drive, the L2 simulation,
+the self-filter and the LIO pipeline; its paused hardware work is kept in
+[docs/hardware_transition.md](docs/hardware_transition.md).
 
 | Phase | Content | Status |
 |---|---|---|
-| 0 | Explore workspace, verify upstream packages | done |
-| 1 | L2 sensor frames in the description, `STANDINS.md`, this README | done |
-| 2 | Gazebo world, simulated drive plant, ESP32 driver with mock and sim transports, motion test | done |
-| 3 | Simulated L2 cloud and IMU, self-filter, cloud-to-scan | done |
-| 4 | LIO and odom adapter, evaluated against Gazebo ground truth | built; sim drift targets not met; decision D4 pending |
-| 5 | Motor calibration tool, validated against injected plant errors | |
-| 6 | Mapping with slam_toolbox, map saving | |
-| 7 | Localization and Nav2 | |
-| 8 | Docking and mission executive, end to end | |
-| 3H–8H | Hardware transition (`docs/hardware_transition.md`) | Paused 2026-10-16. L2 driver done; 3H and 4H procedures ready; first 4H static run analysed |
+| 0 | Model v2 description from the reference URDF | done 2026-10-27 |
+| 1 | Drive on encoders: ros2_control in simulation | |
+| 2 | Simulated sensor suite: 2D lidar, D435i, ultrasonics, cliff ToF, bumpers | |
+| 3 | State estimation: EKF on wheel odometry and IMU; LIO re-evaluated | |
+| 4 | Safety layer: cliffs, bumpers, E-stop, sensor loss | |
+| 5 | Mapping with slam_toolbox on the 2D lidar | |
+| 6 | Localization and Nav2 | |
+| 7 | Docking and mission executive | |
+| 8 | End-to-end acceptance in simulation | |

@@ -1,13 +1,12 @@
-# LIO on hardware: the robot pushed by hand (phase 4H)
+# LIO on hardware: the robot pushed by hand (stage 4H)
 
-> **REWRITE (branch `feature/model-v2`):** this procedure assumes the previous model (L2 on
-> the rear mast, self-filter box of the old chassis, the chassis plate front edge as the
-> measuring point). Re-check it for the new model. See [`REWRITE.md`](../REWRITE.md).
-
-> **Paused (2026-10-16).** Hardware work resumes after the sim track; see
-> [`hardware_transition.md`](hardware_transition.md) for this stage's status, dependencies and
-> confidence. Re-read its section 2 (contracts) and the stage's "Depends on" before running this
-> procedure, because sim-track decisions may have changed what it tests.
+> **Paused.** Hardware is not planned while the end-to-end simulation build
+> ([`plan.md`](plan.md)) runs. The setup below was updated on 2026-10-27 for the robot model v2
+> (the L2 upright on the robot's top, the front bumper as the measuring point). The
+> **simulation results it compares against belong to the previous model**, whose L2 hung
+> inverted on a mast and saw mostly the floor. LIO is re-evaluated on the new mount in plan
+> Phase 3, and it is no longer the only odometry: the new motors have encoders. Redo the
+> "Reading the result" tables from the Phase 3 results before running stage 2.
 
 This procedure runs LIO (rko_lio and the odometry adapter) on the real L2 while the robot is
 pushed by hand. No motors are needed.
@@ -15,13 +14,14 @@ pushed by hand. No motors are needed.
 It answers two questions, in this order:
 
 1. **Does the real L2 have the simulation's failure?** In simulation, LIO sees almost no motion
-   when the robot moves along a corridor (see "Phase 4 results" in
+   when the robot moves along a corridor (see "LIO results with the previous robot model" in
    `src/mecanum_localization/README.md`). The suspected cause is the simulated L2's fixed scan
    grid. The real L2's pattern shifts between revolutions, so it may not fail. Stage 2 tests
    exactly the motion that fails in simulation. Its answer decides the next step: fix the
    simulated sensor, or change the LIO approach.
 2. **How large is the drift?** Stages 1, 3 and 4 measure static drift, loop drift and the
-   corridor case against the phase 4 targets: under 1% of the path and under 2° of yaw.
+   corridor case against the previous plan's targets: under 1% of the path and under 2° of
+   yaw.
 
 | Stage | Motion | Proves |
 |---|---|---|
@@ -39,7 +39,7 @@ Every run is also recorded to a bag, so it can be replayed later with other LIO 
 
 ## 0. Prerequisites
 
-- **The L2 on the mast, over Ethernet.** The NetworkManager profile on `enp2s0` is up and
+- **The L2 on its standoff on the robot's top, over Ethernet.** The NetworkManager profile on `enp2s0` is up and
   `ping 192.168.1.62` answers. See "Ethernet setup" in `src/mecanum_lidar/README.md`.
 - **The L2 configured, stage 1 of `docs/hardware_l2_test.md`.** In particular step 2,
   `cloud_scan_num` for full sweeps (about 39). **This is required.** With the driver default of
@@ -52,15 +52,16 @@ Every run is also recorded to a bag, so it can be replayed later with other LIO 
 - **The mount checked, stage 2b of `docs/hardware_l2_test.md`.** LIO takes the L2's position
   and tilt from the URDF; no warnings on height and tilt. If this is skipped, run anyway, but
   write it in the results log: a mount error biases the result.
-- **The laptop rides on the robot,** inside the self-filter box (the chassis footprint, below
-  1 m), so it is removed from the cloud. The Ethernet cable must not trail into view.
+- **The laptop rides on the robot's deck,** inside the self-filter box (the robot's footprint,
+  up to 0.86 m), so it is removed from the cloud. The Ethernet cable must not trail into view.
 - **The robot can be pushed.** The motors are unpowered. Check that it rolls forward and
   backward, and whether it slides sideways on its rollers. If sideways pushes need a lot of
   force or jerk the robot, leave them out and note it.
-- **The pusher stays behind the robot,** low and close. Behind is the L2's blind side: the pole
-  shadows the sector straight back. Nobody else walks near the robot during a run.
+- **The pusher stays behind the robot,** low and close. The upright L2 sees nothing below its
+  own height (0.77 m) within about 3 m, so a crouching pusher stays out of view; a standing one
+  is seen above that height. Nobody else walks near the robot during a run.
 - **Tape marks.** See each stage. Measure them with a tape to the nearest centimetre. Use the
-  same point on the robot every time, for example the front edge of the chassis plate at its
+  same point on the robot every time, for example the face of the front bumper plank at its
   centre, over the mark.
 
 Build first: `colcon build`, then `source install/setup.bash` in every terminal.
@@ -119,7 +120,8 @@ This is the decisive stage: one 2 m push that repeats the motion failing in simu
 **Which way to push.** Push **away from the wall**, not toward it. The direction matters:
 
 - In simulation, LIO failed when the robot moved with the nearest end wall **behind** it, where
-  the L2 sees little (the pole shadows the sector straight back), and the far end 7 m ahead.
+  where the previous model's L2 saw little (its pole shadowed the sector straight back), and the
+  far end 7 m ahead.
   That is the start of the simulated corridor: the robot 0.7 m in front of a wall, facing away
   from it. LIO read 0.05 m after 2 m of true motion.
 - When the robot drove **toward** a wall close ahead, LIO tracked well in the same simulation.
@@ -127,10 +129,10 @@ This is the decisive stage: one 2 m push that repeats the motion failing in simu
   track even if the real L2 had the problem. The test could then not show the failure.
 
 **Setup.** Use the existing tape: marks at 0, 1, 2 and 3 m, with the wall at the 3 m mark.
-Measure with the robot's **front edge** (the front of the chassis plate, at its centre).
+Measure with the robot's **front edge** (the face of the front bumper plank, at its centre).
 1. Put the robot with its front edge on the **2 m mark, facing the 0 m mark**, so its back is
-   to the wall. Its rear edge is then about 0.4 m from the wall.
-2. Check there is room for the robot beyond the 0 m mark: its body is 0.6 m long, but it only
+   to the wall. Its rear bumper is then about 0.2 m from the wall.
+2. Check there is room for the robot beyond the 0 m mark: it is 0.81 m long, but it only
    needs to reach the 0 m mark with its front edge. Clear the area ahead of the 0 m mark; the
    more open floor ahead, the closer this is to the simulation.
 
@@ -153,7 +155,7 @@ none of the motion. With the floor points removed before LIO, it saw about 75 to
 
 | `x` at `0m` | Share of the true 2 m | Meaning | Next step |
 |---|---|---|---|
-| 1.92 to 2.08 m | 96 to 104% | **The real L2 tracks.** The simulation failure is an artifact of the simulated scan grid. | Fix the simulated L2 (option 1), then re-run phase 4 in simulation. Continue with stage 3. |
+| 1.92 to 2.08 m | 96 to 104% | **The real L2 tracks.** The simulation failure is an artifact of the simulated scan grid. | Fix the simulated L2 (option 1), then re-run the LIO evaluation in simulation. Continue with stage 3. |
 | 1.60 to 1.92 m | 80 to 96% | Partial: LIO under-reads the motion. | Analyse the bag offline (below) before deciding. |
 | Under 1.60 m | Under 80% | **The real L2 has the same failure.** Under about 0.3 m, it is the simulation's failure exactly. | Stop here. The LIO approach needs to change: other rko_lio settings, floor removal, another LIO, or the rf2o fallback. The bag allows testing these offline. |
 
@@ -193,7 +195,7 @@ That is like the simulation's loop: straight legs, sideways legs and turns on th
 **Result.** At `end`, the `|xy|` column is the position error, and `yaw` the heading error.
 Divide the error by 18 m. The corner marks show where the error grew.
 
-**Pass:** under 0.18 m (1% of 18 m) and under 2° of yaw. These are the phase 4 targets
+**Pass:** under 0.18 m (1% of 18 m) and under 2° of yaw. These are the previous plan's targets
 (stand-ins). The ±0.03 m reading uncertainty is small against 0.18 m.
 
 ## 4. Long corridor (optional)

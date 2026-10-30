@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<!--
+  2D lidar, SLAMTEC RPLIDAR C1 (BOM item 3): scan frame.
+
+  Included from mecanum.urdf.xacro when use_lidar_2d is true (the default).
+
+  Mount: front-face centre, in a 200 deg horizontal slot, protruding about 2 cm from the face
+  (PDF schedule). The body sees out of the slot only: limit the scan to the front 200 deg
+  (+-100 deg about +x) in the driver and the simulation.
+
+  Frame: lidar_2d_link at the scan centre, z up, scan plane horizontal 0.13 m above the floor,
+  0 deg = +x. x, y = STEP body centre; z = the PDF scan plane. The STEP placeholder box
+  (55.6 wide x 41.3 deep x 55.6 tall) is drawn on its side; it is kept as drawn for geometry.
+
+  NOTE: the body protrudes to x = 0.420 m, 16 mm beyond the front bumper plank (0.404 m), so a
+  wall hits the lidar before the bumper. The PDF intends the plank to hit first (3 cm proud of
+  the face). Not changed here; see docs/plan.md, Phase 4.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:property name="lidar_2d_body_x" value="0.0413"/>
+  <xacro:property name="lidar_2d_body_y" value="0.0556"/>
+  <xacro:property name="lidar_2d_body_z" value="0.0556"/>
+  <!-- Pose in base_link -->
+  <xacro:property name="lidar_2d_x" value="0.3997"/>
+  <!-- STAND-IN: PDF scan plane 0.13 m above the floor; measure the C1's optical centre height,
+       and check its 0 deg direction on the unit. -->
+  <xacro:property name="lidar_2d_z" value="0.0275"/>
+  <!-- Body centre below the scan plane -->
+  <xacro:property name="lidar_2d_body_offset_z" value="-0.0078"/>
+
+  <xacro:macro name="lidar_2d" params="prefix parent">
+
+    <joint name="${prefix}lidar_2d_joint" type="fixed">
+      <parent link="${prefix}${parent}"/>
+      <child link="${prefix}lidar_2d_link"/>
+      <origin xyz="${lidar_2d_x} 0 ${lidar_2d_z}" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Massless: the lidar's mass is counted in chassis_mass -->
+    <link name="${prefix}lidar_2d_link">
+      <visual>
+        <origin xyz="0 0 ${lidar_2d_body_offset_z}" rpy="0 0 0"/>
+        <geometry>
+          <box size="${lidar_2d_body_x} ${lidar_2d_body_y} ${lidar_2d_body_z}"/>
+        </geometry>
+        <material name="lidar_orange"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${lidar_2d_body_offset_z}" rpy="0 0 0"/>
+        <geometry>
+          <box size="${lidar_2d_body_x} ${lidar_2d_body_y} ${lidar_2d_body_z}"/>
+        </geometry>
+      </collision>
+    </link>
+
+  </xacro:macro>
+
+  <xacro:lidar_2d prefix="$(arg prefix)" parent="base_link"/>
+
+</robot>

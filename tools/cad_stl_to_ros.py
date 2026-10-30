@@ -26,21 +26,13 @@ link axes (``--axes``, e.g. ``y,-x,z`` means link x = CAD y, link y = -CAD x, li
 recomputed. The output is binary STL with a header starting ``ROS-converted:``; files that
 already carry it are refused, so a converted file is never transformed twice.
 
-REWRITE: the example below and ``--report-l2`` are for the previous model's L2 mast, whose
-meshes were removed on branch feature/model-v2 (see REWRITE.md). The converter itself is
-generic; work out ``--origin`` and ``--axes`` for each new CAD export.
+The robot's model (mecanum_description) is built from primitives and has no meshes; use this
+tool if meshes are added. Example for the washroom robot's STEP export (Shapr3D, mm), whose
+CAD-to-ROS mapping is x = -Y_cad, y = +X_cad, z = Z_cad + 148.9 mm (see the header of
+src/mecanum_description/refs/washroom_robot.urdf). This puts a mesh in base_footprint; subtract
+the link's own origin for any other link frame::
 
-L2 mast (previous model), exported from Shapr3D in mm.
-Link frame "l2_mast": origin at the centre of the pole's bottom face, x along the bracket
-overhang (away from the pole), z up::
-
-    tools/cad_stl_to_ros.py --origin=-5,-2115,-21 --axes=y,-x,z --scale 0.001 \
-        src/mecanum_description/meshes/visual/810mmL2stand.stl \
-        src/mecanum_description/meshes/visual/L2lidar30degree.stl
-
-``--report-l2`` additionally locates the Unitree L2 body (75 x 75 x 65 mm block under a
-tilted bracket plate) in the converted bracket mesh and prints its base-face centre, tilt
-and dome direction, for the xacro constants.
+    tools/cad_stl_to_ros.py --origin=0,0,-148.9 --axes=-y,x,z --scale 0.001 part.stl
 """
 
 import argparse
@@ -118,48 +110,6 @@ def bbox(tris):
     return ([min(p[i] for p in pts) for i in range(3)], [max(p[i] for p in pts) for i in range(3)])
 
 
-def report_l2(tris):
-    """Locate the L2 block under the tilted bracket plate (converted mesh, metres)."""
-    # Tilt: area-weighted mean of the upward faces that are tilted (the plate top).
-    acc = [0.0, 0.0, 0.0]
-    for t in tris:
-        n = normal(t)
-        a = [t[1][i] - t[0][i] for i in range(3)]
-        b = [t[2][i] - t[0][i] for i in range(3)]
-        area = 0.5 * math.sqrt(sum(x * x for x in (a[1] * b[2] - a[2] * b[1],
-                                                   a[2] * b[0] - a[0] * b[2],
-                                                   a[0] * b[1] - a[1] * b[0])))
-        if n[2] > 0.8 and abs(n[0]) > 0.1:
-            acc = [acc[i] + n[i] * area for i in range(3)]
-    length = math.sqrt(sum(x * x for x in acc))
-    up = [x / length for x in acc]                  # plate normal, pointing up
-    along = [up[2], 0.0, -up[0]]                    # in-plane, toward the overhang (+x)
-    if along[0] < 0:
-        along = [-v for v in along]
-    pts = [v for t in tris for v in t]
-
-    def proj(p):
-        return (sum(along[i] * p[i] for i in range(3)), p[1],
-                sum(up[i] * p[i] for i in range(3)))
-
-    q = [proj(p) for p in pts]
-    # Topmost levels along the plate normal: plate top, plate bottom, then the L2 base face.
-    plate_bottom = sorted({round(v[2], 5) for v in q})[-2]
-    body = [v for v in q if v[2] < plate_bottom - 1e-4]
-    face = max(v[2] for v in body)
-    top = [v for v in body if v[2] > face - 1e-4]
-    cu = (min(v[0] for v in top) + max(v[0] for v in top)) / 2
-    cy = (min(v[1] for v in top) + max(v[1] for v in top)) / 2
-    centre = [cu * along[i] + face * up[i] for i in range(3)]
-    centre[1] = cy
-    depth = face - min(v[2] for v in body)
-    tilt = math.degrees(math.atan2(-up[0], up[2]))
-    print(f'  L2 base-face centre (m): ({centre[0]:.5f}, {centre[1]:.5f}, {centre[2]:.5f})')
-    print(f'  plate normal: ({up[0]:+.5f}, {up[1]:+.5f}, {up[2]:+.5f}); '
-          f'tilt about y: {tilt:+.3f} deg; L2 body depth {depth * 1000:.1f} mm '
-          '(dome points away from the plate, i.e. the L2 hangs inverted)')
-
-
 def main(argv=None):
     """Convert the given STL files in place."""
     parser = argparse.ArgumentParser(description=__doc__,
@@ -168,8 +118,6 @@ def main(argv=None):
     parser.add_argument('--origin', required=True, help='CAD point that becomes 0,0,0; use --origin=-1,2,3 for negatives')
     parser.add_argument('--axes', default='x,y,z', help='link axes in CAD axes, e.g. y,-x,z')
     parser.add_argument('--scale', type=float, default=0.001, help='CAD unit -> metres')
-    parser.add_argument('--report-l2', action='store_true',
-                        help='print the L2 base face found in each converted mesh')
     args = parser.parse_args(argv)
 
     origin = [float(v) for v in args.origin.split(',')]
@@ -191,11 +139,6 @@ def main(argv=None):
         print(f'{path}: {len(out)} triangles, bbox (m) '
               f'x {lo[0]:+.4f}..{hi[0]:+.4f}  y {lo[1]:+.4f}..{hi[1]:+.4f}  '
               f'z {lo[2]:+.4f}..{hi[2]:+.4f}')
-        if args.report_l2:
-            try:
-                report_l2(out)
-            except (ValueError, ZeroDivisionError, IndexError):
-                print('  (no tilted bracket / L2 block found)')
     return 0
 
 

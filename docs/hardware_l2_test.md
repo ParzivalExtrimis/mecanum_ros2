@@ -1,13 +1,9 @@
 # Unitree L2 on hardware: configuration, mount verification and sim comparison
 
-> **REWRITE (branch `feature/model-v2`):** the mount verification, measurement table and
-> visibility model below describe the previous L2 mast, which was removed with the old
-> model. Rewrite them for the new mount. See [`REWRITE.md`](../REWRITE.md).
-
-> **Paused (2026-10-16).** Hardware work resumes after the sim track; see
-> [`hardware_transition.md`](hardware_transition.md) for this stage's status, dependencies and
-> confidence. Re-read its section 2 (contracts) and the stage's "Depends on" before running this
-> procedure, because sim-track decisions may have changed what it tests.
+> **Paused.** Hardware is not planned while the end-to-end simulation build
+> ([`plan.md`](plan.md)) runs. This procedure was updated on 2026-10-27 for the robot model v2:
+> the L2 stands upright on a 30 mm standoff on the top of the robot. Re-read the plan's sensor
+> contract before running it, because the simulation build may have changed what it tests.
 
 This procedure takes the real L2 from the desk to the robot. It makes sure that everything
 built in simulation still holds on hardware: the frames, the mount pose, the stream format, the
@@ -18,19 +14,18 @@ It has four stages. Do them in order, because each one assumes the previous one 
 | Stage | Where | Proves |
 |---|---|---|
 | 1. Configure and bench test | L2 on a desk, Ethernet | The driver works, and the L2 is configured to match the sim |
-| 2. Mount verification | L2 on the mast, robot still on a flat floor | The real mount matches the URDF |
+| 2. Mount verification | L2 on the robot, robot still on a flat floor under a flat ceiling | The real mount matches the URDF |
 | 3. Sim against real | Same setup, plus a few props | The sim's sensor model is close enough, so stand-ins can be replaced |
-| 4. Moving | Phase 4 onward | LIO, mapping and navigation on hardware |
+| 4. Moving | Later hardware work | LIO, mapping and navigation on hardware |
 
 Stage 4 is covered by the phase test lists, not here.
 
 The main tool is `tools/l2_mount_check.py`. It reads `/l2/points`, `/l2/imu` and the URDF TF,
-and prints a report with an OK or WARN verdict per check. It was validated against the
-simulation, where the true pose is known:
-- **Exact pose.** Height 0.930 m, tilt 30.01° and spin 22.90°, against URDF values of 0.930 m,
-  30.00° and 22.90°.
-- **Wall.** A deliberate 3° heading error was reported as −3.00°.
-- **Synthetic mount error.** A wrong mount was recovered to within 0.5 mm and 0.02°.
+and prints a report with an OK or WARN verdict per check. The upright L2 sees the floor only
+from about 7 m out, so the tool fits the **ceiling** by default (`--plane ceiling`); given a
+tape-measured `--ceiling-height`, the ceiling also gives the L2's height. Validated against the
+simulation (2026-10-27), where the true pose is known: height 0.767 m against 0.767 m, tilt
+0.01° against 0°, wall heading −0.06°, wall distance 1.002 m against 1.0 m.
 
 ## 0. What the simulation assumes
 
@@ -40,21 +35,21 @@ remaining difference goes into `STANDINS.md` and the sim model.
 | Assumption | Sim value | Real L2 setting or check |
 |---|---|---|
 | Connection | n/a | Ethernet/UDP, factory addresses: L2 192.168.1.62, host 192.168.1.2. Work-mode bit 3 = 0. USB-UART crashed the dev laptop's USB controller. |
-| Field of view | Standard: elevation 0° to 90° in the L2 frame | Work-mode bit 0 = 0. For wide mode (bit 0 = 1, −6° to 90°), launch the sim with `sim_l2_wide_fov:=true`. |
+| Field of view | **Wide:** elevation −6° to 90° in the L2 frame (`sim_l2_wide_fov` defaults to `true`), the PDF's negative-angle mode | Work-mode bit 0 = 1. For standard mode (bit 0 = 0, 0° to 90°), launch the sim with `sim_l2_wide_fov:=false`. |
 | Scan mode | 3D | Work-mode bit 1 = 0 |
 | IMU | On | Work-mode bit 2 = 0 |
 | Start | Spins at power-on | Work-mode bit 4 = 0 |
-| **Work mode** | n/a | **0** for Ethernet, standard FOV, 3D, IMU on, auto start: the factory mode. **1** for the same with wide FOV. |
+| **Work mode** | n/a | **1** for Ethernet, wide FOV, 3D, IMU on, auto start: the robot's mode. **0** is the factory mode, the same with standard FOV. |
 | One message | **One full 360° sweep at 5.55 Hz** | `cloud_scan_num`. The default of 18 scans covers only about 166° at about 12 Hz. A revolution is 216 Hz vertical scans divided by 5.55 Hz, about **39 scans**. Verify in stage 1. |
 | Points per sweep | 11,520, on a regular 360 × 32 grid | Measured in stage 1. The real pattern is non-repetitive. |
 | Range | 0.05 to 30 m | `range_min: 0.05`, `range_max: 30.0`. The driver defaults are 0 and 100. |
 | Timestamps | Simulation clock | `use_system_timestamp: true`, the default |
-| Per-point `time` field | **Absent**: Gazebo renders instantly | Present on hardware, spanning about 180 ms per full sweep. LIO deskews with it in phase 4. |
+| Per-point `time` field | **Absent**: Gazebo renders instantly | Present on hardware, spanning about 180 ms per full sweep. LIO deskews with it. |
 | Frames | `l2_lidar`, `l2_imu` | `cloud_frame_id`, `imu_frame_id`, the defaults |
 | IMU units | m/s², rad/s | The driver converts. Check that the norm is about 9.8 at rest. |
 | IMU rate | 250 Hz | Measured in stage 1 |
 | Noise | Range σ 0.01 m; gyro σ 0.002 rad/s; accel σ 0.02 m/s² | Measured in stages 1 and 2 |
-| Mount | 810 mm pole at the rear edge, bracket 30°, L2 inverted, cable 22.9° clockwise from above | Measured in stage 2 |
+| Mount | Upright on a 30 mm standoff on the tall box, bottom face 0.767 m above the floor, 0.100 m behind the robot centre, on the centreline. Cable toward the rear (`l2_cable_yaw` 0, a stand-in). | Measured in stage 2 |
 
 The driver parameters live in `src/mecanum_lidar/config/l2.yaml`. Once stage 1 has confirmed
 them, set them there so they apply everywhere:
@@ -70,11 +65,13 @@ them, set them there so they apply everywhere:
 
 Follow "Ethernet setup" in `src/mecanum_lidar/README.md` for the network profile. Then:
 
-1. **Check the work mode is 0, Ethernet.** That is the factory setting. If the L2 was switched to
-   serial, write mode 0 over serial once, then power-cycle:
+1. **Set the work mode to 1: Ethernet, wide FOV.** The factory setting is 0 (standard FOV).
+   Write mode 1 once over Ethernet, or over serial if the L2 was switched to serial, then
+   power-cycle:
    ```bash
+   ros2 run mecanum_lidar l2_driver --ros-args -p work_mode:=1
    ros2 run mecanum_lidar l2_driver --ros-args -p connection:=serial \
-     -p serial_port:=/dev/ttyACM0 -p work_mode:=0
+     -p serial_port:=/dev/ttyACM0 -p work_mode:=1     # if it is in serial mode
    ```
    After the power cycle, with the Ethernet cable in, `ping 192.168.1.62` answers, and the
    driver logs `Receiving data from the L2`.
@@ -93,10 +90,10 @@ Follow "Ethernet setup" in `src/mecanum_lidar/README.md` for the network profile
      be about 180 ms for a full sweep.
 3. **Check the IMU axes and units.** Place the L2 upright and level. In the report:
    - |accel| should be about 9.81. A value of 1.0 means the units are g, which is a driver bug.
-   - IMU tilt from vertical should be about 180°, because the upright L2's +Z points up,
-     away from "down". It is about 0° when the L2 is inverted.
+   - IMU tilt from vertical should be about 0°. The tool measures the tilt of the L2's Z axis
+     from the vertical, up or down.
    - Tip the L2 so the side away from the cable rises: accel x must go positive. That is the
-     +X convention the URDF's `l2_bracket_yaw` relies on.
+     +X convention the URDF's `l2_cable_yaw` relies on.
 4. **Measure IMU noise.** Leave the L2 untouched on a solid surface:
    ```bash
    tools/l2_mount_check.py --duration 180
@@ -111,7 +108,8 @@ and the IMU axes follow the vendor convention.
 ## 2. Mount verification (L2 on the robot)
 
 **Setup:**
-- Put the robot on a flat, level floor; check the floor with a spirit level.
+- Put the robot on a flat, level floor under a flat ceiling; check the floor with a spirit
+  level, and tape-measure the ceiling height at the robot.
 - Park it **parallel to a long straight wall**, about 1 m to its right or left. Use a wall
   without skirting cabinets.
 - Keep at least 3 m clear ahead.
@@ -124,12 +122,12 @@ Measure these before trusting any software. Each one checks a value the URDF ass
 
 | Quantity | Design (URDF) | How to measure |
 |---|---|---|
-| Pole height above the chassis plate | 810 mm | Tape, plate top to pole top |
-| Pole position | Rear face flush with the plate's rear edge, centred left-right | Square and tape |
-| Pole vertical | 90° to the plate | Angle gauge on two faces of the pole |
-| Bracket tilt | 30° up toward the front | Digital angle gauge on the bracket plate. Zero it on the chassis plate first. |
-| L2 face centre | 66 mm ahead of the pole centre, 7.5 mm left of the centreline | Tape. This comes from the CAD. |
-| Cable direction | 22.9° clockwise from above, from pointing straight at the pole | Protractor on the bracket, or a photo from straight above |
+| Tall box top above the floor | 0.737 m | Tape, floor to the box top next to the standoff |
+| Standoff height | 30 mm | Tape or calipers |
+| L2 bottom face above the floor | 0.767 m | The two above added; a stand-in, because the STEP sinks the L2 40 mm into the box |
+| L2 position | Centre 0.100 m behind the robot centre (the wheel-rectangle centre), on the centreline | Square and tape from the front axle line |
+| L2 level | Upright, 0° tilt | Angle gauge on the L2 top, zeroed on the floor |
+| Cable direction | Toward the rear (vendor +X forward) | Look from straight above. Set any other direction as `l2_cable_yaw`, counter-clockwise positive. |
 
 ### 2b. Software check
 
@@ -141,44 +139,43 @@ ros2 launch mecanum_bringup hardware_sensors.launch.py
 ```
 
 **Look in RViz first:**
-- The floor lies on the grid at z = 0.
+- The ceiling is level, at its tape-measured height.
 - Walls are vertical and straight.
-- `/l2/points_filtered` has no points on the chassis, wheels, pole or bracket.
-- `/scan` traces the walls.
+- `/l2/points_filtered` has no points on the top of the robot.
 
 Then run the check. Tape-measure the wall distance from the robot's **centreline**, which is
-the chassis side face plus 0.197 m:
+the body's side face plus 0.255 m:
 
 ```bash
-tools/l2_mount_check.py --duration 20 --wall-side right --wall-distance 1.03
+tools/l2_mount_check.py --duration 20 --wall-side right --wall-distance 1.03 --ceiling-height 2.70
 ```
 
 ### 2c. Reading the report
 
 The tolerances below are what the navigation stack can absorb. At 3 m range, 0.5° of tilt error
-moves the floor by 2.6 cm.
+moves a point by 2.6 cm.
 
 | Row | Tolerance | If WARN |
 |---|---|---|
-| L2 height above floor | ±1 cm | The pole or bracket height differs from the CAD. Check 2a. Fix the hardware, or set `l2_mast_z`, which moves the whole mast. |
-| L2 tilt from vertical, from the floor | ±0.5° | The bracket angle differs from 30°. Check it with the angle gauge, then shim the bracket or update `l2_bracket_tilt` and `l2_face_*`. Re-export and convert the CAD so the meshes match. |
-| Mount roll or pitch error | ±0.5° | Roll means the pole leans sideways or the bracket is twisted. Pitch is the same error as the tilt row. Shim it, rather than encoding a lean in the URDF. |
-| IMU tilt from vertical | ±1° | It should agree with the floor tilt within about 0.5°. If only the IMU disagrees, the floor isn't level (check with the spirit level) or the robot is rocking. |
-| L2 spin about own axis | ±2° | The cable direction differs from 22.9°. Set the measured value as `l2_bracket_yaw` in radians; see `STANDINS.md` "Provisional design choices". A roll error also shifts this row, so fix roll first. |
-| Wall heading | ±0.5° | First make sure the robot really is parallel to the wall, then rerun. If it persists, the mast is rotated on the plate (`l2_mast_yaw`) or the bracket is twisted on the pole. |
-| Wall distance | ±2 cm | A sideways mast offset (`l2_mast_y`) or a wrong L2 face position. Check 2a. |
-| Points just outside the box | about 0 | Self-hits the box misses, for example cables or a larger bracket. Look in RViz, then grow `self_filter.yaml`. |
+| L2 height above floor (from the ceiling) | ±2 cm | The box top or standoff differs from the design. Check 2a. Fix the hardware, or set `l2_mount_z` in `unitree_l2.xacro`. The tolerance includes the tape measurement of the ceiling. |
+| L2 tilt from vertical, from the ceiling | ±0.5° | The standoff or the box top is not level. Shim the standoff, rather than encoding a tilt in the URDF. |
+| Mount roll or pitch error | ±0.5° | The same error split into its two directions. A ceiling that is not level shows here too: check the floor with the spirit level and the ceiling with a laser line. |
+| IMU tilt from vertical | ±1° | It should agree with the ceiling tilt within about 0.5°. If only the IMU disagrees, the floor isn't level or the robot is rocking. |
+| L2 spin about own axis | n/a | Not measurable from gravity on an upright mount. The wall heading gives the yaw. |
+| Wall heading | ±0.5° | First make sure the robot really is parallel to the wall, then rerun. If it persists, the L2 is rotated on its standoff: set the measured value in `l2_cable_yaw`, or turn the L2. |
+| Wall distance | ±2 cm | A sideways L2 offset (`l2_mount_y`). Check 2a. |
+| Points just outside the box | about 0 | Self-hits the box misses, for example cables or the arm. Look in RViz, then grow `self_filter.yaml`. |
 
 **Which to change, the hardware or the URDF?**
-- **Fix the hardware** when it deviates from the CAD design: a loose bolt, a bent bracket, a
+- **Fix the hardware** when it deviates from the CAD design: a loose bolt, a tilted standoff, a
   wrong cable direction.
 - **Change the URDF** only when the design itself is different and the measurement repeats
-  after re-tightening. Do that through the xacro args (`l2_mast_*`, `l2_bracket_yaw`) or a CAD
-  re-export with `tools/cad_stl_to_ros.py`.
+  after re-tightening. Do that through the properties in `unitree_l2.xacro` (`l2_mount_*`,
+  `l2_cable_yaw`).
 
 Rerun until the report has no warnings.
 
-**Pass:** zero warnings with the robot parallel to the wall. Floor and IMU tilt agree within
+**Pass:** zero warnings with the robot parallel to the wall. Ceiling and IMU tilt agree within
 0.5°.
 
 ## 3. Sim against real
@@ -188,7 +185,7 @@ corridor wall on the right. Fill in the table:
 
 ```bash
 ros2 launch mecanum_bringup robot.launch.py gui:=false
-tools/l2_mount_check.py --use-sim-time --wall-side right --wall-distance 1.0
+tools/l2_mount_check.py --use-sim-time --wall-side right --wall-distance 1.0 --ceiling-height 2.4
 ```
 
 | Row | Sim | Real | Action if they differ |
@@ -196,8 +193,8 @@ tools/l2_mount_check.py --use-sim-time --wall-side right --wall-distance 1.0
 | Cloud rate | 5.55 Hz | | Tune `cloud_scan_num` (stage 1) |
 | Azimuth per cloud | 360° | | Tune `cloud_scan_num` (stage 1) |
 | Points per cloud | 11,520 | | Set the gpu_lidar samples in `mecanum_simulation/urdf/mecanum.gazebo.xacro` to about the same count, for example 360 × N |
-| Points on the robot | about 25% | | A big difference means a frame or mount error; go back to stage 2 |
-| Floor residual (range noise) | 0.008 m | | Set the gpu_lidar noise `stddev` |
+| Points on the robot | about 0.6% | | A big difference means a frame or mount error, or something on the robot top (cables, the arm); go back to stage 2 |
+| Ceiling residual (range noise) | 0.009 m | | Set the gpu_lidar noise `stddev` |
 | IMU rate | 250 Hz | | Set the IMU `update_rate` |
 | Gyro std, accel std | 0.002, 0.02 | | Set the IMU noise |
 | Per-point time span | none | about 180 ms | Expected difference. LIO deskews on hardware only. |
@@ -205,36 +202,24 @@ tools/l2_mount_check.py --use-sim-time --wall-side right --wall-distance 1.0
 After each change, update the matching row in `STANDINS.md`. Remove a row once its value is
 measured.
 
-### 3a. Field of view and rear blind zone
+### 3a. Field of view
 
-The L2 hangs inverted, tilted 30° forward. Take a point at horizontal distance r and azimuth φ
-from the L2, with φ = 0 straight ahead. It is in the L2's field of view only if its height z
-satisfies:
+The L2 stands upright with its bottom face 0.767 m above the floor. In wide mode it sees the
+hemisphere above its horizon plus 6° below it. A point at horizontal distance r from the L2 is
+in view, in every direction, only if its height z satisfies:
 
 ```
-z ≤ 0.93 + r · tan(30°) · cos φ
+z ≥ 0.767 − r · tan(6°)
 ```
 
-Ahead, the L2 sees above its own height. Toward the rear the limit drops with distance, so low,
-near objects are visible and tall or far ones are not. In addition, the **pole shadows a sector
-about 60° wide straight back**. Nothing there is ever visible. This is the biggest hardware
-risk to confirm, because the real pole, cable and bracket may shadow more or less than the CAD.
+So a 0.45 m object comes into view only about 3 m out, and the floor about 7.3 m out. The robot
+itself shadows almost nothing: the tall box top is 3 cm below the L2's face.
 
-Use a box about 0.3 m tall, placed at a measured distance from the L2's centre. That centre is
-0.22 m behind the chassis centre, on the centreline. For each position, note whether the box
-appears in `/l2/points_filtered`, and the highest point seen on it, and whether it appears in
-`/scan`. The predicted and sim results:
-
-| Box position, from the L2 | Predicted | Sim (measured) | Real |
-|---|---|---|---|
-| 45° rear-left or rear-right, 1.0 m | Fully visible | 83 points up to 0.31 m; in `/scan` | |
-| 45° rear-left or rear-right, 2.0 m | Lowest part only, about 0.18 m at its near face | Up to 0.21 m; in `/scan` | |
-| 45° rear-left or rear-right, 2.6 m | Invisible; the floor leaves the view at about 2.3 m | Nothing | |
-| Straight back, 1.0 m | Invisible, because of the pole shadow | Nothing | |
-| Straight back, sweep the azimuth | Shadow edges at about ±30° from straight back | No points between about 150° and 210° | |
-
-To find the shadow edges on the real robot, walk the box around the rear at 1 m. Note the
-azimuth at which it disappears and reappears. Compare with the sim's 150° to 210° sector.
+Check two points with a box about 0.5 m tall:
+- **Near field is blind:** at 1.5 m in any direction, nothing of the box appears in
+  `/l2/points_filtered`.
+- **The edge of the view:** move the box out along a line until its top first appears. It
+  should be at about 2.5 m (0.5 m tall). Compare with the sim, which uses the same formula.
 
 To reproduce a position in the sim, spawn the same box with Gazebo's `create` service. This
 example puts the robot in the open restroom centre first:
@@ -242,33 +227,28 @@ example puts the robot in the open restroom centre first:
 ```bash
 gz service -s /world/restroom/set_pose --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean \
   --timeout 3000 --req "name: 'mecanum', position: {x: 4.5, y: 2.0, z: 0.01}"
-# box 1.0 m from the L2 at 45 deg rear-right: L2 is at world (4.278, 2.008)
+# box 2.5 m ahead of the L2: L2 is at world (4.4, 2.0)
 gz service -s /world/restroom/create --reqtype gz.msgs.EntityFactory \
-  --reptype gz.msgs.Boolean --timeout 3000 --req 'sdf: "<sdf version=\"1.9\"><model name=\"probe\"><static>true</static><pose>3.571 1.300 0.15 0 0 0</pose><link name=\"l\"><collision name=\"c\"><geometry><box><size>0.3 0.3 0.3</size></box></geometry></collision><visual name=\"v\"><geometry><box><size>0.3 0.3 0.3</size></box></geometry></visual></link></model></sdf>"'
+  --reptype gz.msgs.Boolean --timeout 3000 --req 'sdf: "<sdf version=\"1.9\"><model name=\"probe\"><static>true</static><pose>6.9 2.0 0.25 0 0 0</pose><link name=\"l\"><collision name=\"c\"><geometry><box><size>0.3 0.3 0.5</size></box></geometry></collision><visual name=\"v\"><geometry><box><size>0.3 0.3 0.5</size></box></geometry></visual></link></model></sdf>"'
 gz service -s /world/restroom/remove --reqtype gz.msgs.Entity --reptype gz.msgs.Boolean \
   --timeout 3000 --req "name: 'probe', type: MODEL"
 ```
 
-**If the real result differs:**
-- **A wider shadow** means the cable, bracket or pole is bigger than in the CAD. Update the
-  meshes or grow the self-filter, and tell Phase 7: the rear safety zone relies on this sector.
-- **A different edge distance** means a tilt or height error. Go back to stage 2.
+**If the real result differs:** a different edge distance means a height or tilt error (go back
+to stage 2), or the work mode is not wide (stage 1).
 
-Also compare the forward and side coverage. In a corridor of known width, the scan's side
-returns must match the tape-measured distances to within about 2 cm, in both the sim and the
-real run.
-
-**Pass:** the sim and real rows agree, or the sim was updated; the blind-zone boundary matches
-the prediction within about 0.15 m; and `STANDINS.md` was updated.
+**Pass:** the sim and real rows agree, or the sim was updated; the edge of the view matches the
+prediction within about 0.3 m; and `STANDINS.md` was updated.
 
 ## 4. After this procedure
 
 - **Commit the config.** Commit the confirmed driver config (`cloud_scan_num`, ranges) and
   any sim and stand-in updates.
-- **Phase H.** `robot.launch.py sim:=false` does not start the L2 driver yet. It will include
-  `mecanum_lidar/l2.launch.py` in phase H, so the hardware bringup becomes one command.
-- **Phase 4 on hardware.** Push the robot by hand while LIO runs, and check that `/odom`
-  follows: `docs/hardware_lio_test.md`. LIO then uses the per-point `time` field the sim lacks.
+- **Hardware bringup.** `robot.launch.py sim:=false` does not start the L2 driver yet. It will
+  include `mecanum_lidar/l2.launch.py` when hardware is planned, so the hardware bringup
+  becomes one command.
+- **LIO on hardware.** Push the robot by hand while LIO runs, and check that `/odom` follows:
+  `docs/hardware_lio_test.md`. LIO then uses the per-point `time` field the sim lacks.
 
 ## Results log
 

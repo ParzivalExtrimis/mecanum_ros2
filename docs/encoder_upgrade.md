@@ -1,15 +1,11 @@
 # Encoder upgrade: migrating the drive to ros2_control
 
-> **REWRITE (branch `feature/model-v2`):** the controller numbers below (`wheels_radius`
-> 0.05, `sum_of_robot_center_projection_on_X_Y_axis` 0.4325, the 9.5 mm wheel-centre
-> offset) come from the previous model. Take them from the new URDF. See
-> [`REWRITE.md`](../REWRITE.md).
-
-The current drive is open-loop because the motors have no encoders. See
-[decision 0001](decisions/0001-open-loop-drive-without-ros2-control.md). An upcoming motor and
-ESP32 firmware update adds wheel position encoders and state reporting. Once the ESP32 reports
-**measured** wheel state, the drive should move to ros2_control. This guide lists the steps
-in order.
+The current drive is open-loop, because the first motors had no encoders. See
+[decision 0001](decisions/0001-open-loop-drive-without-ros2-control.md). The new motors have
+position and velocity encoders, so the drive moves to ros2_control. In simulation that is
+Phase 1 of [`plan.md`](plan.md), which follows sections 1 and 3 to 6 below; on hardware it also
+needs the ESP32 to report the **measured** wheel state (section 0) and the hardware plugin
+(section 2). This guide lists the steps in order. The numbers are those of the robot model v2.
 
 The names and parameters below were checked against ROS 2 Jazzy:
 
@@ -111,8 +107,8 @@ mecanum_drive_controller:
     rear_left_wheel_state_joint_name: rear_left_wheel_joint
     rear_right_wheel_state_joint_name: rear_right_wheel_joint
     kinematics:
-      wheels_radius: 0.05
-      sum_of_robot_center_projection_on_X_Y_axis: 0.4325
+      wheels_radius: 0.1025
+      sum_of_robot_center_projection_on_X_Y_axis: 0.451
       base_frame_offset: {x: 0.0, y: 0.0, theta: 0.0}
     reference_timeout: 0.25
     enable_odom_tf: false        # the EKF owns odom -> base_footprint (step 4)
@@ -120,7 +116,7 @@ mecanum_drive_controller:
     base_frame_id: base_footprint
 ```
 
-`sum_of_robot_center_projection_on_X_Y_axis` is lx + ly, which is 0.2255 + 0.207.
+`sum_of_robot_center_projection_on_X_Y_axis` is lx + ly, which is 0.2360 + 0.2150.
 
 Carry each setting over from the current driver config:
 
@@ -128,7 +124,7 @@ Carry each setting over from the current driver config:
 |---|---|---|
 | `mecanum_base/config/esp32_driver.yaml` | `wheel_radius` | `kinematics.wheels_radius` |
 | `mecanum_base/config/esp32_driver.yaml` | `lx` + `ly` | `kinematics.sum_of_robot_center_projection_on_X_Y_axis` |
-| `mecanum_description/urdf/mecanum_params.xacro` | wheel centre 9.5 mm behind `base_link` | `kinematics.base_frame_offset.x`. Check the sign in the parameter description before setting it. |
+| `mecanum_description/urdf/mecanum_params.xacro` | wheel-rectangle centre 0.3 mm ahead of `base_link` (`front_axle_x` 0.2363, `rear_axle_x` −0.2357) | `kinematics.base_frame_offset.x`: 0, the offset is negligible. Check the sign in the parameter description before setting a non-zero one. |
 | `mecanum_base/config/esp32_driver.yaml` | `max_vx`, `max_vy`, `max_wz` | `linear.x.*`, `linear.y.*`, `angular.z.*` limits |
 | `mecanum_base/config/esp32_driver.yaml` | `cmd_timeout` | `reference_timeout` |
 | `mecanum_base/config/wheel_calibration.yaml` | sign, scale, deadband, max, motor_id | Parameters of the hardware plugin, not the controller |
@@ -176,7 +172,7 @@ Keep the Python unit tests' numeric cases as test vectors for the C++ port.
   ros2 run teleop_twist_keyboard teleop_twist_keyboard \
     --ros-args -p stamped:=true -r cmd_vel:=/mecanum_drive_controller/reference
   ```
-- **Motion test.** Set `cmd_vel_stamped: true` on `motion_test` and on the calibration tool.
+- **Motion test.** Set `cmd_vel_stamped: true` on `motion_test`.
 
 ## 4. Odometry and TF ownership
 
@@ -237,7 +233,7 @@ In `gz_bridge.yaml` and `sim.launch.py`:
 | `mecanum_base/esp32_driver_node.py`, `drive_core.py`, `transport.py` | Remove after the C++ plugin is in service. The protocol logic moves into `mecanum_hardware`. |
 | `mecanum_base/kinematics.py` and its tests | Keep as a reference to cross-check the controller's inverse kinematics. |
 | `mecanum_base/motion_test.py` | Keep. Set it stamped and point it at the controller reference. |
-| Calibration tool | Repurpose. With firmware PID it validates wheel speed tracking instead of fitting open-loop scale and deadband. |
+| `mecanum_base/config/wheel_calibration.yaml` | Move the values that remain into the hardware plugin parameters (section 2), then remove it with the driver. With firmware PID there is no open-loop scale or deadband to fit; `motion_test` checks wheel speed tracking. |
 | `mecanum_simulation/sim_motor_plant.py` | Remove. |
 | `mecanum_bringup/launch/*` | Include `controllers.launch.py`. Drop the driver node and joint_state_publisher. |
 | `STANDINS.md` | Remove the calibration stand-ins that no longer apply. Add the encoder counts per revolution until they are confirmed. |
