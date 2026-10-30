@@ -22,10 +22,12 @@ ros2 launch mecanum_bringup robot.launch.py rviz:=true   # also RViz
 |---|---|---|
 | `sim` | `true` | `true` for the Gazebo simulation, `false` for real hardware |
 | `rviz` | `false` | Start RViz |
-| `rviz_config` | `rviz/sensors.rviz` | Robot model, raw and filtered L2 clouds, and `/scan`. `rviz/robot.rviz` shows only the model and TF. |
+| `rviz_config` | `rviz/sensors.rviz` | Robot model, L2 clouds, `/scan`, D435i cloud and image, the ultrasonic and cliff ranges. `rviz/robot.rviz` shows only the model and TF. The bumpers have no RViz display: `ros2 topic echo /bumper/front`. |
 | `gui` | `true` | Gazebo GUI; sim only |
 | `world` | restroom | Gazebo world; sim only |
 | `use_l2` | `true` | Include the Unitree L2 in the model |
+| `use_d435i`, `use_lidar_2d`, `use_ultrasonics`, `use_cliff_tof`, `use_bumpers` | `true` | Include that sensor in the model; sim only |
+| `use_l2_scan` | `false` | Also make a 2D scan from the L2 cloud, on `/l2/scan`, for comparison |
 | `lio` | `true` | Run LIO odometry; needs `use_l2` |
 
 With `sim:=true`, the launch starts:
@@ -33,7 +35,9 @@ With `sim:=true`, the launch starts:
   `mecanum_drive_controller` takes `TwistStamped` on `/cmd_vel` and publishes
   `/wheel/odometry` and the `odom -> base_footprint` TF; `joint_state_broadcaster` publishes
   `/joint_states`;
-- the L2 perception from `mecanum_localization/perception.launch.py`: the self-filter, from `/l2/points` to `/l2/points_filtered`, then the scan conversion to `/scan`;
+- the simulated sensors, on the plan's contract topics; `/scan` is the 2D lidar's;
+- the L2 perception from `mecanum_localization/perception.launch.py`: the self-filter, from
+  `/l2/points` to `/l2/points_filtered`;
 - LIO odometry from `mecanum_localization/lio.launch.py`: rko_lio and the odometry adapter,
   which publish `/lio/odom` only, with no TF;
 - everything on `use_sim_time:=true`.

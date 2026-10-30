@@ -22,8 +22,9 @@ sim:=false  robot_state_publisher + joint_state_publisher (zero wheel angles) an
             open-loop esp32_driver with the esp32 transport. The real transport is not
             implemented until the rewritten firmware's protocol exists; the driver then exits
             with an explanation.
-Both        L2 perception (mecanum_localization/perception.launch.py): self-filter and
-            cloud-to-scan, /l2/points -> /l2/points_filtered -> /scan.
+Both        L2 perception (mecanum_localization/perception.launch.py): the self-filter,
+            /l2/points -> /l2/points_filtered. With use_l2_scan:=true also cloud-to-scan, on
+            /l2/scan; /scan is the 2D lidar's.
             LIO odometry (mecanum_localization/lio.launch.py, lio:=true): rko_lio and the
             adapter. In sim it publishes /lio/odom only, with no TF (wheel odometry owns it);
             on hardware, with no wheel odometry, /odom and odom -> base_footprint. Its config
@@ -41,6 +42,16 @@ from launch.substitutions import (
     AndSubstitution, Command, LaunchConfiguration, PythonExpression)
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
+
+
+# The sensors with no hardware driver yet, with what each one leaves out when false.
+OTHER_SENSORS = {
+    'use_d435i': 'the RealSense D435i',
+    'use_lidar_2d': 'the RPLIDAR C1',
+    'use_ultrasonics': 'the four ultrasonics',
+    'use_cliff_tof': 'the four cliff ToF sensors',
+    'use_bumpers': 'the bumper planks',
+}
 
 
 def generate_launch_description():
@@ -62,6 +73,7 @@ def generate_launch_description():
         launch_arguments={
             'world': LaunchConfiguration('world'),
             'gui': LaunchConfiguration('gui'),
+            **{sensor: LaunchConfiguration(sensor) for sensor in OTHER_SENSORS},
             'use_l2': LaunchConfiguration('use_l2'),
         }.items(),
         condition=IfCondition(sim))
@@ -85,6 +97,11 @@ def generate_launch_description():
             description='Gazebo world (sim only)'),
         DeclareLaunchArgument('use_l2', default_value='true',
                               description='Include the Unitree L2 in the robot model'),
+        *[DeclareLaunchArgument(sensor, default_value='true',
+                                description=f'Include {what} in the robot model (sim only)')
+          for sensor, what in OTHER_SENSORS.items()],
+        DeclareLaunchArgument('use_l2_scan', default_value='false',
+                              description='Also make a 2D scan from the L2 cloud, on /l2/scan'),
         DeclareLaunchArgument('lio', default_value='true',
                               description='Run LIO odometry (needs use_l2)'),
 
@@ -101,11 +118,12 @@ def generate_launch_description():
             executable='joint_state_publisher',
             condition=UnlessCondition(sim)),
 
-        # L2 perception: self-filter and cloud-to-scan, identical in sim and on hardware.
+        # L2 perception, identical in sim and on hardware.
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(loc_share, 'launch', 'perception.launch.py')),
-            launch_arguments={'use_sim_time': sim}.items(),
+            launch_arguments={'use_sim_time': sim,
+                              'use_l2_scan': LaunchConfiguration('use_l2_scan')}.items(),
             condition=IfCondition(LaunchConfiguration('use_l2'))),
 
         # LIO odometry. In sim an evaluation input on /lio/odom (an EKF input from

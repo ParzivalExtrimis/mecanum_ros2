@@ -15,9 +15,6 @@
   gz_type_name: gz.msgs.Odometry
   direction: GZ_TO_ROS
 
-# The robot's other sensors (D435i, 2D lidar, ultrasonics, cliff ToF, bumpers) are bridged in
-# docs/plan.md Phase 2, on the topics and frames of the plan's contract table.
-
 # Simulated Unitree L2, on the same topics as the real driver (mecanum_lidar).
 # gpu_lidar publishes its packed cloud on <sensor topic>/points; frames come from gz_frame_id.
 - ros_topic_name: /l2/points
@@ -29,4 +26,97 @@
   gz_topic_name: /sim/l2/imu
   ros_type_name: sensor_msgs/msg/Imu
   gz_type_name: gz.msgs.IMU
+  direction: GZ_TO_ROS
+
+# Simulated RPLIDAR C1
+- ros_topic_name: /scan
+  gz_topic_name: /sim/lidar_2d
+  ros_type_name: sensor_msgs/msg/LaserScan
+  gz_type_name: gz.msgs.LaserScan
+  direction: GZ_TO_ROS
+
+# Simulated D435i. rgbd_camera publishes on <sensor topic>/image, /depth_image, /points and
+# /camera_info. There is one camera_info: colour and depth share their intrinsics in sim. Its
+# /points are not bridged: their axes do not match their frame, so sim_depth_cloud makes the
+# cloud from the depth image, and with no subscriber Gazebo does not compute them.
+- ros_topic_name: /d435i/color/image_raw
+  gz_topic_name: /sim/d435i/image
+  ros_type_name: sensor_msgs/msg/Image
+  gz_type_name: gz.msgs.Image
+  direction: GZ_TO_ROS
+- ros_topic_name: /d435i/color/camera_info
+  gz_topic_name: /sim/d435i/camera_info
+  ros_type_name: sensor_msgs/msg/CameraInfo
+  gz_type_name: gz.msgs.CameraInfo
+  direction: GZ_TO_ROS
+- ros_topic_name: /d435i/depth/image_rect_raw
+  gz_topic_name: /sim/d435i/depth_image
+  ros_type_name: sensor_msgs/msg/Image
+  gz_type_name: gz.msgs.Image
+  direction: GZ_TO_ROS
+- ros_topic_name: /d435i/depth/camera_info
+  gz_topic_name: /sim/d435i/camera_info
+  ros_type_name: sensor_msgs/msg/CameraInfo
+  gz_type_name: gz.msgs.CameraInfo
+  direction: GZ_TO_ROS
+- ros_topic_name: /d435i/imu
+  gz_topic_name: /sim/d435i/imu
+  ros_type_name: sensor_msgs/msg/Imu
+  gz_type_name: gz.msgs.IMU
+  direction: GZ_TO_ROS
+
+# Range cones, input of sim_range_sensor, which publishes /ultrasonic/* and /cliff/*
+# (ros_gz_bridge has no sensor_msgs/Range). As clouds: a bridged LaserScan keeps only the middle
+# row of a cone with several rows.
+- ros_topic_name: /sim/ultrasonic/front_left
+  gz_topic_name: /sim/ultrasonic/front_left/points
+  ros_type_name: sensor_msgs/msg/PointCloud2
+  gz_type_name: gz.msgs.PointCloudPacked
+  direction: GZ_TO_ROS
+- ros_topic_name: /sim/ultrasonic/front_right
+  gz_topic_name: /sim/ultrasonic/front_right/points
+  ros_type_name: sensor_msgs/msg/PointCloud2
+  gz_type_name: gz.msgs.PointCloudPacked
+  direction: GZ_TO_ROS
+- ros_topic_name: /sim/ultrasonic/rear_left
+  gz_topic_name: /sim/ultrasonic/rear_left/points
+  ros_type_name: sensor_msgs/msg/PointCloud2
+  gz_type_name: gz.msgs.PointCloudPacked
+  direction: GZ_TO_ROS
+- ros_topic_name: /sim/ultrasonic/rear_right
+  gz_topic_name: /sim/ultrasonic/rear_right/points
+  ros_type_name: sensor_msgs/msg/PointCloud2
+  gz_type_name: gz.msgs.PointCloudPacked
+  direction: GZ_TO_ROS
+- ros_topic_name: /sim/cliff/front_left
+  gz_topic_name: /sim/cliff/front_left/points
+  ros_type_name: sensor_msgs/msg/PointCloud2
+  gz_type_name: gz.msgs.PointCloudPacked
+  direction: GZ_TO_ROS
+- ros_topic_name: /sim/cliff/front_right
+  gz_topic_name: /sim/cliff/front_right/points
+  ros_type_name: sensor_msgs/msg/PointCloud2
+  gz_type_name: gz.msgs.PointCloudPacked
+  direction: GZ_TO_ROS
+- ros_topic_name: /sim/cliff/rear_left
+  gz_topic_name: /sim/cliff/rear_left/points
+  ros_type_name: sensor_msgs/msg/PointCloud2
+  gz_type_name: gz.msgs.PointCloudPacked
+  direction: GZ_TO_ROS
+- ros_topic_name: /sim/cliff/rear_right
+  gz_topic_name: /sim/cliff/rear_right/points
+  ros_type_name: sensor_msgs/msg/PointCloud2
+  gz_type_name: gz.msgs.PointCloudPacked
+  direction: GZ_TO_ROS
+
+# Plank contacts, input of sim_bumper, which publishes /bumper/*
+- ros_topic_name: /sim/bumper/front
+  gz_topic_name: /sim/bumper/front
+  ros_type_name: ros_gz_interfaces/msg/Contacts
+  gz_type_name: gz.msgs.Contacts
+  direction: GZ_TO_ROS
+- ros_topic_name: /sim/bumper/rear
+  gz_topic_name: /sim/bumper/rear
+  ros_type_name: ros_gz_interfaces/msg/Contacts
+  gz_type_name: gz.msgs.Contacts
   direction: GZ_TO_ROS

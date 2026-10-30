@@ -54,6 +54,21 @@
   <xacro:sim_mecanum_wheel wheel="rear_left" fdir="1 1 0"/>
   <xacro:sim_mecanum_wheel wheel="rear_right" fdir="1 -1 0"/>
 
+  <!-- Everything except the visibility bit of the glass in the worlds (shortcut S4 in
+       docs/plan.md): the glass visual sets only bit 28 (268435456) in <visibility_flags>, and every
+       optical sensor uses this mask (0xEFFFFFFF), so it looks through the glass. The ultrasonics
+       keep the default mask and are the only sensors that see it. It has to be a bit above
+       GZ_VISIBILITY_ALL (0x0FFFFFFF): the rgbd_camera's depth pass ignores <visibility_mask> and
+       renders those bits only. -->
+  <xacro:property name="sim_optical_visibility_mask" value="4026531839"/>
+
+  <xacro:macro name="sim_imu_noise" params="stddev">
+    <noise type="gaussian">
+      <mean>0.0</mean>
+      <stddev>${stddev}</stddev>
+    </noise>
+  </xacro:macro>
+
   <!-- 4. Simulated Unitree L2: a gpu_lidar on l2_lidar and an IMU on l2_imu, bridged to the
        same topics and frames as the real driver (mecanum_lidar): /l2/points in l2_lidar and
        /l2/imu in l2_imu. Requires the Sensors (ogre2) and Imu systems in the world.
@@ -109,16 +124,10 @@
           <mean>0.0</mean>
           <stddev>0.01</stddev>
         </noise>
+        <visibility_mask>${sim_optical_visibility_mask}</visibility_mask>
       </lidar>
     </sensor>
   </gazebo>
-
-  <xacro:macro name="sim_imu_noise" params="stddev">
-    <noise type="gaussian">
-      <mean>0.0</mean>
-      <stddev>${stddev}</stddev>
-    </noise>
-  </xacro:macro>
 
   <gazebo reference="$(arg prefix)l2_imu">
     <sensor name="l2_imu" type="imu">
@@ -147,8 +156,213 @@
 
   </xacro:if>
 
-  <!-- The robot's other sensors (D435i, 2D lidar, ultrasonics, cliff ToF, bumpers) are added
-       here in docs/plan.md Phase 2, on their URDF frames, and bridged in config/gz_bridge.yaml. -->
+  <!-- 5. Simulated RPLIDAR C1 on lidar_2d_link, bridged to /scan. The real C1 looks through a
+       200 deg slot, which the model does not have: the sensor is 0.7 mm ahead of a solid front
+       face, and from +-90 deg on the rays run into it and return from inside the body. So the
+       scan stops at +-89.5 deg. Range min 0.05 m drops the returns from its own housing. -->
+  <xacro:if value="$(arg use_lidar_2d)">
+  <gazebo reference="$(arg prefix)lidar_2d_link">
+    <sensor name="lidar_2d" type="gpu_lidar">
+      <gz_frame_id>$(arg prefix)lidar_2d_link</gz_frame_id>
+      <topic>/sim/lidar_2d</topic>
+      <update_rate>10</update_rate>
+      <always_on>true</always_on>
+      <visualize>false</visualize>
+      <lidar>
+        <scan>
+          <!-- 0.72 deg steps: the C1's 5 kHz sample rate at 10 Hz -->
+          <horizontal>
+            <samples>250</samples>
+            <resolution>1</resolution>
+            <min_angle>${radians(-89.5)}</min_angle>
+            <max_angle>${radians(89.5)}</max_angle>
+          </horizontal>
+        </scan>
+        <!-- 0.05..12 m: C1 datasheet -->
+        <range>
+          <min>0.05</min>
+          <max>12.0</max>
+          <resolution>0.01</resolution>
+        </range>
+        <noise>
+          <!-- STAND-IN: the datasheet gives an accuracy, not a noise model; 0.01 m Gaussian is
+               assumed. Record a flat wall with the real C1. -->
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
+        </noise>
+        <visibility_mask>${sim_optical_visibility_mask}</visibility_mask>
+      </lidar>
+    </sensor>
+  </gazebo>
+  </xacro:if>
+
+  <!-- 6. Simulated RealSense D435i: an rgbd_camera and an IMU on d435i_link. The image axes are
+       those of d435i_optical_frame. 848 x 480, a real depth mode, gives the camera's vertical
+       field of view (about 56 deg; Gazebo derives it from the aspect ratio) with its 87 deg
+       horizontal one. The colour and depth images share one set of intrinsics, unlike the
+       real camera without depth alignment. The camera's own cloud is not used: it has x
+       forward but carries the optical frame's label (mecanum_simulation/sim_depth_cloud). -->
+  <xacro:if value="$(arg use_d435i)">
+  <gazebo reference="$(arg prefix)d435i_link">
+    <sensor name="d435i" type="rgbd_camera">
+      <gz_frame_id>$(arg prefix)d435i_optical_frame</gz_frame_id>
+      <topic>/sim/d435i</topic>
+      <!-- STAND-IN: 15 Hz and 848 x 480 for the sim load; the camera goes to 30 Hz or more -->
+      <update_rate>15</update_rate>
+      <always_on>true</always_on>
+      <visualize>false</visualize>
+      <camera>
+        <horizontal_fov>${radians(87.0)}</horizontal_fov>
+        <image>
+          <width>848</width>
+          <height>480</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.1</near>
+          <far>20.0</far>
+        </clip>
+        <!-- STAND-IN: 0.3..3 m is the useful depth range of docs/plan.md, not a hard limit of
+             the camera -->
+        <depth_camera>
+          <clip>
+            <near>0.3</near>
+            <far>3.0</far>
+          </clip>
+        </depth_camera>
+        <noise>
+          <!-- STAND-IN: 0.01 Gaussian. Real stereo depth noise grows with the square of range. -->
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
+        </noise>
+        <visibility_mask>${sim_optical_visibility_mask}</visibility_mask>
+        <optical_frame_id>$(arg prefix)d435i_optical_frame</optical_frame_id>
+      </camera>
+    </sensor>
+    <sensor name="d435i_imu" type="imu">
+      <gz_frame_id>$(arg prefix)d435i_link</gz_frame_id>
+      <topic>/sim/d435i/imu</topic>
+      <!-- 200 Hz: the camera's gyro rate is 200 or 400 Hz -->
+      <update_rate>200</update_rate>
+      <always_on>true</always_on>
+      <!-- STAND-IN: as the L2 IMU. Record the IMU at rest on the real camera. -->
+      <imu>
+        <angular_velocity>
+          <x><xacro:sim_imu_noise stddev="0.002"/></x>
+          <y><xacro:sim_imu_noise stddev="0.002"/></y>
+          <z><xacro:sim_imu_noise stddev="0.002"/></z>
+        </angular_velocity>
+        <linear_acceleration>
+          <x><xacro:sim_imu_noise stddev="0.02"/></x>
+          <y><xacro:sim_imu_noise stddev="0.02"/></y>
+          <z><xacro:sim_imu_noise stddev="0.02"/></z>
+        </linear_acceleration>
+      </imu>
+    </sensor>
+  </gazebo>
+  </xacro:if>
+
+  <!-- 7. Range sensors. Gazebo Harmonic has no sonar sensor, so each one is a small gpu_lidar
+       cone along +x of its link, and mecanum_simulation/sim_range_sensor turns each cone's cloud
+       into a sensor_msgs/Range with the minimum return. -->
+  <xacro:macro name="sim_range_cone"
+    params="name link topic rate h_samples h_half v_samples v_half r_min r_max r_res stddev
+            mask:=4294967295">
+    <gazebo reference="$(arg prefix)${link}">
+      <sensor name="${name}" type="gpu_lidar">
+        <gz_frame_id>$(arg prefix)${link}</gz_frame_id>
+        <topic>${topic}</topic>
+        <update_rate>${rate}</update_rate>
+        <always_on>true</always_on>
+        <visualize>false</visualize>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>${h_samples}</samples>
+              <resolution>1</resolution>
+              <min_angle>${radians(-h_half)}</min_angle>
+              <max_angle>${radians(h_half)}</max_angle>
+            </horizontal>
+            <vertical>
+              <samples>${v_samples}</samples>
+              <resolution>1</resolution>
+              <min_angle>${radians(-v_half)}</min_angle>
+              <max_angle>${radians(v_half)}</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>${r_min}</min>
+            <max>${r_max}</max>
+            <resolution>${r_res}</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>${stddev}</stddev>
+          </noise>
+          <visibility_mask>${mask}</visibility_mask>
+        </lidar>
+      </sensor>
+    </gazebo>
+  </xacro:macro>
+
+  <!-- Ultrasonics (DFRobot A02YYUW, 0.03..4.5 m). 60 deg across, but only 6 deg high: a full
+       cone from 0.30 m would hit the floor at about 0.5 m and read it for ever, while real
+       ultrasound reflects away from a smooth floor at this grazing angle (shortcut S7 in
+       docs/plan.md). STAND-IN: the cone and the 0.01 m noise. -->
+  <xacro:if value="$(arg use_ultrasonics)">
+  <xacro:macro name="sim_ultrasonic" params="pos">
+    <xacro:sim_range_cone name="ultrasonic_${pos}" link="ultrasonic_${pos}_link"
+      topic="/sim/ultrasonic/${pos}" rate="10" h_samples="9" h_half="30.0" v_samples="3"
+      v_half="3.0" r_min="0.03" r_max="4.5" r_res="0.01" stddev="0.01"/>
+  </xacro:macro>
+  <xacro:sim_ultrasonic pos="front_left"/>
+  <xacro:sim_ultrasonic pos="front_right"/>
+  <xacro:sim_ultrasonic pos="rear_left"/>
+  <xacro:sim_ultrasonic pos="rear_right"/>
+  </xacro:if>
+
+  <!-- Cliff ToF (VL53L1X, 27 deg field of view, up to 4 m), looking down from the pockets in
+       the underside. STAND-IN: the 3 x 3 rays and the 3 mm noise. -->
+  <xacro:if value="$(arg use_cliff_tof)">
+  <xacro:macro name="sim_cliff_tof" params="pos">
+    <xacro:sim_range_cone name="cliff_tof_${pos}" link="cliff_tof_${pos}_link"
+      topic="/sim/cliff/${pos}" rate="20" h_samples="3" h_half="13.5" v_samples="3"
+      v_half="13.5" r_min="0.01" r_max="4.0" r_res="0.001" stddev="0.003"
+      mask="${sim_optical_visibility_mask}"/>
+  </xacro:macro>
+  <xacro:sim_cliff_tof pos="front_left"/>
+  <xacro:sim_cliff_tof pos="front_right"/>
+  <xacro:sim_cliff_tof pos="rear_left"/>
+  <xacro:sim_cliff_tof pos="rear_right"/>
+  </xacro:if>
+
+  <!-- 8. Bumpers: a contact sensor on each plank's collision, which needs the Contact system in
+       the world. The joint is preserved so that the plank stays a link with its own collision
+       name (<link>_collision); otherwise it is lumped into base_footprint. That needs the
+       plank's mass (mecanum_description/urdf/sensors/bumpers.xacro). Gazebo publishes only
+       while in contact: mecanum_simulation/sim_bumper makes the Bool topics. -->
+  <xacro:if value="$(arg use_bumpers)">
+  <xacro:macro name="sim_bumper" params="pos">
+    <gazebo reference="$(arg prefix)bumper_${pos}_joint">
+      <preserveFixedJoint>true</preserveFixedJoint>
+    </gazebo>
+    <gazebo reference="$(arg prefix)bumper_${pos}_link">
+      <sensor name="bumper_${pos}" type="contact">
+        <update_rate>50</update_rate>
+        <always_on>true</always_on>
+        <contact>
+          <collision>$(arg prefix)bumper_${pos}_link_collision</collision>
+          <topic>/sim/bumper/${pos}</topic>
+        </contact>
+      </sensor>
+    </gazebo>
+  </xacro:macro>
+  <xacro:sim_bumper pos="front"/>
+  <xacro:sim_bumper pos="rear"/>
+  </xacro:if>
 
   <gazebo>
     <plugin filename="gz-sim-odometry-publisher-system"

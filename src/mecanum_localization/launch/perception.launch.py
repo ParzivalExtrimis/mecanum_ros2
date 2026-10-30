@@ -13,10 +13,13 @@
 # limitations under the License.
 
 """
-L2 perception: robot self-filter, then 3D cloud to 2D scan.
+L2 perception: robot self-filter, and optionally 3D cloud to 2D scan.
 
     /l2/points --self_filter (pcl_ros CropBox)--> /l2/points_filtered
-               --cloud_to_scan (pointcloud_to_laserscan)--> /scan
+               --cloud_to_scan (pointcloud_to_laserscan, use_l2_scan:=true)--> /l2/scan
+
+/scan belongs to the 2D lidar. The L2 scan stays for comparison, and is removed in docs/plan.md
+Phase 8.
 
 Works the same with the real driver (mecanum_lidar) and the simulated L2 (mecanum_simulation).
 """
@@ -26,6 +29,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -43,8 +47,10 @@ def generate_launch_description():
                               description='Raw L2 point cloud'),
         DeclareLaunchArgument('filtered_cloud_topic', default_value='/l2/points_filtered',
                               description='Cloud without the robot body'),
-        DeclareLaunchArgument('scan_topic', default_value='/scan',
-                              description='2D scan output'),
+        DeclareLaunchArgument('use_l2_scan', default_value='false',
+                              description='Also make a 2D scan from the filtered cloud'),
+        DeclareLaunchArgument('scan_topic', default_value='/l2/scan',
+                              description='2D scan output of use_l2_scan'),
         Node(
             package='pcl_ros',
             executable='filter_crop_box_node',
@@ -62,5 +68,6 @@ def generate_launch_description():
             parameters=[os.path.join(share, 'config', 'cloud_to_scan.yaml'),
                         {'use_sim_time': use_sim_time}],
             remappings=[('cloud_in', filtered), ('scan', LaunchConfiguration('scan_topic'))],
+            condition=IfCondition(LaunchConfiguration('use_l2_scan')),
         ),
     ])

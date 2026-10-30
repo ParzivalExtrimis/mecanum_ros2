@@ -14,6 +14,11 @@
                stall in the north-east corner (x 5.4..7, y 2.2..4), open towards -x,
                partitions from z 0.15 to 1.9 m
     toilet_1   against the east wall at y = 3.075, bowl front edge at x = 6.34
+    threshold  5 cm high across the corridor at x = 5.5, under the 2D lidar's plane
+    glass      a screen in the lobby at y = 2.8 (x -0.5..0.9), seen only by the ultrasonics
+               (see worlds/sensor_test.sdf)
+    The threshold and the glass are off the routes used so far (the motion_test loop, the
+    doorway, the stall), so that they are obstacles to avoid and not steps to climb.
 
   Viewing: the world is open on top in the Gazebo GUI, and the four outer walls are
   translucent, so the robot can be watched from any angle. Both use the visual's
@@ -32,11 +37,13 @@
     <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
     <plugin filename="gz-sim-scene-broadcaster-system"
             name="gz::sim::systems::SceneBroadcaster"/>
-    <!-- Sensor rendering (simulated L2 gpu_lidar) and IMU sensors -->
+    <!-- Sensor rendering (gpu_lidar, rgbd_camera) and IMU sensors -->
     <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
       <render_engine>ogre2</render_engine>
     </plugin>
     <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+    <!-- Contact sensors (simulated bumpers) -->
+    <plugin filename="gz-sim-contact-system" name="gz::sim::systems::Contact"/>
 
     <scene>
       <ambient>0.6 0.6 0.6 1</ambient>
@@ -175,6 +182,33 @@
 
     <!-- STAND-IN: ceiling height 2.4 m is typical for a restroom; use the real site's value.
          Invisible in the GUI (transparency 1), still seen by the simulated sensors. -->
+    <!-- Sensor test objects from worlds/sensor_test.sdf -->
+    <model name="threshold">
+      <static>true</static>
+      <pose>5.5 -1.0 0.025 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.3 1.9 0.05</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>0.3 1.9 0.05</size></box></geometry>
+          <material><ambient>0.35 0.32 0.30 1</ambient><diffuse>0.35 0.32 0.30 1</diffuse><specular>0.1 0.1 0.1 1</specular></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="glass_screen">
+      <static>true</static>
+      <pose>0.2 2.8 1.0 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>1.4 0.02 2.0</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>1.4 0.02 2.0</size></box></geometry>
+          <transparency>0.7</transparency>
+          <visibility_flags>268435456</visibility_flags>
+          <material><ambient>0.6 0.8 0.9 1</ambient><diffuse>0.6 0.8 0.9 1</diffuse><specular>0.1 0.1 0.1 1</specular></material>
+        </visual>
+      </link>
+    </model>
+
     <model name="ceiling">
       <static>true</static>
       <pose>3.0 1.0 2.45 0 0 0</pose>

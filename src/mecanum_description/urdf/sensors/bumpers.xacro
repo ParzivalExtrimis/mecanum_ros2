@@ -21,6 +21,9 @@
   <xacro:property name="bumper_x" value="0.3915"/>
   <!-- Plank centre 0.076 m above the floor -->
   <xacro:property name="bumper_z" value="-0.0261"/>
+  <!-- STAND-IN: plank and return springs, taken out of chassis_mass so the total stays the same.
+       Weigh a plank. -->
+  <xacro:property name="bumper_mass" value="0.1"/>
 
   <xacro:macro name="bumper" params="prefix parent pos x z yaw">
 
@@ -30,8 +33,14 @@
       <origin xyz="${x} 0 ${z}" rpy="0 0 ${yaw}"/>
     </joint>
 
-    <!-- Massless: counted in chassis_mass -->
+    <!-- The mass is required: the simulation keeps this joint (preserveFixedJoint) so that a
+         contact sensor can name the plank's collision, and the URDF converter deletes a massless
+         link on a preserved joint, with its collision and sensor. -->
     <link name="${prefix}bumper_${pos}_link">
+      <xacro:box_inertia mass="${bumper_mass}" x="${bumper_depth}" y="${bumper_width}"
+        z="${bumper_height}">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </xacro:box_inertia>
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>

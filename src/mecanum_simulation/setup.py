@@ -35,8 +35,15 @@ setup(
     zip_safe=True,
     maintainer='hegde-aryan',
     maintainer_email='claude.raseksha@gmail.com',
-    description='Gazebo simulation of the mecanum base: worlds, sim-only URDF additions and '
-                'the ros_gz bridge.',
+    description='Gazebo simulation of the mecanum base: worlds, sim-only URDF additions, '
+                'simulated sensors and the ros_gz bridge.',
     license='Apache-2.0',
     tests_require=['pytest'],
+    entry_points={
+        'console_scripts': [
+            'sim_bumper = mecanum_simulation.sim_bumper:main',
+            'sim_depth_cloud = mecanum_simulation.sim_depth_cloud:main',
+            'sim_range_sensor = mecanum_simulation.sim_range_sensor:main',
+        ],
+    },
 )

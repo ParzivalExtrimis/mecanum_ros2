@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Gazebo simulation of the mecanum base: world, sim-only URDF additions, simulated ESP32."""
+"""Gazebo simulation of the mecanum base: sim-only sensor nodes."""

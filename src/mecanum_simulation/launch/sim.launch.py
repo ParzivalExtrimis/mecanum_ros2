@@ -19,6 +19,12 @@ Starts: Gazebo (gz sim), robot_state_publisher (sim xacro), the spawner, ros_gz_
 once the robot is spawned, the controllers (mecanum_controllers/controllers.launch.py):
 joint_state_broadcaster publishes /joint_states and mecanum_drive_controller takes
 TwistStamped on /cmd_vel and publishes /wheel/odometry and odom -> base_footprint.
+
+Sensors: each use_<sensor> argument takes a sensor out of the model. Its nodes stay down and its
+bridge entries wait for a Gazebo topic that never appears. The ultrasonic, cliff ToF and bumper
+topics and the D435i cloud come from the sim-only nodes sim_range_sensor, sim_bumper and
+sim_depth_cloud. These three stay off the simulation clock on purpose: they copy the stamps of
+their input or have none, and a Python node on /clock (500 Hz) takes half a core.
 """
 
 import os
@@ -35,6 +41,17 @@ from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
 
+# Xacro arguments of mecanum_description, with what each one leaves out when false.
+SENSORS = {
+    'use_l2': 'the Unitree L2',
+    'use_d435i': 'the RealSense D435i',
+    'use_lidar_2d': 'the RPLIDAR C1',
+    'use_ultrasonics': 'the four ultrasonics',
+    'use_cliff_tof': 'the four cliff ToF sensors',
+    'use_bumpers': 'the bumper planks',
+}
+
+
 def generate_launch_description():
     sim_share = get_package_share_directory('mecanum_simulation')
     desc_share = get_package_share_directory('mecanum_description')
@@ -44,12 +61,20 @@ def generate_launch_description():
 
     world = LaunchConfiguration('world')
     gui = LaunchConfiguration('gui')
-    use_l2 = LaunchConfiguration('use_l2')
+    xacro_command = ['xacro ', os.path.join(sim_share, 'urdf', 'mecanum_sim.urdf.xacro')]
+    for sensor in SENSORS:
+        xacro_command += [f' {sensor}:=', LaunchConfiguration(sensor)]
+    robot_description = ParameterValue(Command(xacro_command), value_type=str)
+    range_config = os.path.join(sim_share, 'config', 'sim_range_sensors.yaml')
 
-    robot_description = ParameterValue(
-        Command(['xacro ', os.path.join(sim_share, 'urdf', 'mecanum_sim.urdf.xacro'),
-                 ' use_l2:=', use_l2]),
-        value_type=str)
+    def range_sensor(name, sensor):
+        return Node(
+            package='mecanum_simulation',
+            executable='sim_range_sensor',
+            name=name,
+            output='screen',
+            parameters=[range_config],
+            condition=IfCondition(LaunchConfiguration(sensor)))
 
     def gazebo(extra_args, condition):
         return IncludeLaunchDescription(
@@ -76,8 +101,9 @@ def generate_launch_description():
         DeclareLaunchArgument('x', default_value='0.0', description='Spawn x (m)'),
         DeclareLaunchArgument('y', default_value='-1.0', description='Spawn y (m)'),
         DeclareLaunchArgument('yaw', default_value='0.0', description='Spawn yaw (rad)'),
-        DeclareLaunchArgument('use_l2', default_value='true',
-                              description='Include the Unitree L2 in the robot model'),
+        *[DeclareLaunchArgument(sensor, default_value='true',
+                                description=f'Include {what} in the robot model')
+          for sensor, what in SENSORS.items()],
 
         # Lets Gazebo resolve package://mecanum_description/... mesh URIs without changing
         # mecanum_description's package.xml.
@@ -108,4 +134,16 @@ def generate_launch_description():
             parameters=[{'config_file': os.path.join(sim_share, 'config', 'gz_bridge.yaml'),
                          'use_sim_time': True}],
         ),
+        Node(
+            package='mecanum_simulation',
+            executable='sim_depth_cloud',
+            output='screen',
+            condition=IfCondition(LaunchConfiguration('use_d435i'))),
+        range_sensor('sim_ultrasonics', 'use_ultrasonics'),
+        range_sensor('sim_cliff_tof', 'use_cliff_tof'),
+        Node(
+            package='mecanum_simulation',
+            executable='sim_bumper',
+            output='screen',
+            condition=IfCondition(LaunchConfiguration('use_bumpers'))),
     ])
