@@ -336,7 +336,60 @@ The plan as written:
   - the sim real-time factor and CPU load with every sensor on. Record them; they bound the
     later phases.
 
-## Phase 3: state estimation
+## Phase 3: state estimation (measured 2026-11-02, decision D1 pending)
+
+- **EKF:** `ekf.launch.py` runs `config/ekf.yaml` (E1), which owns `/odom` and
+  `odom → base_footprint` in simulation; `robot.launch.py` has an `ekf` argument.
+  `mecanum_drive_controller` now has `enable_odom_tf: false`. The hardware path is unchanged.
+- **Tool:** `odom_eval.launch.py` runs beside `robot.launch.py` and measures every candidate on
+  one motion, each with its own `gt_compare`. E3 was measured two ways, E3a (LIO's twist) and
+  E3b (LIO's pose as a differential).
+- **Measured** (headless, all sensors on, 2026-11-02). Two runs of each test, worst of the two,
+  as maximum position error / maximum yaw error:
+
+  | Candidate | Loop, 24.6 m | Restroom corridor, 8 m | Long corridor, 40 m | Along the long corridor, max |
+  |---|---|---|---|---|
+  | E0 wheels | 0.098 m / 0.82° | 0.002 m / 0.00° | 0.002 m / 0.00° | 0.002 m |
+  | E1 wheels + L2 gyro | 0.088 m / 0.20° | 0.003 m / 0.08° | 0.042 m / 0.26° | 0.001 m |
+  | E2 E1 + D435i gyro | 0.087 m / 0.18° | 0.003 m / 0.08° | 0.026 m / 0.13° | 0.001 m |
+  | E3a E1 + LIO twist | 0.079 m / 0.22° | 0.007 m / 0.08° | 0.702 m / 0.25° | 0.702 m |
+  | E3b E1 + LIO pose | 0.074 m / 0.20° | 0.014 m / 0.08° | 1.525 m / 0.25°: FAIL | 1.525 m |
+  | LIO alone | 0.119 m / 1.69° | 0.106 m / 1.41° | 20.01 m: FAIL | 20.01 m |
+
+  | Other checks | Result |
+  |---|---|
+  | `odom → base_footprint` while driving | 50.1 Hz with one parent, equal to `/odom` at every stamp: one publisher |
+  | `/odom` | 50.1 Hz, `odom` → `base_footprint` |
+  | `motion_test` | forward 99%, strafe 98%: PASS. Rotate 98%, translation 5.6 cm: FAIL, as in Phase 2 |
+  | `tools/sensor_check.py` | 0 failures |
+  | `colcon test` | 236 tests, 0 failures, 8 skipped |
+  | EKF CPU | 12 to 14% of a core |
+  | Real-time factor | 0.95 restroom and 0.96 sensor test world, with the test tools running. 0.91 to 0.95 in `odom_eval`, with four filters |
+
+- **LIO cannot be trusted in a long corridor.** On the upright L2 it reports no motion at all
+  along the 70 m corridor: it stays near the origin for the whole 40 m run and ends right only
+  because the run returns to its start. As an EKF input it pulls the estimate back by 0.7 to
+  1.5 m at the far end. On the loop it helps a little: 10 to 16% lower maximum error, below the
+  margin of 25% used for D1.
+- **"The EKF beats each input alone" holds only in part.** On the loop E1 beats the wheels and
+  LIO on position and yaw, and cuts the yaw error by three quarters. On the corridors the wheels
+  alone are better on position, because they run straight and ideal in simulation (shortcut S2),
+  while the gyro's noise adds a small heading error. Real wheels will not be this good.
+- **E2's gain is small,** and it comes from averaging two identical stand-in noise models.
+- **The wheel covariances were not changed.** The loop's residuals are far smaller than the
+  stand-ins (variance vx 5.6e-6, vy 5.3e-5, wz 1.9e-5), but they describe ideal simulated wheels.
+  A wz variance that small would also let the wheels' yaw rate pull against the gyro.
+- **The real L2 gyro has no visible bias at rest.** In the 47 minute static bag its mean is about
+  1e-6 rad/s, so the simulated gyro's zero bias is not optimistic while still. Its behaviour in
+  slow rotation is not known. The real driver publishes zero covariance, which
+  robot_localization takes as 1e-9.
+- **A clock that jumps back kills rko_lio.** With two bridges on `/clock`, which is what an
+  earlier run's survivors caused, it aborted with "ICP found no correspondences". The launch and
+  its nodes must be gone before the next simulation starts.
+- **Decision D1 waits for the owner.** **Recommendation:** E1 as the default, as planned. Keep LIO
+  out of the EKF, and turn it off by default (`lio:=false`), since it adds no safe gain here.
+
+The plan as written:
 
 - **EKF:** robot_localization `ekf_node`, `mecanum_localization/config/ekf.yaml`:
   - `two_d_mode: true`, 50 Hz, `world_frame: odom`, `base_link_frame: base_footprint`;

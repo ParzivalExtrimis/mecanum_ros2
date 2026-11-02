@@ -1,0 +1,55 @@
+# Candidate E3a: E1 (ekf.yaml) + LIO's twist. No TF: it runs beside E1 in odom_eval.launch.py.
+/**:
+  ros__parameters:
+    frequency: 50.0
+    # After this long with no input the filter only predicts; two wheel-odometry periods.
+    sensor_timeout: 0.04
+    two_d_mode: true
+    publish_tf: false
+    print_diagnostics: true
+
+    # REP-105. There is no map input here, so the world frame is odom.
+    odom_frame: odom
+    base_link_frame: base_footprint
+    world_frame: odom
+
+    # Order of every *_config vector:
+    #   x     y     z
+    #   roll  pitch yaw
+    #   vx    vy    vz
+    #   vroll vpitch vyaw
+    #   ax    ay    az
+    odom0: /wheel/odometry
+    odom0_config: [false, false, false,
+                   false, false, false,
+                   true,  true,  false,
+                   false, false, true,
+                   false, false, false]
+    odom0_queue_size: 5
+
+    imu0: /l2/imu
+    imu0_config: [false, false, false,
+                  false, false, false,
+                  false, false, false,
+                  false, false, true,
+                  false, false, false]
+    # 250 Hz into a 50 Hz filter: the queue must hold more than the 5 samples per cycle.
+    imu0_queue_size: 20
+
+    # LIO's twist at the L2's 5.55 Hz; variances in lio_odom_adapter (STAND-IN).
+    odom1: /lio/odom
+    odom1_config: [false, false, false,
+                   false, false, false,
+                   true,  true,  false,
+                   false, false, true,
+                   false, false, false]
+    odom1_queue_size: 5
+
+    # STAND-IN: the installed example's diagonal, in the state order above. Only the ratio to the
+    # input covariances matters, and with twist-only inputs the pose follows the integrated twist
+    # whatever these are.
+    process_noise_covariance: [0.05, 0.05, 0.06,
+                               0.03, 0.03, 0.06,
+                               0.025, 0.025, 0.04,
+                               0.01, 0.01, 0.02,
+                               0.01, 0.01, 0.015]

@@ -16,8 +16,10 @@
 Bring up the robot: simulation (default) or hardware, plus the drive.
 
 sim:=true   Gazebo world + robot + ros2_control (mecanum_simulation/sim.launch.py), all on
-            sim time. mecanum_drive_controller takes TwistStamped on /cmd_vel and owns
-            odom -> base_footprint from the measured wheel states (/wheel/odometry).
+            sim time. mecanum_drive_controller takes TwistStamped on /cmd_vel and publishes
+            /wheel/odometry from the measured wheel states. The EKF
+            (mecanum_localization/ekf.launch.py) fuses that with the L2 gyro and owns /odom and
+            odom -> base_footprint; with ekf:=false nothing publishes that transform.
 sim:=false  robot_state_publisher + joint_state_publisher (zero wheel angles) and the
             open-loop esp32_driver with the esp32 transport. The real transport is not
             implemented until the rewritten firmware's protocol exists; the driver then exits
@@ -26,7 +28,7 @@ Both        L2 perception (mecanum_localization/perception.launch.py): the self-
             /l2/points -> /l2/points_filtered. With use_l2_scan:=true also cloud-to-scan, on
             /l2/scan; /scan is the 2D lidar's.
             LIO odometry (mecanum_localization/lio.launch.py, lio:=true): rko_lio and the
-            adapter. In sim it publishes /lio/odom only, with no TF (wheel odometry owns it);
+            adapter. In sim it publishes /lio/odom only, with no TF (the EKF owns it);
             on hardware, with no wheel odometry, /odom and odom -> base_footprint. Its config
             is for simulation; the hardware LIO config is in hardware_sensors.launch.py.
 """
@@ -35,7 +37,7 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import (
@@ -63,8 +65,8 @@ def generate_launch_description():
 
     sim = LaunchConfiguration('sim')
     rviz = LaunchConfiguration('rviz')
-    # Wheel odometry owns odom -> base_footprint in sim; LIO only on hardware (no encoders
-    # read by the open-loop driver).
+    # The EKF owns odom -> base_footprint in sim; LIO only on hardware (no encoders read by the
+    # open-loop driver).
     lio_odom_topic = PythonExpression(["'/lio/odom' if '", sim, "' == 'true' else '/odom'"])
     lio_publish_tf = PythonExpression(["'false' if '", sim, "' == 'true' else 'true'"])
 
@@ -104,6 +106,9 @@ def generate_launch_description():
                               description='Also make a 2D scan from the L2 cloud, on /l2/scan'),
         DeclareLaunchArgument('lio', default_value='true',
                               description='Run LIO odometry (needs use_l2)'),
+        DeclareLaunchArgument('ekf', default_value='true',
+                              description='Run the EKF (sim only). False leaves '
+                              'odom -> base_footprint unpublished'),
 
         sim_launch,
 
@@ -126,8 +131,17 @@ def generate_launch_description():
                               'use_l2_scan': LaunchConfiguration('use_l2_scan')}.items(),
             condition=IfCondition(LaunchConfiguration('use_l2'))),
 
-        # LIO odometry. In sim an evaluation input on /lio/odom (an EKF input from
-        # docs/plan.md Phase 3); on hardware the source of odom -> base_footprint.
+        # The EKF, which owns odom -> base_footprint in sim. Scoped: an include's arguments leak
+        # into this scope, and the LIO include below has an odom_topic of its own.
+        GroupAction(
+            scoped=True,
+            condition=IfCondition(AndSubstitution(sim, LaunchConfiguration('ekf'))),
+            actions=[IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(os.path.join(loc_share, 'launch', 'ekf.launch.py')),
+                launch_arguments={'use_sim_time': sim}.items())]),
+
+        # LIO odometry. In sim an evaluation input on /lio/odom (an optional EKF input, see
+        # odom_eval.launch.py); on hardware the source of odom -> base_footprint.
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(loc_share, 'launch', 'lio.launch.py')),
             launch_arguments={'use_sim_time': sim, 'odom_topic': lio_odom_topic,

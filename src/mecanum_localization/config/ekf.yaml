@@ -1,0 +1,60 @@
+# robot_localization EKF, candidate E1 and the default: wheel odometry + the L2 gyro.
+# It owns odom -> base_footprint and publishes /odom (docs/plan.md, Phase 3).
+#
+# The other candidates are ekf_e2.yaml, ekf_e3a.yaml and ekf_e3b.yaml: this file plus one input,
+# with publish_tf false, for tools that compare them in one run (launch/odom_eval.launch.py).
+#
+# The state's vx and vy come only from the wheels, so this filter's position is wheel integration
+# with the gyro's heading. It takes twist only, never the wheels' pose: the wheel pose is the
+# integral of the same data and would count it twice.
+#
+# Input weights come from the messages' covariances:
+#   /wheel/odometry  wz variance 0.002 (controllers.yaml), a STAND-IN.
+#   /l2/imu          sim: 4e-6, the bridge's value for the simulated noise. The real driver
+#                    publishes zero (unknown, REP 145), and robot_localization then uses 1e-9.
+# So the gyro sets the yaw rate, and the wheels' yaw rate is what remains if the gyro stops.
+/**:
+  ros__parameters:
+    frequency: 50.0
+    # After this long with no input the filter only predicts; two wheel-odometry periods.
+    sensor_timeout: 0.04
+    two_d_mode: true
+    publish_tf: true
+    print_diagnostics: true
+
+    # REP-105. There is no map input here, so the world frame is odom.
+    odom_frame: odom
+    base_link_frame: base_footprint
+    world_frame: odom
+
+    # Order of every *_config vector:
+    #   x     y     z
+    #   roll  pitch yaw
+    #   vx    vy    vz
+    #   vroll vpitch vyaw
+    #   ax    ay    az
+    odom0: /wheel/odometry
+    odom0_config: [false, false, false,
+                   false, false, false,
+                   true,  true,  false,
+                   false, false, true,
+                   false, false, false]
+    odom0_queue_size: 5
+
+    imu0: /l2/imu
+    imu0_config: [false, false, false,
+                  false, false, false,
+                  false, false, false,
+                  false, false, true,
+                  false, false, false]
+    # 250 Hz into a 50 Hz filter: the queue must hold more than the 5 samples per cycle.
+    imu0_queue_size: 20
+
+    # STAND-IN: the installed example's diagonal, in the state order above. Only the ratio to the
+    # input covariances matters, and with twist-only inputs the pose follows the integrated twist
+    # whatever these are.
+    process_noise_covariance: [0.05, 0.05, 0.06,
+                               0.03, 0.03, 0.06,
+                               0.025, 0.025, 0.04,
+                               0.01, 0.01, 0.02,
+                               0.01, 0.01, 0.015]

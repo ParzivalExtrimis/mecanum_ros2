@@ -23,7 +23,7 @@ hardware:=mock  Also robot_state_publisher on urdf/mecanum_mock.urdf.xacro and
 The drive controller's topics are remapped to the command and odometry contract:
     ~/reference     <- /cmd_vel           (geometry_msgs/TwistStamped)
     ~/odometry      -> /wheel/odometry    (nav_msgs/Odometry, from measured wheel states)
-    ~/tf_odometry   -> /tf                (odom -> base_footprint)
+    ~/tf_odometry   -> /tf                (unused: enable_odom_tf is false, the EKF owns the TF)
 """
 
 import os
