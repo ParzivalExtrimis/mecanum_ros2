@@ -53,7 +53,7 @@ Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
 | `mecanum_controllers` | done, Phase 1 | ros2_control xacro (mock or Gazebo hardware), `mecanum_drive_controller` and `joint_state_broadcaster` config, mock kinematics test |
 | `mecanum_interfaces` | messages done; safety and mission interfaces in Phases 4 and 7 | Motor command and debug messages, plus safety, task and mission interfaces later |
 | `mecanum_lidar` | driver done, hardware test paused | Unitree L2 driver (`/l2/points`, `/l2/imu`, no TF) on the vendored SDK, bench-test launch, RViz config |
-| `mecanum_localization` | self-filter, cloud-to-scan, LIO pipeline done; EKF and SLAM in Phases 3 and 5 | Self-filter, cloud-to-scan, LIO and its odom adapter, EKF, slam_toolbox, AMCL |
+| `mecanum_localization` | self-filter, cloud-to-scan, LIO pipeline and EKF done; SLAM in Phase 5 | Self-filter, cloud-to-scan, LIO and its odom adapter, EKF, slam_toolbox, AMCL |
 | `mecanum_safety` | planned, Phase 4 | Safety supervisor: cliffs, bumpers, E-stop, sensor loss |
 | `mecanum_navigation` | planned, Phase 6 | Nav2 parameters, collision monitor, docking, keepout mask, maps |
 | `mecanum_mission` | planned, Phase 7 | Mission executive and placeholder task server |
@@ -84,7 +84,7 @@ map -> odom -> base_footprint -> base_link -> {chassis_link, wheels, l2_mount ->
 | Transform | Publisher |
 |---|---|
 | `map -> odom` | AMCL or slam_toolbox, never both (plan Phase 5 onward) |
-| `odom -> base_footprint` | sim: `mecanum_drive_controller` from the measured wheel states; hardware: the LIO odom adapter; the EKF from plan Phase 3 |
+| `odom -> base_footprint` | sim: the EKF (plan Phase 3); hardware: the LIO odom adapter |
 | `base_footprint` and below | robot_state_publisher from the URDF |
 
 In simulation `joint_state_broadcaster` publishes the measured wheel angles. On hardware,

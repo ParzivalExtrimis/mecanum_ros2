@@ -18,7 +18,7 @@ physics. These are ideal encoders, with no noise or quantization (shortcut S2 in
   -> gz_ros2_control (GazeboSimSystem, inside Gazebo)
   -> wheel joint velocities -> anisotropic roller friction -> the chassis moves
   -> measured wheel states -> joint_state_broadcaster -> /joint_states
-                           -> mecanum_drive_controller -> /wheel/odometry, odom -> base_footprint
+                           -> mecanum_drive_controller -> /wheel/odometry
 
 gz OdometryPublisher -> /sim/ground_truth/odom   evaluation only, never TF or /odom
 ```

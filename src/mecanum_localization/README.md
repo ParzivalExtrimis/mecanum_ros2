@@ -24,13 +24,16 @@ It uses upstream nodes where they exist. Topics are identical with the real L2 d
   -> lio_odom_adapter keep x, y, yaw; start at the origin
 /lio/odom (sim)       Odometry, odom -> base_footprint, no TF
 /odom (hardware)      Odometry, plus the TF odom -> base_footprint
+
+/wheel/odometry + /l2/imu
+  -> ekf              robot_localization, simulation only
+/odom (sim)           Odometry, plus the TF odom -> base_footprint
 ```
 
-TF ownership: in simulation, `mecanum_drive_controller` publishes `odom -> base_footprint`
-from the measured wheel states (`/wheel/odometry`), and `robot.launch.py` runs the adapter
-with `publish_tf:=false` on `/lio/odom`. On hardware, where the open-loop driver reads no
-encoders, the adapter publishes `/odom` and the TF (the `lio.launch.py` defaults). From plan
-Phase 3 the EKF owns `odom -> base_footprint`. rko_lio has no switch to turn its TF off, so
+TF ownership: in simulation the EKF publishes `odom -> base_footprint`, and `robot.launch.py`
+runs the adapter with `publish_tf:=false` on `/lio/odom`. On hardware, where the open-loop
+driver reads no encoders, the adapter publishes `/odom` and the TF (the `lio.launch.py`
+defaults). rko_lio has no switch to turn its TF off, so
 `lio.launch.py` remaps its `/tf` to `/lio/tf_unused`; `lio_odom` never appears in the TF tree.
 Wheel commands are never odometry.
 
@@ -99,6 +102,39 @@ config and no remappings.
 - At start-up rko_lio logs a few "TF lookup error ... from_frame" warnings until the first
   messages arrive. They are harmless.
 
+## EKF: `config/ekf.yaml`
+
+`ekf.launch.py` runs robot_localization's `ekf_node`, which `robot.launch.py` starts in
+simulation (`ekf:=false` turns it off, and then nothing publishes `odom -> base_footprint`).
+
+| Input | Fields used | Why |
+|---|---|---|
+| `/wheel/odometry` | vx, vy, wz | The wheels' pose is the integral of the same data, so it is not used |
+| `/l2/imu` | yaw rate | Variance 4e-6 against the wheels' 0.002, so it sets the yaw rate. The wheels' yaw rate is what remains if the gyro stops |
+
+Because vx and vy come only from the wheels, the filter's position is wheel integration with
+the gyro's heading.
+
+The real L2 driver publishes zero IMU covariance (unknown, REP 145). robot_localization would
+take that as 1e-9, which gives the same weighting. The real gyro's mean was about 1e-6 rad/s
+over 47 minutes at rest, so the firmware appears to remove the bias; how it behaves during slow
+rotation is not known.
+
+`config/ekf_e2.yaml`, `ekf_e3a.yaml` and `ekf_e3b.yaml` are the candidates of plan Phase 3: this
+file plus the D435i gyro, LIO's twist or LIO's pose as a differential, each with no TF.
+`odom_eval.launch.py` runs them beside `robot.launch.py` and measures them all on one motion:
+
+```bash
+ros2 launch mecanum_bringup robot.launch.py gui:=false
+ros2 launch mecanum_localization odom_eval.launch.py output_dir:=/tmp/eval \
+  pattern:=loop laps:=2
+```
+
+It writes `e0`, `e1`, `e2`, `e3a`, `e3b` and `lio` CSV files to `output_dir`, which must exist,
+and each `gt_compare` prints its final report when the motion ends. The launch reports
+`gt_compare` as died for any candidate that failed its targets: that is its exit code 1.
+The results are in `docs/plan.md`, Phase 3.
+
 ## Odometry adapter: `lio_odom_adapter`
 
 Flattens rko_lio's 3D pose to x, y and yaw, makes the first pose the origin, and publishes
@@ -107,7 +143,7 @@ Flattens rko_lio's 3D pose to x, y and yaw, makes the first pose the origin, and
 | Parameter | Default | Meaning |
 |---|---|---|
 | `input_topic` | `/lio/raw_odom` | rko_lio odometry |
-| `odom_topic` | `/odom` | Output; `/lio/odom` once an EKF fuses it (`docs/encoder_upgrade.md`) |
+| `odom_topic` | `/odom` | Output; `/lio/odom` in simulation |
 | `publish_tf` | `true` | Publish `odom -> base_footprint`; `false` hands the TF to the EKF |
 | `odom_frame`, `base_frame` | `odom`, `base_footprint` | Output frames |
 | `pose_covariance_diagonal` | x, y 0.0025; yaw 0.0012; z, roll, pitch 1e6 | Stand-in |
@@ -124,7 +160,7 @@ relative to the first estimate. It reports the path length, final and maximum po
 `report_period` seconds and on exit (`duration`, or Ctrl-C / SIGTERM). The run passes when the
 final and the maximum position error are under `max_drift_percent` (2%) of the path, the yaw
 error is under `max_yaw_error_deg` (2°), and there are no jumps. Both targets are stand-ins.
-`csv_path` writes the paired trajectory.
+`csv_path` writes the paired trajectory and twists.
 
 ```bash
 ros2 launch mecanum_bringup robot.launch.py gui:=false
@@ -136,7 +172,8 @@ ros2 launch mecanum_base motion_test.launch.py use_sim_time:=true pattern:=loop 
 
 With the model v2 on ros2_control (2026-10-28, restroom `loop`, 2 laps, 24.6 m): wheel
 odometry final 0.03 m, max 0.096 m (0.39%), yaw max 0.73°; LIO on the upright L2 final
-0.005 m, max 0.056 m (0.23%), yaw max 1.35°. Both pass. The corridor world was not re-run.
+0.005 m, max 0.056 m (0.23%), yaw max 1.35°. Both pass. On the 40 m run in the corridor world
+LIO reports no motion (max error 20 m); see `docs/plan.md`, Phase 3.
 
 ## LIO results with the previous robot model (2026-10-15): targets not met
 

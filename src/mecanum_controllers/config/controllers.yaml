@@ -5,7 +5,6 @@
 # Topics, remapped in launch/controllers.launch.py:
 #   /cmd_vel           geometry_msgs/TwistStamped in base_footprint, the reference
 #   /wheel/odometry    nav_msgs/Odometry from the measured wheel states
-#   /tf                odom -> base_footprint (enable_odom_tf, until the EKF in Phase 3)
 #   /joint_states      from joint_state_broadcaster
 controller_manager:
   ros__parameters:
@@ -42,9 +41,9 @@ mecanum_drive_controller:
 
     odom_frame_id: odom
     base_frame_id: base_footprint
-    # Wheel odometry owns odom -> base_footprint until the EKF takes it over (docs/plan.md
-    # Phase 3), which sets this to false.
-    enable_odom_tf: true
+    # The EKF owns odom -> base_footprint (mecanum_localization/config/ekf.yaml); this controller
+    # only publishes /wheel/odometry, the EKF's main input.
+    enable_odom_tf: false
 
     # STAND-IN: speed limits, as max_vx / max_vy / max_wz of esp32_driver; raise them once
     # stopping and tracking are shown to be good. min_velocity is the negative bound.

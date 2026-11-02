@@ -25,7 +25,6 @@ starts `controllers.launch.py` once the robot is spawned. The ESP32 hardware plu
 |---|---|---|---|
 | `/cmd_vel` | `geometry_msgs/TwistStamped` | in | The drive controller's `~/reference`. All velocity sources publish here; from plan Phase 4 the safety gate sits in between. |
 | `/wheel/odometry` | `nav_msgs/Odometry` | out | From the measured wheel states, `odom` → `base_footprint` |
-| `/tf` | `odom → base_footprint` | out | `enable_odom_tf: true` until the EKF takes it over in plan Phase 3 |
 | `/joint_states` | `sensor_msgs/JointState` | out | From `joint_state_broadcaster`, 50 Hz |
 
 The controller applies the speed limits in `controllers.yaml` (0.3 m/s, 0.3 m/s, 0.8 rad/s,

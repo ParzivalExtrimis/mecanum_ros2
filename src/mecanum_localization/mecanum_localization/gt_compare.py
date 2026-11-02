@@ -132,7 +132,8 @@ class DriftTracker:
         if est_twist is not None and gt_twist is not None:
             for k in range(3):
                 self._sum_twist_error[k] += abs(est_twist[k] - gt_twist[k])
-        self.rows.append((t, *est, *gt))
+        self.rows.append((t, *est, *gt, *(est_twist or (math.nan,) * 3),
+                          *(gt_twist or (math.nan,) * 3)))
 
     @property
     def drift_percent(self):
@@ -261,7 +262,8 @@ class GtCompare(Node):
         if not path:
             return
         with open(path, 'w') as f:
-            f.write('t,est_x,est_y,est_yaw,gt_x,gt_y,gt_yaw\n')
+            f.write('t,est_x,est_y,est_yaw,gt_x,gt_y,gt_yaw,'
+                    'est_vx,est_vy,est_wz,gt_vx,gt_vy,gt_wz\n')
             for row in self.tracker.rows:
                 f.write(','.join(f'{v:.6f}' for v in row) + '\n')
 

@@ -18,7 +18,8 @@ Start Gazebo with the restroom world and spawn the mecanum base.
 Starts: Gazebo (gz sim), robot_state_publisher (sim xacro), the spawner, ros_gz_bridge and,
 once the robot is spawned, the controllers (mecanum_controllers/controllers.launch.py):
 joint_state_broadcaster publishes /joint_states and mecanum_drive_controller takes
-TwistStamped on /cmd_vel and publishes /wheel/odometry and odom -> base_footprint.
+TwistStamped on /cmd_vel and publishes /wheel/odometry. odom -> base_footprint is the EKF's
+(mecanum_bringup/robot.launch.py).
 
 Sensors: each use_<sensor> argument takes a sensor out of the model. Its nodes stay down and its
 bridge entries wait for a Gazebo topic that never appears. The ultrasonic, cliff ToF and bumper
