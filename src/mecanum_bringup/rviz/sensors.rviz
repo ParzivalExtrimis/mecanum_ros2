@@ -120,7 +120,7 @@ Visualization Manager:
     Value: true
   - Class: rviz_default_plugins/LaserScan
     Enabled: true
-    Name: Scan (/scan)
+    Name: 2D scan (/scan)
     Value: true
     Size (m): 0.04
     Style: Flat Squares
@@ -135,6 +135,166 @@ Visualization Manager:
       History Policy: Keep Last
       Reliability Policy: Best Effort
       Value: /scan
+  - Alpha: 1
+    Autocompute Intensity Bounds: true
+    Autocompute Value Bounds:
+      Max Value: 2
+      Min Value: 0
+      Value: true
+    Axis: Z
+    Channel Name: intensity
+    Class: rviz_default_plugins/PointCloud2
+    Color: 255; 255; 255
+    Color Transformer: AxisColor
+    Decay Time: 0
+    Enabled: true
+    Invert Rainbow: false
+    Max Color: 255; 255; 255
+    Max Intensity: 255
+    Min Color: 0; 0; 0
+    Min Intensity: 0
+    Name: D435i cloud (/d435i/depth/color/points)
+    Position Transformer: XYZ
+    Selectable: true
+    Size (Pixels): 2
+    Size (m): 0.019999999552965164
+    Style: Points
+    Topic:
+      Depth: 1
+      Durability Policy: Volatile
+      Filter size: 10
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /d435i/depth/color/points
+    Use Fixed Frame: true
+    Use rainbow: true
+    Value: true
+  - Class: rviz_default_plugins/Image
+    Enabled: false
+    Max Value: 1
+    Median window: 5
+    Min Value: 0
+    Name: D435i colour (/d435i/color/image_raw)
+    Normalize Range: true
+    Topic:
+      Depth: 1
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /d435i/color/image_raw
+    Value: false
+  - Alpha: 0.5
+    Buffer Length: 1
+    Class: rviz_default_plugins/Range
+    Color: 204; 136; 0
+    Enabled: true
+    Name: Ultrasonic front left
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      Filter size: 10
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /ultrasonic/front_left
+    Value: true
+  - Alpha: 0.5
+    Buffer Length: 1
+    Class: rviz_default_plugins/Range
+    Color: 204; 136; 0
+    Enabled: true
+    Name: Ultrasonic front right
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      Filter size: 10
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /ultrasonic/front_right
+    Value: true
+  - Alpha: 0.5
+    Buffer Length: 1
+    Class: rviz_default_plugins/Range
+    Color: 204; 136; 0
+    Enabled: true
+    Name: Ultrasonic rear left
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      Filter size: 10
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /ultrasonic/rear_left
+    Value: true
+  - Alpha: 0.5
+    Buffer Length: 1
+    Class: rviz_default_plugins/Range
+    Color: 204; 136; 0
+    Enabled: true
+    Name: Ultrasonic rear right
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      Filter size: 10
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /ultrasonic/rear_right
+    Value: true
+  - Alpha: 0.5
+    Buffer Length: 1
+    Class: rviz_default_plugins/Range
+    Color: 52; 152; 219
+    Enabled: true
+    Name: Cliff front left
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      Filter size: 10
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /cliff/front_left
+    Value: true
+  - Alpha: 0.5
+    Buffer Length: 1
+    Class: rviz_default_plugins/Range
+    Color: 52; 152; 219
+    Enabled: true
+    Name: Cliff front right
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      Filter size: 10
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /cliff/front_right
+    Value: true
+  - Alpha: 0.5
+    Buffer Length: 1
+    Class: rviz_default_plugins/Range
+    Color: 52; 152; 219
+    Enabled: true
+    Name: Cliff rear left
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      Filter size: 10
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /cliff/rear_left
+    Value: true
+  - Alpha: 0.5
+    Buffer Length: 1
+    Class: rviz_default_plugins/Range
+    Color: 52; 152; 219
+    Enabled: true
+    Name: Cliff rear right
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      Filter size: 10
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /cliff/rear_right
+    Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48

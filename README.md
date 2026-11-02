@@ -48,7 +48,7 @@ Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
 | Package | Status | Responsibility |
 |---|---|---|
 | `mecanum_description` | done: model v2 with all sensor frames (plan Phase 0) | URDF/xacro, reference URDF, test display launch |
-| `mecanum_simulation` | ros2_control drive and L2 done; the other sensors in Phase 2 | Gazebo worlds, sim-only xacro (mecanum friction, sensors, ground truth), bridge |
+| `mecanum_simulation` | done: ros2_control drive and the sensor suite (plan Phase 2) | Gazebo worlds, sim-only xacro (mecanum friction, sensors, ground truth), bridge, sim-only sensor nodes |
 | `mecanum_base` | done (open-loop driver, hardware path only) | ESP32 driver node, mecanum kinematics, motion test |
 | `mecanum_controllers` | done, Phase 1 | ros2_control xacro (mock or Gazebo hardware), `mecanum_drive_controller` and `joint_state_broadcaster` config, mock kinematics test |
 | `mecanum_interfaces` | messages done; safety and mission interfaces in Phases 4 and 7 | Motor command and debug messages, plus safety, task and mission interfaces later |
@@ -155,21 +155,28 @@ ros2 launch mecanum_base motion_test.launch.py use_sim_time:=true \
   measure_odom_topic:=/sim/ground_truth/odom
 ```
 
-### Simulation: L2 sensor and perception
+### Simulation: sensors and perception
 
-`robot.launch.py` also starts the simulated L2 and the perception pipeline. The topics are the
-same as with the real driver:
+`robot.launch.py` also starts the simulated sensors and the L2 perception pipeline. The topics
+are those of the plan's sensor contract:
 
 | Topic | Content |
 |---|---|
 | `/l2/points` | Raw cloud, one full sweep at 5.55 Hz |
 | `/l2/imu` | IMU at 250 Hz |
 | `/l2/points_filtered` | Cloud without the robot body |
-| `/scan` | 2D scan from the 0.10 to 0.50 m band of the L2 cloud (until the 2D lidar arrives in plan Phase 2) |
+| `/scan` | RPLIDAR C1 at 10 Hz |
+| `/d435i/color/*`, `/d435i/depth/*`, `/d435i/imu` | D435i images, cloud and IMU |
+| `/ultrasonic/*`, `/cliff/*` | The four ultrasonics and the four cliff ToF sensors, `Range` |
+| `/bumper/front`, `/bumper/rear` | Bumper switches, `Bool` |
 
 ```bash
-ros2 launch mecanum_bringup robot.launch.py rviz:=true   # RViz shows clouds and scan
+ros2 launch mecanum_bringup robot.launch.py rviz:=true   # RViz shows the sensors
 ```
+
+`tools/sensor_check.py` checks the whole suite in the sensor test world: topics, frames, rates,
+that no sensor sees the robot, and which sensors see each test object. See
+`src/mecanum_simulation/README.md`.
 
 The L2 stands upright on the top of the robot, at 0.80 m, in wide mode (−6° to 90° elevation).
 It sees all around, but upward: the walls above the robot and the ceiling. It reaches low
@@ -228,7 +235,7 @@ the self-filter and the LIO pipeline; its paused hardware work is kept in
 |---|---|---|
 | 0 | Model v2 description from the reference URDF | done 2026-10-27 |
 | 1 | Drive on encoders: ros2_control in simulation | done 2026-10-28 |
-| 2 | Simulated sensor suite: 2D lidar, D435i, ultrasonics, cliff ToF, bumpers | |
+| 2 | Simulated sensor suite: 2D lidar, D435i, ultrasonics, cliff ToF, bumpers | done 2026-10-30 |
 | 3 | State estimation: EKF on wheel odometry and IMU; LIO re-evaluated | |
 | 4 | Safety layer: cliffs, bumpers, E-stop, sensor loss | |
 | 5 | Mapping with slam_toolbox on the 2D lidar | |

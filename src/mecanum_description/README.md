@@ -40,7 +40,7 @@ Where the two sources disagree, the reference URDF wins; its header lists every 
 | Overall extent, y | ±0.258 m (the wheels) |
 | Wheel radius, width | 0.1025 m, 0.085 m |
 | Wheel centres | x +0.2363 / −0.2357 m, y ±0.2150 m: lx = 0.2360 m, ly = 0.2150 m |
-| Mass | 31.23 kg: chassis 25 kg, wheels 1.5 kg each, L2 0.23 kg (all STAND-IN except the L2) |
+| Mass | 31.23 kg: chassis 24.8 kg, bumper planks 0.1 kg each, wheels 1.5 kg each, L2 0.23 kg (all STAND-IN except the L2) |
 
 ## Frames
 

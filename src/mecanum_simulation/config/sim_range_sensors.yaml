@@ -1,0 +1,19 @@
+# sim_range_sensor, one instance per sensor group (launch/sim.launch.py). The limits and the cone
+# width match the gpu_lidar cones in urdf/mecanum.gazebo.xacro; keep them in step.
+sim_ultrasonics:
+  ros__parameters:
+    cloud_prefix: /sim/ultrasonic
+    range_prefix: /ultrasonic
+    radiation_type: ultrasound
+    field_of_view: 1.047198   # 60 deg
+    min_range: 0.03           # DFRobot A02YYUW blind zone
+    max_range: 4.5
+
+sim_cliff_tof:
+  ros__parameters:
+    cloud_prefix: /sim/cliff
+    range_prefix: /cliff
+    radiation_type: infrared
+    field_of_view: 0.471239   # 27 deg, VL53L1X
+    min_range: 0.01
+    max_range: 4.0

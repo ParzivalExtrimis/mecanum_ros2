@@ -44,8 +44,10 @@
        z -0.0037..0.6344 (0.099..0.737 m above the floor). -->
   <!-- STAND-IN: no masses were supplied. 25 kg = frame, panels, battery, drive motors,
        electronics and sensors (except the L2's vendor mass), spread evenly over the envelope.
-       The real centre of mass is probably lower (battery, motors). Weigh the robot. -->
-  <xacro:property name="chassis_mass" value="25.0"/>
+       0.2 kg of it is in the two bumper planks (sensors/bumpers.xacro), hence 24.8 here; the
+       inertia below is still that of the 25 kg body. The real centre of mass is probably lower
+       (battery, motors). Weigh the robot. -->
+  <xacro:property name="chassis_mass" value="24.8"/>
   <xacro:property name="chassis_com_x" value="-0.065"/>
   <xacro:property name="chassis_com_z" value="0.2426"/>
   <xacro:property name="chassis_ixx" value="1.25341"/>

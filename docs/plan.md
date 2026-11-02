@@ -148,10 +148,10 @@ Topics and frames that the simulation provides and that hardware drivers must ma
 | `/l2/points` | `sensor_msgs/PointCloud2` | `l2_lidar` | 5.55 Hz | carried over |
 | `/l2/imu` | `sensor_msgs/Imu` | `l2_imu` | 250 Hz | carried over |
 | `/l2/points_filtered` | `sensor_msgs/PointCloud2` | `l2_lidar` | 5.55 Hz | carried over |
-| `/scan` | `sensor_msgs/LaserScan`, ±100° | `lidar_2d_link` | 10 Hz | 2 |
+| `/scan` | `sensor_msgs/LaserScan`, ±100° (sim: ±89.5°, the model has no slot) | `lidar_2d_link` | 10 Hz | 2 |
 | `/d435i/color/image_raw`, `/d435i/color/camera_info` | `sensor_msgs/Image`, `CameraInfo` | `d435i_optical_frame` | 15 Hz (STAND-IN) | 2 |
 | `/d435i/depth/image_rect_raw`, `/d435i/depth/camera_info` | `sensor_msgs/Image`, `CameraInfo` | `d435i_optical_frame` | 15 Hz (STAND-IN) | 2 |
-| `/d435i/depth/color/points` | `sensor_msgs/PointCloud2` | `d435i_optical_frame` | 15 Hz (STAND-IN) | 2 |
+| `/d435i/depth/color/points` | `sensor_msgs/PointCloud2`; reliable QoS (see Phase 2). In sim x, y, z only, every second pixel. | `d435i_optical_frame` | 15 Hz (STAND-IN) | 2 |
 | `/d435i/imu` | `sensor_msgs/Imu` | `d435i_link` | 200 Hz | 2 |
 | `/ultrasonic/{front_left,front_right,rear_left,rear_right}` | `sensor_msgs/Range` (ULTRASOUND) | `ultrasonic_<pos>_link` | 10 Hz | 2 |
 | `/cliff/{front_left,front_right,rear_left,rear_right}` | `sensor_msgs/Range` (INFRARED) | `cliff_tof_<pos>_link` | 20 Hz | 2 |
@@ -162,7 +162,9 @@ Topics and frames that the simulation provides and that hardware drivers must ma
 | `/odom` | `nav_msgs/Odometry` (EKF) | `odom` → `base_footprint` | 50 Hz | 3 |
 | `/safety/state` | to be defined in Phase 4 (`mecanum_interfaces`) | — | 10 Hz | 4 |
 
-The frames come from `mecanum_description`. Gazebo-only topics live under `/sim/`.
+The frames come from `mecanum_description`. Gazebo-only topics live under `/sim/`, such as the
+inputs of the sim-only nodes (`/sim/ultrasonic/*`, `/sim/cliff/*`, `/sim/bumper/*`). `/l2/scan`,
+the L2's height band as a scan, is off by default, for comparison only, until Phase 8.
 
 ---
 
@@ -178,7 +180,7 @@ The frames come from `mecanum_description`. Gazebo-only topics live under `/sim/
   - `test_urdf_defaults.py` re-enabled.
 - **Every marker left by the model strip (commit 08310da) was resolved,** and its tracking
   list was deleted.
-- **The simulation still drives open-loop** (`sim_motor_plant`) until Phase 1.
+- **The simulation still drove open-loop** (`sim_motor_plant`) until Phase 1.
 
 ## Phase 1: drive on encoders (ros2_control in simulation) (done 2026-10-28)
 
@@ -230,7 +232,70 @@ The frames come from `mecanum_description`. Gazebo-only topics live under `/sim/
 - **The ESP32 hardware plugin (`mecanum_hardware`) is out of scope.** `mecanum_base`'s driver
   stays for the hardware path (`sim:=false`), with the `mock` and `esp32` transports.
 
-## Phase 2: simulated sensor suite
+## Phase 2: simulated sensor suite (done 2026-10-30)
+
+- **Sensors:** the 2D lidar, D435i with IMU, four ultrasonics, four cliff ToF sensors and two
+  bumpers are in `mecanum.gazebo.xacro`, on the URDF frames and the contract topics, each with
+  its `use_<sensor>` argument. The sim-only nodes are `sim_range_sensor`, `sim_bumper` and
+  `sim_depth_cloud`. The details and the Gazebo behaviours behind them are in
+  `src/mecanum_simulation/README.md`.
+- **`/scan` belongs to the 2D lidar.** The L2 band moved to `/l2/scan`, off by default
+  (`use_l2_scan:=true`), for comparison only. `hardware_sensors.launch.py` keeps it on `/scan`,
+  because there is no 2D lidar driver yet.
+- **Tool:** `tools/sensor_check.py` drives the robot through the stations of
+  `worlds/sensor_test.sdf` and checks the contract, the self view, every test object, the
+  cliffs and the bumpers.
+- **Changed from the plan below:**
+  - The 2D lidar covers ±89.5°, not ±100°. The sensor stands 0.7 mm ahead of the solid front
+    face and the model has no slot, so from ±90° on the rays start inside the body. The model's
+    slot is a stand-in question: the real field of view waits for the real slot's shape.
+  - The D435i image is 848 × 480, not 640 × 480, because Gazebo derives the vertical field of
+    view from the aspect ratio: 848 × 480 gives 56°, near the real 58°, and 640 × 480 gives 71°.
+  - `sim_depth_cloud` is new. Gazebo's own camera cloud has the wrong axes for its frame.
+  - The cones are bridged as clouds, not scans, because a bridged scan keeps only the middle
+    row.
+  - `sim_range_sensor` runs as two instances, one per group. All three sim-only nodes stay off
+    `/clock`, so `sim_bumper` works on wall time.
+  - The cliff test is a floor hole, not a raised deck. The test objects stand along y, each
+    with its station. In `restroom.sdf` only a threshold and a glass screen were added, both off
+    the routes in use; a partition belongs there once the stalls are laid out.
+- **Measured** (headless, 2026-10-30, with every sensor on and LIO running):
+
+  | Test | Result |
+  |---|---|
+  | `tools/sensor_check.py`, sensor test world | every check passes, except that `/l2/points_filtered` fell below its rate limit in one run of the last five (see below) |
+  | `motion_test` forward 0.45 m | 99% of commanded, drift 0.0%: PASS |
+  | `motion_test` strafe left 0.45 m | 98%, drift 0.0%: PASS |
+  | `motion_test` rotate 85.9° | 98% of commanded, and the base translates **5.6 cm** (limit 5 cm): FAIL, as in Phase 1 |
+  | `/wheel/odometry` vs ground truth, `loop` × 2 (24.6 m) | final 0.035 m (0.14%), max 0.098 m (0.40%), yaw max 0.82°: PASS |
+  | `/lio/odom` vs ground truth, same run | final 0.011 m, max 0.107 m (0.43%), yaw max 1.44°: PASS |
+  | Real-time factor and CPU, restroom | 1.00. Gazebo 188% of a core, bridge 35%, `sim_depth_cloud` 28%, `sim_range_sensor` 11% each |
+  | The same with only the L2 | 1.00. Gazebo 103%, bridge 20% |
+  | Real-time factor, sensor test world with `sensor_check` running | 0.94 |
+
+  LIO's maximum error is twice Phase 1's (0.056 m), but it comes in the first 10 s and does not
+  grow; the final error is smaller than Phase 1's largest. Phase 3 evaluates LIO properly. The
+  rendering uses no GPU. With the Gazebo window open the sensor test world runs at 0.81, and
+  with RViz as well at 0.71. The motion test ran
+  on the normal network interface and the loop on loopback, after a Wi-Fi change cut the first
+  loop run.
+- **Self view:** in the open, the 2D lidar, the D435i, the ultrasonics and the cliff sensors see
+  no part of the robot, and the filtered L2 cloud has nothing near it.
+- **Large messages need reliable QoS.** At the default `net.core.rmem_max` (212 kB) Cyclone DDS
+  loses fragments of large best-effort messages. Measured on the 1 to 1.6 MB D435i topics:
+  best-effort 9 to 13 Hz, reliable 13.9 Hz. On the 13 MB camera cloud of an earlier version,
+  best-effort got nothing. **Phase 6's STVL layer must subscribe reliable,** or the socket
+  buffers must be raised (`sudo sysctl` and a Cyclone configuration).
+- **The camera traffic costs the L2 self-filter some clouds.** `self_filter` (pcl_ros) subscribes
+  best-effort, and that cannot be set from outside. With the D435i on it loses 3 to 5% of the L2
+  clouds, in pairs, every few seconds; without it, 0.3%. `/l2/points_filtered` read 4.7 to 5.6 Hz
+  in 10 s windows, so `sensor_check` fails it now and then. The raw `/l2/points` is unaffected.
+  Larger socket buffers should cure this too; that was not tested, as it needs `sudo`.
+- **Python nodes on `/clock` cost about half a core** at 500 Hz, measured on `lio_odom_adapter`,
+  `motion_test` and `gt_compare`. Keep any new Python node off `/clock` unless it needs it.
+- **Shortcuts:** S3 and S4 are in force. S7, S8 and S9 are new.
+
+The plan as written:
 
 - **New Gazebo sensors** in `mecanum.gazebo.xacro`, on the URDF frames, bridged in
   `gz_bridge.yaml` to the contract topics. Each is switchable with its `use_<sensor>` arg in
@@ -462,6 +527,9 @@ Each entry works only because this is a simulation. Add entries as they are intr
 | S4 | Glass via visibility masks | Phase 2 | Glass is hidden from the lidars and the camera by a Gazebo visibility mask and seen only by the ultrasonics. Real glass is partly visible and partly not. |
 | S5 | The E-stop is a topic | Phase 4 | No hardware stop circuit. |
 | S6 | Poses from the world file | Phase 7 | The dock and staging poses come from the known `toilet_1` pose until detection exists. |
+| S7 | Ultrasonic beams 6° high | Phase 2 | The cones are 60° across but only 6° high, so the floor never answers. Real ultrasound mostly reflects away from a smooth floor at this angle, but a rough or wet one may answer, and real beams are taller, so they hear low objects the simulated ones miss. |
+| S8 | 2D lidar limited to ±89.5° | Phase 2 | The model has no slot for it, so the sim sees 10.5° less on each side than the contract's ±100°. Anything that relies on the side view at the robot's front corners must be re-checked. |
+| S9 | D435i cloud computed from the depth image | Phase 2 | Exact depth with Gaussian noise, every second pixel, no colour. The real cloud comes from the RealSense driver, with stereo errors. |
 
 ## After the simulation build
 

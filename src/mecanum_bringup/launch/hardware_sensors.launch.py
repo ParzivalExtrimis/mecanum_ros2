@@ -124,7 +124,9 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(loc_share, 'launch', 'perception.launch.py')),
-            launch_arguments={'use_sim_time': use_sim_time}.items()),
+            # No 2D lidar driver yet, so /scan stays the L2 band here.
+            launch_arguments={'use_sim_time': use_sim_time, 'use_l2_scan': 'true',
+                              'scan_topic': '/scan'}.items()),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(loc_share, 'launch', 'lio.launch.py')),

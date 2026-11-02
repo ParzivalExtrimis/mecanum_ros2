@@ -15,8 +15,8 @@ It uses upstream nodes where they exist. Topics are identical with the real L2 d
 /l2/points            PointCloud2, l2_lidar       real driver or Gazebo
   -> self_filter      pcl_ros CropBox (negative): drop points on the robot
 /l2/points_filtered   PointCloud2, l2_lidar       -> LIO, costmaps (plan Phase 6)
-  -> cloud_to_scan    pointcloud_to_laserscan: fold a height band into a 2D scan
-/scan                 LaserScan, base_footprint   until the 2D lidar takes /scan (plan Phase 2)
+  -> cloud_to_scan    pointcloud_to_laserscan: fold a height band into a 2D scan, optional
+/l2/scan              LaserScan, base_footprint   use_l2_scan:=true, for comparison only
 
 /l2/points_filtered + /l2/imu
   -> rko_lio          lidar-inertial odometry, 3D, frame lio_odom; its TF goes to /lio/tf_unused
@@ -63,8 +63,9 @@ This one node is the place to swap in a URDF-based self-filter once the arm is m
   z ≥ 0.767 − r · tan(6°)      (wide mode; z ≥ 0.767 in standard mode)
   ```
   The top of the band (0.50 m) comes into view about 2.5 m out, and the floor about 7.3 m out.
-  **Near the robot this scan is empty.** In the new strategy (plan, "Sensor roles") the 2D lidar
-  provides `/scan`, and this node stays only for comparison.
+  **Near the robot this scan is empty.** The 2D lidar provides `/scan`. This node stays for
+  comparison, off by default (`use_l2_scan:=true`), on `/l2/scan`. It goes in plan Phase 8.
+  `hardware_sensors.launch.py` still runs it on `/scan`, because there is no 2D lidar driver yet.
 - **Upper structure.** Above 0.77 m the L2 sees all around, with no shadow from the robot: the
   walls, partitions, door frames, counters and the ceiling. That is its role in the costmaps
   (plan Phase 6).
@@ -186,7 +187,8 @@ ros2 launch mecanum_localization lio.launch.py use_sim_time:=true
 | `use_sim_time` | `false` |
 | `cloud_topic` | `/l2/points` |
 | `filtered_cloud_topic` | `/l2/points_filtered` |
-| `scan_topic` | `/scan` |
+| `use_l2_scan` | `false` |
+| `scan_topic` | `/l2/scan` |
 
 | `lio.launch.py` argument | Default |
 |---|---|

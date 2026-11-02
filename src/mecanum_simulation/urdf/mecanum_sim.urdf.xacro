@@ -3,7 +3,7 @@
   Simulation entry point: the unmodified robot description plus Gazebo-only additions and
   ros2_control on Gazebo hardware (mecanum_controllers).
 
-  All xacro args of mecanum_description pass through (prefix, use_l2).
+  All xacro args of mecanum_description pass through (prefix, use_<sensor>).
   The sim plugins assume prefix:="" and the model name "mecanum" (see mecanum.gazebo.xacro).
 -->
 <robot name="mecanum" xmlns:xacro="http://www.ros.org/wiki/xacro"
