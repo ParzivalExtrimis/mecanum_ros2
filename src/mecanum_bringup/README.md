@@ -28,7 +28,7 @@ ros2 launch mecanum_bringup robot.launch.py rviz:=true   # also RViz
 | `use_l2` | `true` | Include the Unitree L2 in the model |
 | `use_d435i`, `use_lidar_2d`, `use_ultrasonics`, `use_cliff_tof`, `use_bumpers` | `true` | Include that sensor in the model; sim only |
 | `use_l2_scan` | `false` | Also make a 2D scan from the L2 cloud, on `/l2/scan`, for comparison |
-| `lio` | `true` | Run LIO odometry; needs `use_l2` |
+| `lio` | `false` in sim, `true` on hardware | Run LIO odometry; needs `use_l2`. In sim it is not an EKF input ([decision 0003](../../docs/decisions/0003-default-odometry-wheels-and-l2-gyro.md)), so it runs only for evaluation |
 | `ekf` | `true` | Run the EKF, sim only. With `false`, nothing publishes `odom -> base_footprint` |
 
 With `sim:=true`, the launch starts:
@@ -40,8 +40,8 @@ With `sim:=true`, the launch starts:
   `/l2/points` to `/l2/points_filtered`;
 - the EKF from `mecanum_localization/ekf.launch.py`, on `/wheel/odometry` and `/l2/imu`, which
   publishes `/odom` and the `odom -> base_footprint` TF;
-- LIO odometry from `mecanum_localization/lio.launch.py`: rko_lio and the odometry adapter,
-  which publish `/lio/odom` only, with no TF;
+- with `lio:=true`, LIO odometry from `mecanum_localization/lio.launch.py`: rko_lio and the
+  odometry adapter, which publish `/lio/odom` only, with no TF;
 - everything on `use_sim_time:=true`.
 
 With `sim:=false`, it starts robot_state_publisher, joint_state_publisher and the open-loop

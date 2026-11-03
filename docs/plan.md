@@ -336,7 +336,7 @@ The plan as written:
   - the sim real-time factor and CPU load with every sensor on. Record them; they bound the
     later phases.
 
-## Phase 3: state estimation (measured 2026-11-02, decision D1 pending)
+## Phase 3: state estimation (measured 2026-11-02, decision D1 taken 2026-11-03)
 
 - **EKF:** `ekf.launch.py` runs `config/ekf.yaml` (E1), which owns `/odom` and
   `odom → base_footprint` in simulation; `robot.launch.py` has an `ekf` argument.
@@ -386,8 +386,13 @@ The plan as written:
 - **A clock that jumps back kills rko_lio.** With two bridges on `/clock`, which is what an
   earlier run's survivors caused, it aborted with "ICP found no correspondences". The launch and
   its nodes must be gone before the next simulation starts.
-- **Decision D1 waits for the owner.** **Recommendation:** E1 as the default, as planned. Keep LIO
-  out of the EKF, and turn it off by default (`lio:=false`), since it adds no safe gain here.
+- **Decision D1: E1** ([0003](decisions/0003-default-odometry-wheels-and-l2-gyro.md)). LIO is
+  out of the EKF and off by default in simulation; on hardware it stays on until the hardware
+  plugin exists. Visual odometry on the D435i is deferred to hardware, and 2D scan matching on
+  the C1 (rf2o) is not used, with the reasons in 0003. The real drive has no encoder feedback
+  (closed-loop steppers with a fault output only), so the wheel state on hardware comes from the
+  echoed step pulses; 0003 gives the reasoning, the rules for the MCU and the plugin, and the
+  validation tests.
 
 The plan as written:
 

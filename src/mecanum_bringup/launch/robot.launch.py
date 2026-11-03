@@ -27,10 +27,11 @@ sim:=false  robot_state_publisher + joint_state_publisher (zero wheel angles) an
 Both        L2 perception (mecanum_localization/perception.launch.py): the self-filter,
             /l2/points -> /l2/points_filtered. With use_l2_scan:=true also cloud-to-scan, on
             /l2/scan; /scan is the 2D lidar's.
-            LIO odometry (mecanum_localization/lio.launch.py, lio:=true): rko_lio and the
-            adapter. In sim it publishes /lio/odom only, with no TF (the EKF owns it);
-            on hardware, with no wheel odometry, /odom and odom -> base_footprint. Its config
-            is for simulation; the hardware LIO config is in hardware_sensors.launch.py.
+            LIO odometry (mecanum_localization/lio.launch.py): rko_lio and the adapter. Off by
+            default in sim (decision 0003); lio:=true publishes /lio/odom only, with no TF
+            (the EKF owns it). On by default on hardware, where with no wheel odometry it
+            publishes /odom and odom -> base_footprint. Its config is for simulation; the
+            hardware LIO config is in hardware_sensors.launch.py.
 """
 
 import os
@@ -68,7 +69,7 @@ def generate_launch_description():
     # The EKF owns odom -> base_footprint in sim; LIO only on hardware (no encoders read by the
     # open-loop driver).
     lio_odom_topic = PythonExpression(["'/lio/odom' if '", sim, "' == 'true' else '/odom'"])
-    lio_publish_tf = PythonExpression(["'false' if '", sim, "' == 'true' else 'true'"])
+    not_sim = PythonExpression(["'false' if '", sim, "' == 'true' else 'true'"])
 
     sim_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(sim_share, 'launch', 'sim.launch.py')),
@@ -104,8 +105,11 @@ def generate_launch_description():
           for sensor, what in OTHER_SENSORS.items()],
         DeclareLaunchArgument('use_l2_scan', default_value='false',
                               description='Also make a 2D scan from the L2 cloud, on /l2/scan'),
-        DeclareLaunchArgument('lio', default_value='true',
-                              description='Run LIO odometry (needs use_l2)'),
+        # Decision 0003: LIO is not an EKF input, so off in sim; on hardware it is the only
+        # odometry until the hardware plugin exists.
+        DeclareLaunchArgument('lio', default_value=not_sim,
+                              description='Run LIO odometry (needs use_l2). Default: false '
+                              'in sim, true on hardware'),
         DeclareLaunchArgument('ekf', default_value='true',
                               description='Run the EKF (sim only). False leaves '
                               'odom -> base_footprint unpublished'),
@@ -145,7 +149,7 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(loc_share, 'launch', 'lio.launch.py')),
             launch_arguments={'use_sim_time': sim, 'odom_topic': lio_odom_topic,
-                              'publish_tf': lio_publish_tf}.items(),
+                              'publish_tf': not_sim}.items(),
             condition=IfCondition(AndSubstitution(LaunchConfiguration('use_l2'),
                                                   LaunchConfiguration('lio')))),
 

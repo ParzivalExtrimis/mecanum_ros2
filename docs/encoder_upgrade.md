@@ -14,6 +14,12 @@ reference is remapped to `/cmd_vel` (all sources publish stamped there), and
 `enable_odom_tf` is `true` until the EKF of section 4 exists (plan Phase 3). Sections 0, 2, 4,
 7 and the hardware steps of 8 are open.
 
+**Amended (2026-11-03):** the drive uses closed-loop steppers (Leadshine CS-M234120 with CS-D808
+drivers), whose encoders close the loop inside the driver and never reach the MCU. The only
+output is a fault signal. The wheel state is therefore the echoed step pulse count, not a
+measured encoder state, and section 0's encoder requirements are replaced by the echo rules of
+[decision 0003](decisions/0003-default-odometry-wheels-and-l2-gyro.md).
+
 The names and parameters below were checked against ROS 2 Jazzy:
 
 | Package | Version |

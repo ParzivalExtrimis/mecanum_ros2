@@ -67,6 +67,10 @@ Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
   The simulation drives through `mecanum_drive_controller` on gz_ros2_control. Every velocity
   source publishes `TwistStamped` on `/cmd_vel`; wheel odometry owns `odom -> base_footprint`
   until the EKF.
+- **[0003: Default odometry, echoed wheel motion and the L2 gyro](docs/decisions/0003-default-odometry-wheels-and-l2-gyro.md).**
+  Decision D1: the EKF on the wheels and the L2 gyro (E1); LIO off in simulation. The drive's
+  closed-loop steppers report only faults, so the hardware wheel state is the echoed step
+  pulse count, with the reasoning and the validation tests.
 - **[Encoder upgrade guide](docs/encoder_upgrade.md).** The steps to move to ros2_control with
   measured wheel state: `mecanum_controllers`, `mecanum_hardware`, stamped `cmd_vel` and an
   EKF. Plan Phase 1 follows its simulation steps.
@@ -236,7 +240,7 @@ the self-filter and the LIO pipeline; its paused hardware work is kept in
 | 0 | Model v2 description from the reference URDF | done 2026-10-27 |
 | 1 | Drive on encoders: ros2_control in simulation | done 2026-10-28 |
 | 2 | Simulated sensor suite: 2D lidar, D435i, ultrasonics, cliff ToF, bumpers | done 2026-10-30 |
-| 3 | State estimation: EKF on wheel odometry and IMU; LIO re-evaluated | |
+| 3 | State estimation: EKF on wheel odometry and IMU; LIO re-evaluated | done 2026-11-03 (D1: E1) |
 | 4 | Safety layer: cliffs, bumpers, E-stop, sensor loss | |
 | 5 | Mapping with slam_toolbox on the 2D lidar | |
 | 6 | Localization and Nav2 | |
