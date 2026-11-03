@@ -2,8 +2,9 @@
 
 This package holds the perception and localization for the mecanum base:
 - **Built:** the L2 self-filter, the cloud-to-scan conversion, LIO (rko_lio) and its planar
-  odometry adapter, plus `gt_compare` to measure drift in simulation.
-- **Planned** ([docs/plan.md](../../docs/plan.md)): the EKF in Phase 3, slam_toolbox mapping in
+  odometry adapter, the EKF (plan Phase 3), plus `gt_compare` and `odom_eval.launch.py` to
+  measure drift in simulation.
+- **Planned** ([docs/plan.md](../../docs/plan.md)): slam_toolbox mapping in
   Phase 5, and AMCL or slam_toolbox localization in Phase 6.
 
 It uses upstream nodes where they exist. Topics are identical with the real L2 driver,
@@ -120,12 +121,18 @@ take that as 1e-9, which gives the same weighting. The real gyro's mean was abou
 over 47 minutes at rest, so the firmware appears to remove the bias; how it behaves during slow
 rotation is not known.
 
+**E1 is the default** ([decision 0003](../../docs/decisions/0003-default-odometry-wheels-and-l2-gyro.md),
+D1): LIO is not an EKF input, and `robot.launch.py` runs it only with `lio:=true` in
+simulation. On hardware the wheel state will be the echoed step pulse count, since the
+closed-loop stepper drivers report only faults; 0003 explains why that is treated as an
+encoder, and why the wheel covariances are not reduced for it.
+
 `config/ekf_e2.yaml`, `ekf_e3a.yaml` and `ekf_e3b.yaml` are the candidates of plan Phase 3: this
 file plus the D435i gyro, LIO's twist or LIO's pose as a differential, each with no TF.
 `odom_eval.launch.py` runs them beside `robot.launch.py` and measures them all on one motion:
 
 ```bash
-ros2 launch mecanum_bringup robot.launch.py gui:=false
+ros2 launch mecanum_bringup robot.launch.py gui:=false lio:=true   # LIO is off by default
 ros2 launch mecanum_localization odom_eval.launch.py output_dir:=/tmp/eval \
   pattern:=loop laps:=2
 ```

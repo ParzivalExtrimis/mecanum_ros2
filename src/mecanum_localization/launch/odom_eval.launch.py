@@ -15,10 +15,11 @@
 """
 Measure every odometry candidate on the same motion (simulation only, docs/plan.md Phase 3).
 
-Run beside ``robot.launch.py``, which provides E0 (/wheel/odometry), E1 (/odom) and LIO
-(/lio/odom). This adds the other filters on /eval/<name>/odom with no TF, one ``gt_compare`` per
-candidate, and ``motion_test``. When the motion ends everything shuts down, and each gt_compare
-prints its final report and writes ``<output_dir>/<name>.csv``.
+Run beside ``robot.launch.py lio:=true``, which provides E0 (/wheel/odometry), E1 (/odom) and
+LIO (/lio/odom); LIO is off by default in sim (decision 0003). This adds the other filters on
+/eval/<name>/odom with no TF, one ``gt_compare`` per candidate, and ``motion_test``. When the
+motion ends everything shuts down, and each gt_compare prints its final report and writes
+``<output_dir>/<name>.csv``.
 """
 
 import os
