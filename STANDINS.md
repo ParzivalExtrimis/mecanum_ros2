@@ -38,6 +38,9 @@ here once the real value is known.
 | Closed-loop stepper drivers (CS-D808), set in Leadshine's tuning software | Following-error alarm threshold | Not set yet | It bounds the echoed wheel state (decision 0003). Set it as tight as acceleration allows, and record it here. |
 | `src/mecanum_localization/config/ekf*.yaml` | `process_noise_covariance` | The installed example's diagonal | Tune on hardware, with real wheel slip. With twist-only inputs the pose follows the integrated twist, so it has little effect in simulation. |
 | `src/mecanum_localization/mecanum_localization/gt_compare.py` | `max_drift_percent`, `max_yaw_error_deg` | 2% of the path, 2° | The plan Phase 3 targets. Replace them with what docking and navigation actually need. |
+| `src/mecanum_safety/config/safety.yaml` | `floor_distance`, `cliff_margin` | 0.119 m (the STEP's `cliff_tof_z`), 0.05 m: a drop is a range over 0.169 m | Measure the mounted sensor height, and a real VL53L1X over the real floor and an edge. Keep `test_layout.py` in step with the URDF. |
+| `src/mecanum_safety/config/safety.yaml` | `timeout_*` | Scan, D435i, ultrasonics 0.5 s; L2 1.0 s (gaps up to 0.59 s seen in sim); cliff and bumpers 0.25 s; joint states and odometry 0.2 s | Measure each real driver's worst gap on the Jetson, and set three to five periods above it. |
+| `src/mecanum_controllers/config/controllers.yaml` | speed limits, for the cliffs | 0.3 m/s leaves 4.7 cm of the forward and reverse cliff margin (plan Phase 4) | Re-run `tools/safety_check.py` before raising them; real stopping distance on tiles. |
 
 ### Robot model (model v2)
 
@@ -58,5 +61,5 @@ placement PDF do not settle.
 | `src/mecanum_description/urdf/sensors/lidar_2d.xacro` | `lidar_2d_z`, scan 0° direction | Scan plane 0.130 m above the floor (PDF); 0° along `lidar_2d_link` +x, forward | Measure the C1's optical centre height. Check its 0° mark on the unit, and look at `/scan` against a known wall. |
 | `src/mecanum_description/urdf/sensors/cliff_tof.xacro` | `cliff_tof_z` | 0.119 m above the floor (STEP); the PDF says 0.08 m | Measure the mounted sensor height. Phase 4's cliff threshold depends on it. |
 | `src/mecanum_description/urdf/sensors/bumpers.xacro` | `bumper_mass` | 0.1 kg per plank, out of `chassis_mass` (24.8 kg in the file, 25 kg with the planks) | Weigh a plank. |
-| `src/mecanum_description/urdf/sensors/bumpers.xacro` | `bumper_x` | Plank faces at ±0.404 m, as in the STEP. The 2D lidar (0.420 m) and the front ultrasonics (0.408 m) stick out further, so the plank cannot hit first; the PDF wants the planks 3 cm proud. | Plan Phase 4, decision D2. Then measure the real planks. |
+| `src/mecanum_description/urdf/sensors/bumpers.xacro` | `bumper_x` | Plank faces at ±0.404 m, as in the STEP. The 2D lidar (0.420 m) and the front ultrasonics (0.408 m) stick out further, so the plank cannot hit first; the PDF wants the planks 3 cm proud. | Decision D2 deferred, nothing changed ([0004](docs/decisions/0004-safety-bumper-protrusion-and-side-cliffs.md)). Set it with the mechanical design, then measure the real planks. |
 | `src/mecanum_localization/config/self_filter.yaml` | crop box | x −0.43 to 0.45 m, y ±0.29 m, z −0.05 to 0.86 m: the robot extent plus about 2.5 cm | Check a real L2 cloud for points on the robot (`tools/l2_mount_check.py`, "points on the robot"). |

@@ -23,7 +23,7 @@ starts `controllers.launch.py` once the robot is spawned. The ESP32 hardware plu
 
 | Topic | Type | Direction | Notes |
 |---|---|---|---|
-| `/cmd_vel` | `geometry_msgs/TwistStamped` | in | The drive controller's `~/reference`. All velocity sources publish here; from plan Phase 4 the safety gate sits in between. |
+| `/cmd_vel_safe` | `geometry_msgs/TwistStamped` | in | The drive controller's `~/reference`: the safety gate's output (`mecanum_safety`). Every source publishes on `/cmd_vel`, into the gate. `controllers.launch.py reference_topic:=/cmd_vel` bypasses the gate, for mock dry runs only, which have no sensors to watch. |
 | `/wheel/odometry` | `nav_msgs/Odometry` | out | From the measured wheel states, `odom` → `base_footprint` |
 | `/joint_states` | `sensor_msgs/JointState` | out | From `joint_state_broadcaster`, 50 Hz |
 
@@ -36,7 +36,7 @@ stand-ins) and stops the wheels when no reference arrives for 0.25 s
 
 ```bash
 # Dry run without Gazebo (wall clock)
-ros2 launch mecanum_controllers controllers.launch.py hardware:=mock
+ros2 launch mecanum_controllers controllers.launch.py hardware:=mock reference_topic:=/cmd_vel
 ros2 control list_controllers
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true
 ros2 topic echo /joint_states

@@ -57,7 +57,7 @@ def generate_test_description():
         launch.actions.IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(SHARE, 'launch', 'controllers.launch.py')),
-            launch_arguments={'hardware': 'mock'}.items()),
+            launch_arguments={'hardware': 'mock', 'reference_topic': '/cmd_vel'}.items()),
         launch_testing.actions.ReadyToTest(),
     ])
 

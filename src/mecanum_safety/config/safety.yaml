@@ -1,0 +1,28 @@
+# safety_supervisor (docs/plan.md Phase 4). Positions are in base_footprint, from
+# mecanum_description (test/test_layout.py checks them against the URDF).
+safety_supervisor:
+  ros__parameters:
+    cmd_in_topic: /cmd_vel
+    cmd_out_topic: /cmd_vel_safe
+    state_rate: 10.0
+
+    # Cliff: a downward range over floor_distance + cliff_margin, or +inf, is a drop.
+    floor_distance: 0.119   # STAND-IN: cliff_tof_z of the STEP (the PDF says 0.08 m)
+    cliff_margin: 0.05      # STAND-IN
+    cliff_x: 0.3535         # cliff_tof_<pos>_link
+    cliff_y: 0.2078
+
+    bumper_x: 0.3915        # bumper_<pos>_link, the plank centre (decision D2 may move it)
+    ultrasonic_front_x: 0.408
+    ultrasonic_rear_x: -0.401
+    half_width: 0.255       # body envelope; the planks span it
+
+    # STAND-IN timeouts (s, steady clock): about 3 to 5 periods of each sensor
+    timeout_lidar_2d: 0.5
+    timeout_l2: 1.0
+    timeout_d435i: 0.5
+    timeout_joint_states: 0.2
+    timeout_odom: 0.2
+    timeout_ultrasonics: 0.5
+    timeout_cliff_tof: 0.25
+    timeout_bumpers: 0.25

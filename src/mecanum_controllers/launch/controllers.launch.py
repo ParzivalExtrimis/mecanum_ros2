@@ -21,7 +21,9 @@ hardware:=mock  Also robot_state_publisher on urdf/mecanum_mock.urdf.xacro and
                 ros2_control_node on mock hardware, for dry runs without Gazebo.
 
 The drive controller's topics are remapped to the command and odometry contract:
-    ~/reference     <- /cmd_vel           (geometry_msgs/TwistStamped)
+    ~/reference     <- /cmd_vel_safe      (geometry_msgs/TwistStamped, the safety gate's output;
+                                           reference_topic:=/cmd_vel bypasses the gate, for the
+                                           mock dry runs only, which have no sensors to watch)
     ~/odometry      -> /wheel/odometry    (nav_msgs/Odometry, from measured wheel states)
     ~/tf_odometry   -> /tf                (unused: enable_odom_tf is false, the EKF owns the TF)
 """
@@ -37,8 +39,10 @@ from launch.substitutions import (
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
-DRIVE_REMAPS = ('-r ~/reference:=/cmd_vel -r ~/odometry:=/wheel/odometry '
-                '-r ~/tf_odometry:=/tf')
+
+def drive_remaps(reference_topic):
+    return ['-r ~/reference:=', reference_topic,
+            ' -r ~/odometry:=/wheel/odometry -r ~/tf_odometry:=/tf']
 
 
 def generate_launch_description():
@@ -66,6 +70,9 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('hardware', default_value='sim',
                               description='sim (Gazebo, gz_ros2_control) or mock'),
+        DeclareLaunchArgument('reference_topic', default_value='/cmd_vel_safe',
+                              description='The drive reference: the safety gate output, or '
+                              '/cmd_vel to bypass the gate (mock dry runs only)'),
 
         Node(
             package='robot_state_publisher',
@@ -85,5 +92,6 @@ def generate_launch_description():
         ),
 
         spawner('joint_state_broadcaster'),
-        spawner('mecanum_drive_controller', '--controller-ros-args', DRIVE_REMAPS),
+        spawner('mecanum_drive_controller', '--controller-ros-args',
+                drive_remaps(LaunchConfiguration('reference_topic'))),
     ])

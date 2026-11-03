@@ -20,6 +20,9 @@ sim:=true   Gazebo world + robot + ros2_control (mecanum_simulation/sim.launch.p
             /wheel/odometry from the measured wheel states. The EKF
             (mecanum_localization/ekf.launch.py) fuses that with the L2 gyro and owns /odom and
             odom -> base_footprint; with ekf:=false nothing publishes that transform.
+            The safety gate (mecanum_safety/safety.launch.py) takes /cmd_vel and feeds the
+            controller on /cmd_vel_safe; with safety:=false nothing drives the robot. It
+            watches the sensors that the use_* arguments fit, and /odom only with the EKF.
 sim:=false  robot_state_publisher + joint_state_publisher (zero wheel angles) and the
             open-loop esp32_driver with the esp32 transport. The real transport is not
             implemented until the rewritten firmware's protocol exists; the driver then exits
@@ -63,6 +66,7 @@ def generate_launch_description():
     base_share = get_package_share_directory('mecanum_base')
     desc_share = get_package_share_directory('mecanum_description')
     loc_share = get_package_share_directory('mecanum_localization')
+    safety_share = get_package_share_directory('mecanum_safety')
 
     sim = LaunchConfiguration('sim')
     rviz = LaunchConfiguration('rviz')
@@ -110,6 +114,9 @@ def generate_launch_description():
         DeclareLaunchArgument('lio', default_value=not_sim,
                               description='Run LIO odometry (needs use_l2). Default: false '
                               'in sim, true on hardware'),
+        DeclareLaunchArgument('safety', default_value='true',
+                              description='Run the safety gate (sim only). False leaves the '
+                              'drive controller without a reference'),
         DeclareLaunchArgument('ekf', default_value='true',
                               description='Run the EKF (sim only). False leaves '
                               'odom -> base_footprint unpublished'),
@@ -143,6 +150,18 @@ def generate_launch_description():
             actions=[IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(os.path.join(loc_share, 'launch', 'ekf.launch.py')),
                 launch_arguments={'use_sim_time': sim}.items())]),
+
+        # The safety gate between every velocity source and the drive controller.
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(safety_share, 'launch', 'safety.launch.py')),
+            launch_arguments={
+                'watch_l2': LaunchConfiguration('use_l2'),
+                'watch_odom': LaunchConfiguration('ekf'),
+                **{f'watch_{name}': LaunchConfiguration(f'use_{name}')
+                   for name in ('d435i', 'lidar_2d', 'ultrasonics', 'cliff_tof', 'bumpers')},
+            }.items(),
+            condition=IfCondition(AndSubstitution(sim, LaunchConfiguration('safety')))),
 
         # LIO odometry. In sim an evaluation input on /lio/odom (an optional EKF input, see
         # odom_eval.launch.py); on hardware the source of odom -> base_footprint.

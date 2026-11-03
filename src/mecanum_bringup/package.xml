@@ -17,6 +17,7 @@
   <exec_depend>mecanum_description</exec_depend>
   <exec_depend>mecanum_lidar</exec_depend>
   <exec_depend>mecanum_localization</exec_depend>
+  <exec_depend>mecanum_safety</exec_depend>
   <exec_depend>mecanum_simulation</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>rviz2</exec_depend>
