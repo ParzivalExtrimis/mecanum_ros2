@@ -51,10 +51,10 @@ Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
 | `mecanum_simulation` | done: ros2_control drive and the sensor suite (plan Phase 2) | Gazebo worlds, sim-only xacro (mecanum friction, sensors, ground truth), bridge, sim-only sensor nodes |
 | `mecanum_base` | done (open-loop driver, hardware path only) | ESP32 driver node, mecanum kinematics, motion test |
 | `mecanum_controllers` | done, Phase 1 | ros2_control xacro (mock or Gazebo hardware), `mecanum_drive_controller` and `joint_state_broadcaster` config, mock kinematics test |
-| `mecanum_interfaces` | messages done; safety and mission interfaces in Phases 4 and 7 | Motor command and debug messages, plus safety, task and mission interfaces later |
+| `mecanum_interfaces` | messages done; mission interfaces in Phase 7 | Motor command and debug messages, `SafetyState`, task and mission interfaces later |
 | `mecanum_lidar` | driver done, hardware test paused | Unitree L2 driver (`/l2/points`, `/l2/imu`, no TF) on the vendored SDK, bench-test launch, RViz config |
 | `mecanum_localization` | self-filter, cloud-to-scan, LIO pipeline and EKF done; SLAM in Phase 5 | Self-filter, cloud-to-scan, LIO and its odom adapter, EKF, slam_toolbox, AMCL |
-| `mecanum_safety` | planned, Phase 4 | Safety supervisor: cliffs, bumpers, E-stop, sensor loss |
+| `mecanum_safety` | done in simulation, Phase 4 (D2 deferred, D5-c) | Safety supervisor: the gate from `/cmd_vel` to `/cmd_vel_safe` on cliffs, bumpers, E-stop, sensor loss |
 | `mecanum_navigation` | planned, Phase 6 | Nav2 parameters, collision monitor, docking, keepout mask, maps |
 | `mecanum_mission` | planned, Phase 7 | Mission executive and placeholder task server |
 | `mecanum_bringup` | `robot.launch.py` done | Top-level launch files and RViz configs |
@@ -71,6 +71,9 @@ Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
   Decision D1: the EKF on the wheels and the L2 gyro (E1); LIO off in simulation. The drive's
   closed-loop steppers report only faults, so the hardware wheel state is the echoed step
   pulse count, with the reasoning and the validation tests.
+- **[0004: Bumper protrusion deferred, sideways cliff gap accepted](docs/decisions/0004-safety-bumper-protrusion-and-side-cliffs.md).**
+  Decisions D2 and D5: the lidar and the front ultrasonics stand past the front plank, noted
+  and left; the cliff sensors cannot see a drop beside the robot, accepted for sites with none.
 - **[Encoder upgrade guide](docs/encoder_upgrade.md).** The steps to move to ros2_control with
   measured wheel state: `mecanum_controllers`, `mecanum_hardware`, stamped `cmd_vel` and an
   EKF. Plan Phase 1 follows its simulation steps.
@@ -144,8 +147,9 @@ ros2 launch mecanum_bringup robot.launch.py              # Gazebo GUI + robot + 
 ros2 launch mecanum_bringup robot.launch.py gui:=false   # headless
 ```
 
-In a second terminal, drive the robot with the keyboard. The drive controller takes
-`TwistStamped` on `/cmd_vel`. Hold shift for strafing:
+In a second terminal, drive the robot with the keyboard. Every source publishes `TwistStamped`
+on `/cmd_vel`, which the safety gate passes to the drive controller; `/safety/state` says what
+it blocks. Hold shift for strafing:
 
 ```bash
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true
@@ -191,7 +195,7 @@ robot itself. See `src/mecanum_localization/README.md`.
 To dry-run the controllers without Gazebo, on mock hardware:
 
 ```bash
-ros2 launch mecanum_controllers controllers.launch.py hardware:=mock
+ros2 launch mecanum_controllers controllers.launch.py hardware:=mock reference_topic:=/cmd_vel
 ```
 
 ### Hardware: test the Unitree L2
@@ -241,7 +245,7 @@ the self-filter and the LIO pipeline; its paused hardware work is kept in
 | 1 | Drive on encoders: ros2_control in simulation | done 2026-10-28 |
 | 2 | Simulated sensor suite: 2D lidar, D435i, ultrasonics, cliff ToF, bumpers | done 2026-10-30 |
 | 3 | State estimation: EKF on wheel odometry and IMU; LIO re-evaluated | done 2026-11-03 (D1: E1) |
-| 4 | Safety layer: cliffs, bumpers, E-stop, sensor loss | |
+| 4 | Safety layer: cliffs, bumpers, E-stop, sensor loss | done 2026-11-03 (D2 deferred; D5-c: no side cliff sensing) |
 | 5 | Mapping with slam_toolbox on the 2D lidar | |
 | 6 | Localization and Nav2 | |
 | 7 | Docking and mission executive | |

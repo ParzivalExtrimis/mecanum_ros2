@@ -135,9 +135,8 @@ teleop / test tools ────────────────────
 ```
 
 All velocity messages are `TwistStamped`, as `mecanum_drive_controller` requires. Every source
-publishes on `/cmd_vel`. Until Phase 4 the controller's reference is remapped straight to
-`/cmd_vel`; from Phase 4 the safety gate subscribes to `/cmd_vel` and the controller listens to
-the gate's output, so no source changes ([decision 0002](decisions/0002-ros2-control-with-measured-wheel-state.md)).
+publishes on `/cmd_vel`. Since Phase 4 the safety gate subscribes to `/cmd_vel` and the
+controller listens to the gate's output, `/cmd_vel_safe`, so no source changed ([decision 0002](decisions/0002-ros2-control-with-measured-wheel-state.md)).
 
 ### Sensor contract
 
@@ -160,7 +159,7 @@ Topics and frames that the simulation provides and that hardware drivers must ma
 | `/joint_states` | `sensor_msgs/JointState` | — | 50 Hz | 1 |
 | `/wheel/odometry` | `nav_msgs/Odometry` | `odom` → `base_footprint` | 50 Hz | 1 |
 | `/odom` | `nav_msgs/Odometry` (EKF) | `odom` → `base_footprint` | 50 Hz | 3 |
-| `/safety/state` | to be defined in Phase 4 (`mecanum_interfaces`) | — | 10 Hz | 4 |
+| `/safety/state` | `mecanum_interfaces/SafetyState` | — | 10 Hz and on change | 4 |
 
 The frames come from `mecanum_description`. Gazebo-only topics live under `/sim/`, such as the
 inputs of the sim-only nodes (`/sim/ultrasonic/*`, `/sim/cliff/*`, `/sim/bumper/*`). `/l2/scan`,
@@ -427,7 +426,67 @@ The plan as written:
   three tests, because it costs CPU and is the input most likely to differ on hardware.
 - **Verify:** TF has one publisher per link; the EKF's `/odom` beats each of its inputs alone.
 
-## Phase 4: safety layer
+## Phase 4: safety layer (measured 2026-11-03; D2 deferred, D5 decided 2026-11-03)
+
+- **Gate:** `mecanum_safety`'s `safety_supervisor` takes `/cmd_vel` and feeds the controller on
+  `/cmd_vel_safe`. `controllers.launch.py` has a `reference_topic` argument, default
+  `/cmd_vel_safe`. `reference_topic:=/cmd_vel` bypasses the gate, for the mock dry runs only,
+  which have no sensors. `robot.launch.py` has a `safety` argument (sim only). The hardware
+  path is unchanged.
+- **One rule for every directional block.** A guard is a set of robot points with outward
+  normals. A command passes only if no point moves along a normal; rotation is judged exactly.
+  `/safety/state` is `mecanum_interfaces/SafetyState`. The rules are in the package README.
+- **The watchdogs run on the steady clock.** The node stays on the wall clock: the bridge also
+  carries `/clock`, which a sim-time watchdog would freeze with. A replaced command keeps its
+  source's stamp.
+- **Tool:** `tools/safety_check.py`, in `sensor_test.sdf`, judged on ground truth (S1).
+- **Measured** (headless, all sensors on, 2026-11-03; two runs of every case):
+
+  | Check | Result |
+  |---|---|
+  | Chain | `/cmd_vel_safe`: one publisher (the supervisor), one subscriber (the controller); the controller does not listen to `/cmd_vel`: PASS |
+  | Cliffs, forward and reverse, 0.3 / 0.2 / 0.1 m/s | Stops 1.4 / 0.7 / 0.3 cm after the first block. The leading wheel contact stays 4.7 to 7.4 cm short of the edge. Held toward the hole, 0.0 mm; backing away allowed: PASS, 12 of 12 |
+  | Cliffs, sideways left and right, 0.3 / 0.2 / 0.1 m/s | The block comes when the leading wheel contact is already 6.1 to 7.0 cm over the edge, and the robot falls into the hole. At 0.3 m/s it sometimes slides in 35 to 45 cm: **FAIL, 12 of 12** |
+  | Bumpers, front and rear | Blocked on contact, held toward the wall 0.0 mm with no new presses, backs off 9.7 cm and clears: PASS |
+  | E-stop | Latches; reset refused while true; still latched after release; reset accepted; moves again: PASS |
+  | Sensor loss, by stopping each relay and then the bridge | Cliffs 0.24 s, bumpers 0.22 s, ultrasonics 0.50 s, depth cloud 0.56 s, the bridge (`/scan`, L2) 0.96 s, each with its block: PASS |
+  | Launch test, fake sensors | Each of the 15 watched topics silenced in turn gives its block, then clears: PASS |
+  | `tools/sensor_check.py` | 0 failures |
+  | `motion_test` `axes`, through the gate | forward 98%, strafe 98%: PASS. Rotate 98%, translation 5.6 cm: FAIL, as in Phase 2 |
+  | `odom_eval` loop, E1 | 0.090 m / 0.15° (Phase 3: 0.088 m / 0.20°), within its targets |
+  | Supervisor CPU | 5 to 7% of a core (the default rclpy executor: 34 to 40%) |
+  | Real-time factor | 0.95 restroom, LIO on |
+  | `colcon test` | 271 tests, 0 failures, 8 skipped |
+
+- **The sideways cliff gap is geometric.** The cliff sensors sit at y ±0.208 m, 7 mm *inboard*
+  of the wheel centres (±0.215 m), and the wheels reach ±0.258 m. A drop beside the robot reaches
+  the wheels first. The simulated cone also reports the nearest return, so it flags the drop
+  only when its whole footprint (2.9 cm radius) is past the edge. Speed makes no difference: the
+  wheel is over the edge before anything is seen. The real VL53L1X may report differently, but
+  the layout gap remains.
+- **Forward and reverse have about 9 cm of margin,** from the cone's edge at 0.325 m to the
+  wheel contact at 0.236 m. At 0.3 m/s, 4.7 cm of it is left. Raising the speed limit eats into
+  it at about 1 cm per 0.1 m/s.
+- **The L2 timeout is 1.0 s, not 0.6 s.** `/l2/points_filtered` showed gaps up to 0.59 s (three
+  missed scans; the self-filter's input loses about 2% of the clouds). At 0.6 s it caused three
+  false stops in 150 s.
+- **Running a launch test beside a simulation mixes their topics** (one ROS domain): the fake
+  sensors and the real ones feed the same names. Run the tests with no simulation.
+- **Decision D2: deferred, nothing changed** ([0004](decisions/0004-safety-bumper-protrusion-and-side-cliffs.md)).
+  The owner noted the problem: the 2D lidar stands 16 mm and the front ultrasonics 4 mm past the
+  front plank, so a wall at their height hits them before the plank switches. The planks stay
+  where the STEP puts them. The bumper tests use the low wall, which does not depend on it.
+- **Decision D5: D5-c, the sideways cliff gap is accepted and recorded** ([0004](decisions/0004-safety-bumper-protrusion-and-side-cliffs.md)).
+  The robot is for sites with no drops beside its path. The options were:
+  - **D5-a.** Move the cliff sensors outboard of the wheels, or add a pair facing sideways. Only
+    this closes the gap, and it needs a mechanical change.
+  - **D5-b.** Cap the sideways speed, and keep strafing away from known drops with keepout zones
+    from the map (Phases 5 and 6). It reduces the risk but detects nothing.
+  - **D5-c.** Accept the gap and record it, for sites with no drops.
+
+  The recommendation was D5-a on the real robot, with D5-b until then.
+
+The plan as written:
 
 - **New package `mecanum_safety`,** with a node `safety_supervisor`. Its logic is pure Python
   with unit tests, like `kinematics.py`. It handles:
@@ -583,7 +642,7 @@ Each entry works only because this is a simulation. Add entries as they are intr
 | S2 | Ideal wheel encoders | Phase 1 | No quantization, noise or latency. Slip comes only from the friction model. |
 | S3 | Idealized sensors | Phase 2 | Gaussian noise only. No sonar crosstalk or multipath, no IR depth artefacts on shiny surfaces, no motion distortion in the lidars, a regular L2 scan pattern. |
 | S4 | Glass via visibility masks | Phase 2 | Glass is hidden from the lidars and the camera by a Gazebo visibility mask and seen only by the ultrasonics. Real glass is partly visible and partly not. |
-| S5 | The E-stop is a topic | Phase 4 | No hardware stop circuit. |
+| S5 | The E-stop is a topic | Phase 4 | No hardware stop circuit. With no `/estop` publisher the supervisor is not latched. |
 | S6 | Poses from the world file | Phase 7 | The dock and staging poses come from the known `toilet_1` pose until detection exists. |
 | S7 | Ultrasonic beams 6° high | Phase 2 | The cones are 60° across but only 6° high, so the floor never answers. Real ultrasound mostly reflects away from a smooth floor at this angle, but a rough or wet one may answer, and real beams are taller, so they hear low objects the simulated ones miss. |
 | S8 | 2D lidar limited to ±89.5° | Phase 2 | The model has no slot for it, so the sim sees 10.5° less on each side than the contract's ±100°. Anything that relies on the side view at the robot's front corners must be re-checked. |

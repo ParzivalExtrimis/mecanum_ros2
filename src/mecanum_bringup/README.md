@@ -29,12 +29,16 @@ ros2 launch mecanum_bringup robot.launch.py rviz:=true   # also RViz
 | `use_d435i`, `use_lidar_2d`, `use_ultrasonics`, `use_cliff_tof`, `use_bumpers` | `true` | Include that sensor in the model; sim only |
 | `use_l2_scan` | `false` | Also make a 2D scan from the L2 cloud, on `/l2/scan`, for comparison |
 | `lio` | `false` in sim, `true` on hardware | Run LIO odometry; needs `use_l2`. In sim it is not an EKF input ([decision 0003](../../docs/decisions/0003-default-odometry-wheels-and-l2-gyro.md)), so it runs only for evaluation |
-| `ekf` | `true` | Run the EKF, sim only. With `false`, nothing publishes `odom -> base_footprint` |
+| `ekf` | `true` | Run the EKF, sim only. With `false`, nothing publishes `odom -> base_footprint`, and the safety gate does not watch `/odom` |
+| `safety` | `true` | Run the safety gate (`mecanum_safety`), sim only. With `false`, nothing feeds the drive controller |
 
 With `sim:=true`, the launch starts:
 - the simulation from `mecanum_simulation/sim.launch.py`, including the controllers:
-  `mecanum_drive_controller` takes `TwistStamped` on `/cmd_vel` and publishes
-  `/wheel/odometry`; `joint_state_broadcaster` publishes `/joint_states`;
+  `mecanum_drive_controller` takes `TwistStamped` on `/cmd_vel_safe` and publishes
+  `/wheel/odometry`;
+- the safety gate from `mecanum_safety/safety.launch.py`, from `/cmd_vel` (every source) to
+  `/cmd_vel_safe`, with `/safety/state`. It watches the fitted sensors (the `use_*` arguments)
+  and blocks motion toward a cliff or a pressed bumper, on the e-stop, and on a lost sensor; `joint_state_broadcaster` publishes `/joint_states`;
 - the simulated sensors, on the plan's contract topics; `/scan` is the 2D lidar's;
 - the L2 perception from `mecanum_localization/perception.launch.py`: the self-filter, from
   `/l2/points` to `/l2/points_filtered`;
