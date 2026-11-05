@@ -1,0 +1,3 @@
+# slam_toolbox pose graphs (tools/save_map.py) are about 12 MB per map: kept out of git.
+*.posegraph
+*.data

@@ -3,9 +3,10 @@
 This package holds the perception and localization for the mecanum base:
 - **Built:** the L2 self-filter, the cloud-to-scan conversion, LIO (rko_lio) and its planar
   odometry adapter, the EKF (plan Phase 3), plus `gt_compare` and `odom_eval.launch.py` to
-  measure drift in simulation.
-- **Planned** ([docs/plan.md](../../docs/plan.md)): slam_toolbox mapping in
-  Phase 5, and AMCL or slam_toolbox localization in Phase 6.
+  measure drift in simulation; slam_toolbox mapping on the 2D lidar and `map_compare`, the
+  geometry behind `tools/map_check.py` (plan Phase 5).
+- **Planned** ([docs/plan.md](../../docs/plan.md)): AMCL or slam_toolbox localization in
+  Phase 6.
 
 It uses upstream nodes where they exist. Topics are identical with the real L2 driver,
 `mecanum_lidar`, and the simulated L2 in `mecanum_simulation`.
@@ -29,6 +30,10 @@ It uses upstream nodes where they exist. Topics are identical with the real L2 d
 /wheel/odometry + /l2/imu
   -> ekf              robot_localization, simulation only
 /odom (sim)           Odometry, plus the TF odom -> base_footprint
+
+/scan + TF odom -> base_footprint
+  -> slam_toolbox     online async mapping (slam_mapping.launch.py)
+/map                  OccupancyGrid, map, transient local; plus the TF map -> odom
 ```
 
 TF ownership: in simulation the EKF publishes `odom -> base_footprint`, and `robot.launch.py`
@@ -159,6 +164,54 @@ Flattens rko_lio's 3D pose to x, y and yaw, makes the first pose the origin, and
 The twist is passed through as vx, vy and wz. If rko_lio ever reset, the pose would jump;
 `reset_on_registration_error` is off.
 
+## Mapping: `config/slam_mapping.yaml`, `launch/slam_mapping.launch.py`
+
+slam_toolbox 2.8.5 from apt, online async, on the RPLIDAR C1's `/scan` alone (decision D3-a in
+[docs/plan.md](../../docs/plan.md)). The launch file includes the upstream
+`online_async_launch.py`, which starts a lifecycle node and activates it. It publishes `/map`
+and `map -> odom`; `odom -> base_footprint` stays the EKF's. The config is the upstream
+`mapper_params_online_async.yaml` with seven values changed, each marked `CHANGED` with its
+reason: the C1's range (0.05–12 m), a new scan every 0.25 m or 0.25 rad (STAND-IN, for a small
+room), map updates every 2 s, no interactive mode, and a correlation smear of 0.03 m (Karto's
+default) instead of 0.1 m, for sharper walls.
+
+**Mapping with a lidar that sees only the front.** The C1 covers about 200° ahead (179° in
+simulation) and nothing behind. So:
+- drive forward passes, and turn in place at the end of each pass to look back along it;
+- never reverse into an area not yet seen;
+- strafe past side openings, such as doorways, or stop and turn to face them;
+- go slowly near walls and while turning (0.2 m/s and 0.5 rad/s were used): scan matching is
+  least accurate when the robot turns in place close to a wall;
+- end where you started, so that the pose graph can close the loop.
+
+`tools/map_route.py` drives such a route through the restroom world.
+
+**What the map misses.** The scan plane is 0.13 m above the floor, so the map shows as free:
+- the stall partitions, whose floor gap reaches 0.15 m (only their post is in the map);
+- low objects under the plane, such as the 5 cm threshold;
+- glass, which the lidar does not see (shortcut S4);
+- overhangs, such as the toilet tank above the open space behind the pedestal.
+
+Phase 6 covers these with a keepout mask and the 3D costmap layers.
+
+**Save, then check:**
+```bash
+tools/save_map.py restroom     # src/mecanum_navigation/maps/restroom.{pgm,yaml,posegraph,data}
+tools/map_check.py src/mecanum_navigation/maps/restroom.yaml
+```
+`tools/save_map.py` calls `/slam_toolbox/save_map` (the image and YAML, through map_server's
+map saver) and `/slam_toolbox/serialize_map` (the pose graph, for localization mode or to
+continue the map; about 12 MB, kept out of git). `tools/map_check.py` reads the map and the
+world SDF, with no ROS running. It places the map frame at the spawn pose, because slam_toolbox
+starts the map where the robot starts. It judges each wall face at least 1 m long: the median
+offset of its cells must be within 5 cm. It also reports the cells' distance to the nearest
+shape, a best-fit alignment of the whole map, and the fixtures the map does not contain.
+
+Results (plan Phase 5): every wall face within 2.3 cm, residual 0.8 cm after the best fit,
+slam_toolbox at about 7% of a core. Against ground truth, slam_toolbox's pose was off by up to
+8 cm and 0.75°, mostly right after turns in place near walls, although the odometry it starts
+from was within 1 cm.
+
 ## Drift against ground truth: `gt_compare` (simulation only)
 
 Pairs an odometry topic (`odom_topic`, default `/odom`) with `/sim/ground_truth/odom`, interpolated at each estimate's stamp, both taken
@@ -224,6 +277,7 @@ ros2 launch mecanum_bringup robot.launch.py rviz:=true
 # On their own:
 ros2 launch mecanum_localization perception.launch.py use_sim_time:=true
 ros2 launch mecanum_localization lio.launch.py use_sim_time:=true
+ros2 launch mecanum_localization slam_mapping.launch.py use_sim_time:=true
 ```
 
 | `perception.launch.py` argument | Default |
@@ -240,3 +294,8 @@ ros2 launch mecanum_localization lio.launch.py use_sim_time:=true
 | `config` | `config/rko_lio.yaml` |
 | `odom_topic` | `/odom` |
 | `publish_tf` | `true` |
+
+| `slam_mapping.launch.py` argument | Default |
+|---|---|
+| `use_sim_time` | `false` |
+| `slam_params_file` | `config/slam_mapping.yaml` |

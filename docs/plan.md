@@ -160,6 +160,7 @@ Topics and frames that the simulation provides and that hardware drivers must ma
 | `/wheel/odometry` | `nav_msgs/Odometry` | `odom` → `base_footprint` | 50 Hz | 1 |
 | `/odom` | `nav_msgs/Odometry` (EKF) | `odom` → `base_footprint` | 50 Hz | 3 |
 | `/safety/state` | `mecanum_interfaces/SafetyState` | — | 10 Hz and on change | 4 |
+| `/map` | `nav_msgs/OccupancyGrid`, transient local (slam_toolbox while mapping) | `map` | every 2 s while mapping | 5 |
 
 The frames come from `mecanum_description`. Gazebo-only topics live under `/sim/`, such as the
 inputs of the sim-only nodes (`/sim/ultrasonic/*`, `/sim/cliff/*`, `/sim/bumper/*`). `/l2/scan`,
@@ -518,7 +519,58 @@ The plan as written:
   - killing each sensor's bridge triggers its watchdog;
   - teleop is gated too.
 
-## Phase 5: mapping
+## Phase 5: mapping (measured 2026-11-05; D3-a decided 2026-11-04)
+
+- **slam_toolbox** online async on the C1's `/scan` alone. `mecanum_localization`:
+  `config/slam_mapping.yaml` (upstream with seven values changed, each marked) and
+  `launch/slam_mapping.launch.py` (the upstream lifecycle launch). `mecanum_bringup`:
+  `mapping.launch.py` (robot.launch.py + slam_toolbox + RViz on `rviz/mapping.rviz`). It
+  publishes `/map` and `map → odom`; the EKF keeps `odom → base_footprint`.
+- **New package `mecanum_navigation`,** for now only `maps/`: `restroom.pgm` and `.yaml`. The pose
+  graph (about 12 MB) is kept out of git.
+- **Tools:** `tools/save_map.py` (map image, YAML and pose graph), `tools/map_route.py` (a fixed
+  29 m route through the restroom world, closed loop on `/odom`, through the gate),
+  `tools/map_check.py` (the map against the world SDF, no ROS; the geometry is
+  `mecanum_localization/map_compare.py`, unit-tested).
+- **Owner's criteria (2026-11-04):** each wall face at least 1 m long within 5 cm (median of its
+  cells, map anchored at the spawn pose). Everything else, CPU and the real-time factor
+  included, is reported only.
+- **Measured** (headless, all sensors on, the route: 29.2 m, 1261° of turns, 210 s). Two live
+  runs with the final config, worst of the two:
+
+  | Check | Result |
+  |---|---|
+  | Wall faces, 12 judged | All within 2.3 cm (run A 1.5 cm, run B 2.3 cm): PASS |
+  | Cells to the nearest world shape, as anchored | median 2.3 cm, 95th percentile 5.2 cm, max 7.3 cm; none beyond 10 cm |
+  | Best fit of the whole map onto the world | moved up to 2.9 cm and 0.08°; residual median 1.1 cm, 95th percentile 4.2 cm |
+  | slam_toolbox's pose against ground truth | max 8.3 cm and 0.75°; at the end of the route 6.0 to 8.2 cm |
+  | The EKF's odometry against ground truth | within 1 cm over the route |
+  | Missed by the map, as expected | the stall partitions (only the post is in the map), the threshold, the glass, the toilet tank's overhang |
+  | TF | `map → odom` present, from slam_toolbox (the only node with the `map` frame); `odom → base_footprint` still the EKF |
+  | slam_toolbox CPU | 7% of a core (median), 10 to 15% at peaks |
+  | Real-time factor | 0.76 with slam_toolbox, 0.74 without: no effect from mapping. Lower than Phase 4's 0.95 because of other load on the laptop during the measurements |
+  | `tools/sensor_check.py` (sensor test world, mapping running) | 0 failures |
+  | `motion_test` `axes` | forward 99%, strafe 99%: PASS. Rotate 99%, translation 5.6 cm: FAIL, as since Phase 2 |
+  | `colcon test` | 294 tests, 0 failures, 8 skipped |
+
+- **slam_toolbox, not the inputs, sets the map's accuracy.** On ground truth the scans lie on the
+  world within 1 cm, their timestamps are exact (best match at a 0 s offset, during rotation),
+  and the odometry stays within 1 cm. slam_toolbox's scan matching still moves the pose by up to
+  8 cm and 0.75°, mostly at turns in place near walls. The map stays consistent with itself
+  (residual about 1 cm after a best fit), but its frame can sit several cm off the world.
+- **The result varies between live runs.** With the upstream correlation smear (0.1 m), one run
+  passed (worst face 4.9 cm) and one failed (west wall 5.9 cm, sink counter 10.9 cm; pose error
+  11.3 cm at the end). Replaying one recorded route gives the same result each time, so the
+  spread comes from live timing. On that replay, smear 0.03 m cut the residual after the best
+  fit from 2.5 to 0.8 cm, with the same pose error. It was kept. Penalizing departures from the
+  odometry made it worse (17.7 cm), as did the upstream travel thresholds (9.5 cm).
+- **For Phase 7:** poses taken from the world file (S6) carry the map's offset from the world,
+  several cm. The dock and staging poses should be recorded in the map frame
+  (`record_pose.py`), or the map's offset measured first.
+- **Decision D3: D3-a,** the C1 alone (owner, 2026-11-04). The gaps go to Phase 6's keepout
+  mask and 3D costmap layers.
+
+The plan as written:
 
 - **slam_toolbox,** online async, on the C1 `/scan`:
   - `odom_frame odom`, from the EKF;
