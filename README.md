@@ -53,11 +53,11 @@ Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
 | `mecanum_controllers` | done, Phase 1 | ros2_control xacro (mock or Gazebo hardware), `mecanum_drive_controller` and `joint_state_broadcaster` config, mock kinematics test |
 | `mecanum_interfaces` | messages done; mission interfaces in Phase 7 | Motor command and debug messages, `SafetyState`, task and mission interfaces later |
 | `mecanum_lidar` | driver done, hardware test paused | Unitree L2 driver (`/l2/points`, `/l2/imu`, no TF) on the vendored SDK, bench-test launch, RViz config |
-| `mecanum_localization` | self-filter, cloud-to-scan, LIO pipeline and EKF done; SLAM in Phase 5 | Self-filter, cloud-to-scan, LIO and its odom adapter, EKF, slam_toolbox, AMCL |
+| `mecanum_localization` | self-filter, cloud-to-scan, LIO pipeline, EKF and slam_toolbox mapping done; localization in Phase 6 | Self-filter, cloud-to-scan, LIO and its odom adapter, EKF, slam_toolbox, AMCL |
 | `mecanum_safety` | done in simulation, Phase 4 (D2 deferred, D5-c) | Safety supervisor: the gate from `/cmd_vel` to `/cmd_vel_safe` on cliffs, bumpers, E-stop, sensor loss |
-| `mecanum_navigation` | planned, Phase 6 | Nav2 parameters, collision monitor, docking, keepout mask, maps |
+| `mecanum_navigation` | maps done (Phase 5); Nav2 in Phase 6 | Maps, Nav2 parameters, collision monitor, docking, keepout mask |
 | `mecanum_mission` | planned, Phase 7 | Mission executive and placeholder task server |
-| `mecanum_bringup` | `robot.launch.py` done | Top-level launch files and RViz configs |
+| `mecanum_bringup` | `robot.launch.py` and `mapping.launch.py` done | Top-level launch files and RViz configs |
 
 ## Design decisions
 
@@ -227,9 +227,25 @@ ros2 launch mecanum_bringup hardware_sensors.launch.py lio:=true
 tools/lio_marks.py      # press Enter at each tape mark to log /odom
 ```
 
-### Mapping, navigation and mission runs
+### Simulation: mapping
 
-The exact launch sequences will be added here as plan Phases 5 to 8 land.
+slam_toolbox builds a 2D map from the 2D lidar while the robot is driven (plan Phase 5):
+
+```bash
+ros2 launch mecanum_bringup mapping.launch.py                 # Gazebo GUI + RViz on the map
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args \
+  -p stamped:=true -p speed:=0.2 -p turn:=0.5                # second terminal
+tools/save_map.py my_map                                     # into src/mecanum_navigation/maps/
+tools/map_check.py src/mecanum_navigation/maps/my_map.yaml   # compare with the world file
+```
+
+`tools/map_route.py` drives a fixed route through the restroom world instead of teleop. The
+lidar sees only ahead, so map with forward passes and turns in place; the map misses the stall
+partitions, low objects and glass. See `src/mecanum_localization/README.md`, "Mapping".
+
+### Navigation and mission runs
+
+The exact launch sequences will be added here as plan Phases 6 to 8 land.
 
 ## Development phases
 
@@ -246,7 +262,7 @@ the self-filter and the LIO pipeline; its paused hardware work is kept in
 | 2 | Simulated sensor suite: 2D lidar, D435i, ultrasonics, cliff ToF, bumpers | done 2026-10-30 |
 | 3 | State estimation: EKF on wheel odometry and IMU; LIO re-evaluated | done 2026-11-03 (D1: E1) |
 | 4 | Safety layer: cliffs, bumpers, E-stop, sensor loss | done 2026-11-03 (D2 deferred; D5-c: no side cliff sensing) |
-| 5 | Mapping with slam_toolbox on the 2D lidar | |
+| 5 | Mapping with slam_toolbox on the 2D lidar | done 2026-11-05 (D3-a: the 2D lidar alone) |
 | 6 | Localization and Nav2 | |
 | 7 | Docking and mission executive | |
 | 8 | End-to-end acceptance in simulation | |

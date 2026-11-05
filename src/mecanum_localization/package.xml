@@ -3,7 +3,7 @@
 <package format="3">
   <name>mecanum_localization</name>
   <version>0.0.1</version>
-  <description>Perception and localization for the mecanum base: L2 self-filter and cloud-to-scan (phase 3); LIO, its planar odometry adapter and a ground-truth drift tool (phase 4); the EKF (plan Phase 3); slam_toolbox and AMCL configs (later phases).</description>
+  <description>Perception and localization for the mecanum base: L2 self-filter and cloud-to-scan (phase 3); LIO, its planar odometry adapter and a ground-truth drift tool (phase 4); the EKF (plan Phase 3); slam_toolbox mapping and a map-versus-world comparison (plan Phase 5); AMCL configs (Phase 6).</description>
   <maintainer email="claude.raseksha@gmail.com">hegde-aryan</maintainer>
   <license>Apache-2.0</license>
 
@@ -17,6 +17,7 @@
   <exec_depend>tf2_ros_py</exec_depend>
   <exec_depend>rko_lio</exec_depend>
   <exec_depend>robot_localization</exec_depend>
+  <exec_depend>slam_toolbox</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

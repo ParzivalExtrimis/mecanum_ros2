@@ -6,7 +6,7 @@ Top-level launch files and RViz configurations for the mecanum base.
 |---|---|---|
 | `robot.launch.py` | 1 | Simulation (ros2_control drive) or hardware base (open-loop driver), L2 perception and LIO odometry |
 | `hardware_sensors.launch.py` | paused hardware stages 3H, 4H | Real L2: driver, URDF TF, self-filter, scan and the sensors RViz view; LIO with `lio:=true`. No drive node. |
-| `mapping.launch.py` | 5, planned | Robot, EKF and slam_toolbox mapping |
+| `mapping.launch.py` | 5 | Simulation: `robot.launch.py`, slam_toolbox mapping and RViz on `rviz/mapping.rviz` |
 | `navigation.launch.py` | 6, planned | Robot, EKF, localization and Nav2 |
 | `mission.launch.py` | 7, planned | Navigation plus docking and the mission executive |
 
@@ -66,6 +66,26 @@ in RViz, set Global Options > Fixed Frame to `odom`.
 The LIO configuration here is the simulation one: deskewing and the start-up initialization
 are off. On hardware, use `hardware_sensors.launch.py lio:=true`, which loads
 `rko_lio_hardware.yaml`.
+
+## `mapping.launch.py`
+
+Maps a world in simulation (plan Phase 5): `robot.launch.py` (Gazebo, the drive, the EKF, the
+safety gate) and `mecanum_localization/slam_mapping.launch.py` (slam_toolbox on `/scan`, which
+publishes `/map` and `map -> odom`). RViz starts by default with `rviz/mapping.rviz`: a top-down
+view in the `map` frame with the map, the scan, the robot and the TF frames. Every
+`robot.launch.py` argument can be given too (`world`, `gui`, `use_*`).
+
+```bash
+ros2 launch mecanum_bringup mapping.launch.py                          # Gazebo GUI + RViz
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args \
+  -p stamped:=true -p speed:=0.2 -p turn:=0.5                         # second terminal
+tools/save_map.py restroom                                            # from the workspace root
+tools/map_check.py src/mecanum_navigation/maps/restroom.yaml
+```
+
+For a repeatable map, `tools/map_route.py` drives a fixed route through the restroom world
+instead of teleop. How to map with a lidar that sees only the front, and what the map misses:
+`src/mecanum_localization/README.md`, "Mapping".
 
 ## `hardware_sensors.launch.py`
 
