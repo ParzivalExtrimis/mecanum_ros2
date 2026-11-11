@@ -4,9 +4,9 @@ This package holds the perception and localization for the mecanum base:
 - **Built:** the L2 self-filter, the cloud-to-scan conversion, LIO (rko_lio) and its planar
   odometry adapter, the EKF (plan Phase 3), plus `gt_compare` and `odom_eval.launch.py` to
   measure drift in simulation; slam_toolbox mapping on the 2D lidar and `map_compare`, the
-  geometry behind `tools/map_check.py` (plan Phase 5).
-- **Planned** ([docs/plan.md](../../docs/plan.md)): AMCL or slam_toolbox localization in
-  Phase 6.
+  geometry behind `tools/map_check.py` (plan Phase 5); slam_toolbox localization mode on a
+  saved pose graph (plan Phase 6). AMCL, the default localization, is configured in
+  `mecanum_navigation` ([docs/plan.md](../../docs/plan.md)).
 
 It uses upstream nodes where they exist. Topics are identical with the real L2 driver,
 `mecanum_lidar`, and the simulated L2 in `mecanum_simulation`.
@@ -212,6 +212,28 @@ slam_toolbox at about 7% of a core. Against ground truth, slam_toolbox's pose wa
 8 cm and 0.75°, mostly right after turns in place near walls, although the odometry it starts
 from was within 1 cm.
 
+## Localization mode: `config/slam_localization.yaml`, `launch/slam_localization.launch.py`
+
+The alternative to AMCL, chosen with `localization:=slam_toolbox` in
+`mecanum_navigation/launch/localization.launch.py`. slam_toolbox loads a saved pose graph
+(`map` argument: the path without `.posegraph`, required), starts at the map frame's origin
+(`map_start_pose` [0, 0, 0], the robot's spawn pose and home) and keeps matching scans against
+it. It publishes `/map` and `map -> odom` itself; AMCL and map_server then do not run. The
+config is `slam_mapping.yaml` with the localization values marked `LOCALIZATION`: mode
+`localization`, a short scan buffer (3) and a short loop chain (3), so that it corrects
+quickly without growing the graph. The launch file includes the upstream
+`localization_launch.py`, with `map_file_name` set in a scoped group.
+
+```bash
+ros2 launch mecanum_localization slam_localization.launch.py use_sim_time:=true \
+  map:=$(ros2 pkg prefix mecanum_navigation)/share/mecanum_navigation/maps/restroom
+```
+
+The pose graph is not in git. Make it under its own name with its own keepout mask, as in
+`mecanum_navigation/README.md`, "Localization": `tools/save_map.py restroom` would replace the
+committed map. In Phase 6 this mode lost the robot in the corridor (errors of 30 to 95 cm);
+AMCL is the default and the one measured.
+
 ## Drift against ground truth: `gt_compare` (simulation only)
 
 Pairs an odometry topic (`odom_topic`, default `/odom`) with `/sim/ground_truth/odom`, interpolated at each estimate's stamp, both taken
@@ -278,6 +300,7 @@ ros2 launch mecanum_bringup robot.launch.py rviz:=true
 ros2 launch mecanum_localization perception.launch.py use_sim_time:=true
 ros2 launch mecanum_localization lio.launch.py use_sim_time:=true
 ros2 launch mecanum_localization slam_mapping.launch.py use_sim_time:=true
+ros2 launch mecanum_localization slam_localization.launch.py use_sim_time:=true map:=<graph>
 ```
 
 | `perception.launch.py` argument | Default |

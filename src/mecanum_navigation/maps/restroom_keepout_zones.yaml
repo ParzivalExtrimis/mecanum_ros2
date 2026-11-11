@@ -1,0 +1,41 @@
+# Keepout zones for Nav2 (docs/plan.md Phase 6), polygons in the map frame (m).
+# Written by tools/make_keepout_mask.py --from-world from restroom.sdf
+# (shortcut S10: on a real site, measure and draw them). The map frame sits at
+# [0.0, -1.0, 0.0] in the world; each zone is grown by 0.05 m.
+frame: map
+zones:
+- name: building/stall_partition_side
+  why: z 0.15..1.90 m, misses the 2D lidar plane
+  polygon:
+  - [7.0, 3.27]
+  - [5.35, 3.27]
+  - [5.35, 3.13]
+  - [7.0, 3.13]
+- name: building/stall_partition_front
+  why: z 0.15..1.90 m, misses the 2D lidar plane
+  polygon:
+  - [5.47, 5.0]
+  - [5.33, 5.0]
+  - [5.33, 4.6]
+  - [5.47, 4.6]
+- name: building/toilet_1_tank
+  why: z 0.40..0.80 m, misses the 2D lidar plane
+  polygon:
+  - [7.0, 4.35]
+  - [6.7, 4.35]
+  - [6.7, 3.8]
+  - [7.0, 3.8]
+- name: threshold/link
+  why: z 0.00..0.05 m, misses the 2D lidar plane
+  polygon:
+  - [5.7, 1.0]
+  - [5.3, 1.0]
+  - [5.3, -1.0]
+  - [5.7, -1.0]
+- name: glass_screen/link
+  why: hidden from the lidars
+  polygon:
+  - [0.95, 3.86]
+  - [-0.55, 3.86]
+  - [-0.55, 3.74]
+  - [0.95, 3.74]

@@ -18,7 +18,7 @@ drives the robot). The hardware path is unchanged until the hardware plugin exis
 |---|---|
 | `mecanum_safety/safety_logic.py` | The rules, pure Python with no ROS: guards, the cliff threshold, the watchdog, the e-stop latch |
 | `mecanum_safety/safety_supervisor.py` | The node |
-| `config/safety.yaml` | Positions (from the URDF), thresholds and watchdog timeouts |
+| `config/safety.yaml` | Positions (from the URDF), thresholds, watchdog timeouts and clock |
 | `launch/safety.launch.py` | The node, with a `watch_<sensor>` argument per sensor group |
 | `test/test_safety_logic.py` | Every rule, corner, plank, the latch and the watchdog timing |
 | `test/test_layout.py` | The positions in `safety.yaml` against the URDF |
@@ -61,6 +61,21 @@ replaced with zero, never reduced.
     watchdog on sim time would freeze with it and never fire, so the watchdogs run on the steady
     clock.
   - **Cost.** Following `/clock` (500 Hz) would also cost most of a core in Python.
+- **In simulation, the watchdogs judge message stamps** (`watchdog_clock: stamps`, which
+  `robot.launch.py` sets in sim; the robot keeps `steady`).
+  - **Why.** With the Gazebo window and RViz open the simulation runs at about 0.7 of real
+    time, and the L2 cloud's wall-clock gaps reached 1.0–1.3 s against its 1.0 s timeout: the
+    gate stopped the robot every few seconds in a GUI test run (2026-11-06).
+  - **How.** A topic is lost once its last stamp is more than its timeout behind the newest
+    stamp of any watched topic. The stamp is read from the raw message bytes, so the clouds
+    are still never deserialized. A bumper's `Bool` has no stamp and is given the newest one
+    when it arrives.
+  - **A stopped clock.** Stamps cannot age when the clock stops, so when the newest stamp
+    stands still for `stamp_stall` (0.5 s) of the steady clock, every topic is lost. Stopping
+    the bridge is caught in 0.56 s.
+  - **Measured.** Windows open: 0 stops in 100 s (1–3 on the steady clock). With 12 extra busy
+    processes (0.35 of real time) the L2 cloud and the D435i still fall 0.6–2.1 s behind in sim
+    time and stop the robot (10 in 100 s): the costmaps are then just as stale.
   - **Stamps.** The gate never stamps a command itself. It reuses the sources' stamps, which
     the controller checks.
 - **rclpy's `EventsExecutor`.** With some 300 messages a second, the default executor took

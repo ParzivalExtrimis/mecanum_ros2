@@ -53,11 +53,11 @@ Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
 | `mecanum_controllers` | done, Phase 1 | ros2_control xacro (mock or Gazebo hardware), `mecanum_drive_controller` and `joint_state_broadcaster` config, mock kinematics test |
 | `mecanum_interfaces` | messages done; mission interfaces in Phase 7 | Motor command and debug messages, `SafetyState`, task and mission interfaces later |
 | `mecanum_lidar` | driver done, hardware test paused | Unitree L2 driver (`/l2/points`, `/l2/imu`, no TF) on the vendored SDK, bench-test launch, RViz config |
-| `mecanum_localization` | self-filter, cloud-to-scan, LIO pipeline, EKF and slam_toolbox mapping done; localization in Phase 6 | Self-filter, cloud-to-scan, LIO and its odom adapter, EKF, slam_toolbox, AMCL |
+| `mecanum_localization` | self-filter, cloud-to-scan, LIO pipeline, EKF, slam_toolbox mapping and localization mode done | Self-filter, cloud-to-scan, LIO and its odom adapter, EKF, slam_toolbox, AMCL |
 | `mecanum_safety` | done in simulation, Phase 4 (D2 deferred, D5-c) | Safety supervisor: the gate from `/cmd_vel` to `/cmd_vel_safe` on cliffs, bumpers, E-stop, sensor loss |
-| `mecanum_navigation` | maps done (Phase 5); Nav2 in Phase 6 | Maps, Nav2 parameters, collision monitor, docking, keepout mask |
+| `mecanum_navigation` | maps (Phase 5), AMCL and Nav2 (Phase 6) done; docking in Phase 7 | Maps, keepout mask, AMCL, Nav2 parameters and behaviour trees, collision monitor, ultrasonic relay, D435i thinner; docking later |
 | `mecanum_mission` | planned, Phase 7 | Mission executive and placeholder task server |
-| `mecanum_bringup` | `robot.launch.py` and `mapping.launch.py` done | Top-level launch files and RViz configs |
+| `mecanum_bringup` | `robot.launch.py`, `mapping.launch.py` and `navigation.launch.py` done | Top-level launch files and RViz configs |
 
 ## Design decisions
 
@@ -74,6 +74,9 @@ Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
 - **[0004: Bumper protrusion deferred, sideways cliff gap accepted](docs/decisions/0004-safety-bumper-protrusion-and-side-cliffs.md).**
   Decisions D2 and D5: the lidar and the front ultrasonics stand past the front plank, noted
   and left; the cliff sensors cannot see a drop beside the robot, accepted for sites with none.
+- **[0005: Ultrasonics and glass in navigation](docs/decisions/0005-ultrasonics-and-glass-in-navigation.md).**
+  Decision D6: known glass is a keepout zone; the ultrasonics feed the collision monitor and a
+  range layer in the local costmap only, its marks capped at 0.4 m; unknown glass is a stop.
 - **[Encoder upgrade guide](docs/encoder_upgrade.md).** The steps to move to ros2_control with
   measured wheel state: `mecanum_controllers`, `mecanum_hardware`, stamped `cmd_vel` and an
   EKF. Plan Phase 1 follows its simulation steps.
@@ -243,9 +246,25 @@ tools/map_check.py src/mecanum_navigation/maps/my_map.yaml   # compare with the 
 lidar sees only ahead, so map with forward passes and turns in place; the map misses the stall
 partitions, low objects and glass. See `src/mecanum_localization/README.md`, "Mapping".
 
-### Navigation and mission runs
+### Simulation: navigation
 
-The exact launch sequences will be added here as plan Phases 6 to 8 land.
+AMCL on the committed restroom map, Nav2 with MPPI and the collision monitor, the safety gate
+(plan Phase 6):
+
+```bash
+ros2 launch mecanum_bringup navigation.launch.py              # Gazebo GUI + RViz
+# RViz: "2D Pose Estimate" if the robot is not at home, then "Nav2 Goal"
+ros2 launch mecanum_bringup navigation.launch.py gui:=false rviz:=false
+tools/nav_check.py                                            # every check, about 25 minutes
+```
+
+`localization:=slam_toolbox` uses slam_toolbox's localization mode instead of AMCL; it needs a
+pose graph (`src/mecanum_navigation/README.md`, "Localization"). Teleop on `/cmd_vel` still
+works while Nav2 runs; it passes the safety gate but not the collision monitor.
+
+### Mission runs
+
+The launch sequences will be added here as plan Phases 7 and 8 land.
 
 ## Development phases
 
@@ -263,6 +282,6 @@ the self-filter and the LIO pipeline; its paused hardware work is kept in
 | 3 | State estimation: EKF on wheel odometry and IMU; LIO re-evaluated | done 2026-11-03 (D1: E1) |
 | 4 | Safety layer: cliffs, bumpers, E-stop, sensor loss | done 2026-11-03 (D2 deferred; D5-c: no side cliff sensing) |
 | 5 | Mapping with slam_toolbox on the 2D lidar | done 2026-11-05 (D3-a: the 2D lidar alone) |
-| 6 | Localization and Nav2 | |
+| 6 | Localization and Nav2 | measured 2026-11-06 (D6-a: ultrasonics in the local costmap, known glass in the keepout mask) |
 | 7 | Docking and mission executive | |
 | 8 | End-to-end acceptance in simulation | |

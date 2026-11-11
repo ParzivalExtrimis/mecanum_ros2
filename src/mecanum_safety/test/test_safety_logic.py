@@ -17,7 +17,8 @@
 import math
 
 from mecanum_safety.safety_logic import (
-    corner_guard, decide, EStop, face_guard, is_cliff, Layout, Twist2D, Watchdog, ZERO)
+    corner_guard, decide, EStop, face_guard, header_stamp, is_cliff, Layout, Twist2D,
+    Watchdog, ZERO)
 import pytest
 
 CX, CY, BX, HW = 0.3535, 0.2078, 0.3915, 0.255
@@ -176,3 +177,64 @@ def test_watchdog_lost_until_first_message_and_after_timeout():
     assert dog.lost(1.51) == ['/a', '/b']
     dog.feed('/a', 1.6)
     assert dog.lost(1.7) == ['/b']
+
+
+def test_watchdog_stamps_judge_message_time_not_arrival_time():
+    dog = Watchdog({'/a': 0.2, '/b': 0.5, '/bool': 0.25}, stall=0.5)
+    assert dog.lost(0.0) == ['/a', '/b', '/bool']
+    dog.feed('/bool', 0.0)  # no stamp known yet: still lost
+    assert '/bool' in dog.lost(0.0)
+    dog.feed('/a', 1.0, stamp=10.0)
+    dog.feed('/b', 1.0, stamp=10.0)
+    dog.feed('/bool', 1.0)  # takes the newest stamp, 10.0
+    assert dog.lost(1.0) == []
+    # A slow simulation: 0.4 s of wall time per 0.05 s of message time. Nothing is lost.
+    for i in range(1, 8):
+        for topic in ('/a', '/b'):
+            dog.feed(topic, 1.0 + 0.4 * i, stamp=10.0 + 0.05 * i)
+        dog.feed('/bool', 1.0 + 0.4 * i)
+        assert dog.lost(1.0 + 0.4 * i) == []
+    # /a goes quiet while /b runs on: lost once more than 0.2 s of message time behind.
+    dog.feed('/b', 4.0, stamp=10.5)
+    dog.feed('/bool', 4.0)
+    assert dog.lost(4.0) == []
+    dog.feed('/b', 4.1, stamp=10.6)
+    assert dog.lost(4.1) == ['/a']
+
+
+def test_watchdog_stamps_stopped_clock_loses_everything():
+    dog = Watchdog({'/a': 0.2, '/b': 0.5}, stall=0.5)
+    dog.feed('/a', 1.0, stamp=10.0)
+    dog.feed('/b', 1.0, stamp=10.0)
+    dog.feed('/a', 1.3, stamp=10.0)  # still arriving, but the clock stands still
+    assert dog.lost(1.5) == []
+    assert dog.lost(1.51) == ['/a', '/b']
+    dog.feed('/a', 1.6, stamp=10.01)  # the clock moves again
+    assert dog.lost(1.6) == []
+
+
+def test_watchdog_stamps_restarted_clock_forgets_stamps():
+    dog = Watchdog({'/a': 0.2, '/b': 0.2}, stall=0.5)
+    dog.feed('/a', 1.0, stamp=100.0)
+    dog.feed('/b', 1.0, stamp=100.0)
+    dog.feed('/a', 1.1, stamp=0.5)  # the simulation restarted
+    assert dog.lost(1.1) == ['/b']  # until /b reports on the new clock
+    dog.feed('/b', 1.2, stamp=0.55)
+    assert dog.lost(1.2) == []
+
+
+def test_header_stamp_reads_both_byte_orders():
+    import struct
+    little = b'\x00\x01\x00\x00' + struct.pack('<iI', 12, 500_000_000) + b'frame'
+    big = b'\x00\x00\x00\x00' + struct.pack('>iI', 12, 250_000_000) + b'frame'
+    assert header_stamp(little) == 12.5
+    assert header_stamp(big) == 12.25
+
+
+def test_header_stamp_of_a_real_serialized_message():
+    from rclpy.serialization import serialize_message
+    from sensor_msgs.msg import Range
+    msg = Range()
+    msg.header.stamp.sec, msg.header.stamp.nanosec = 1234, 750_000_000
+    msg.header.frame_id = 'us'
+    assert header_stamp(serialize_message(msg)) == 1234.75

@@ -1,0 +1,69 @@
+<!--
+  mecanum_navigation (docs/plan.md Phase 6): the upstream navigate_to_pose_w_replanning_and_recovery.xml
+  of Nav2 1.3.13 with three changes:
+  - A GoalCheckerSelector. FollowPath uses the goal checker named on the topic
+    goal_checker_selector (std_msgs/String, transient local): "staging" (default, 0.10 m /
+    0.10 rad) or "precise" (0.05 m / 0.05 rad), from config/nav2.yaml.
+  - The recoveries never clear the local costmap, and clear the global one except a 2 x 2 m
+    square around the robot (ClearCostmapExceptRegion), not entirely. The sensors look
+    forward: what is cleared beside or behind the robot, or too close below the D435i, is gone
+    until it is seen again, and the next spin, back-up or approach hit it (Phase 6: the
+    corridor bench, a low box). The local costmap is not cleared even in part: a partial clear
+    leaves Nav2's range layer (the ultrasonics) not current for good, and the controller then
+    fails every goal with "Costmap timed out waiting for update" (Nav2 1.3.13). Its phantoms
+    clear themselves: the voxels decay, the range cones clear on a max reading. STAND-IN.
+  - "Start occupied" from the planner (205, or 305 through poses) also runs the recoveries,
+    which upstream does not. The robot's clearance at a jamb is close to the costmap's error
+    (5 cm cells, a few cm of localization), so the footprint can touch a wall cell while the
+    robot is clear of it; upstream then fails every goal at once and the robot never moves
+    again (Phase 6). The back-up moves it clear. STAND-IN.
+-->
+<!--
+  This Behavior Tree replans the global path periodically at 1 Hz and it also has
+  recovery actions specific to planning / control as well as general system issues.
+  This will be continuous if a kinematically valid planner is selected.
+-->
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithReplanning">
+        <ControllerSelector selected_controller="{selected_controller}" default_controller="FollowPath" topic_name="controller_selector"/>
+        <PlannerSelector selected_planner="{selected_planner}" default_planner="GridBased" topic_name="planner_selector"/>
+        <GoalCheckerSelector selected_goal_checker="{selected_goal_checker}" default_goal_checker="staging" topic_name="goal_checker_selector"/>
+        <RateController hz="1.0">
+          <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="{selected_planner}" error_code_id="{compute_path_error_code}"/>
+            <Sequence>
+              <WouldAPlannerRecoveryHelp error_code="{compute_path_error_code}"/>
+              <ClearCostmapExceptRegion name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_except_global_costmap" reset_distance="2.0"/>
+            </Sequence>
+          </RecoveryNode>
+        </RateController>
+        <RecoveryNode number_of_retries="1" name="FollowPath">
+          <FollowPath path="{path}" controller_id="{selected_controller}" goal_checker_id="{selected_goal_checker}" error_code_id="{follow_path_error_code}"/>
+          <Sequence>
+            <WouldAControllerRecoveryHelp error_code="{follow_path_error_code}"/>
+          </Sequence>
+        </RecoveryNode>
+      </PipelineSequence>
+      <Sequence>
+        <Fallback>
+          <WouldAControllerRecoveryHelp error_code="{follow_path_error_code}"/>
+          <WouldAPlannerRecoveryHelp error_code="{compute_path_error_code}"/>
+          <AreErrorCodesPresent error_code="{compute_path_error_code}" error_codes_to_check="205;305"/>
+        </Fallback>
+        <ReactiveFallback name="RecoveryFallback">
+          <GoalUpdated/>
+          <RoundRobin name="RecoveryActions">
+            <Sequence name="ClearingActions">
+              <ClearCostmapExceptRegion name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_except_global_costmap" reset_distance="2.0"/>
+            </Sequence>
+            <Spin spin_dist="1.57" error_code_id="{spin_error_code}"/>
+            <Wait wait_duration="5.0"/>
+            <BackUp backup_dist="0.30" backup_speed="0.15" error_code_id="{backup_code_id}"/>
+          </RoundRobin>
+        </ReactiveFallback>
+      </Sequence>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

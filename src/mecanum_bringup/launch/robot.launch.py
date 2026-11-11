@@ -22,7 +22,8 @@ sim:=true   Gazebo world + robot + ros2_control (mecanum_simulation/sim.launch.p
             odom -> base_footprint; with ekf:=false nothing publishes that transform.
             The safety gate (mecanum_safety/safety.launch.py) takes /cmd_vel and feeds the
             controller on /cmd_vel_safe; with safety:=false nothing drives the robot. It
-            watches the sensors that the use_* arguments fit, and /odom only with the EKF.
+            watches the sensors that the use_* arguments fit, and /odom only with the EKF,
+            timed by the message stamps (watchdog_clock:=stamps).
 sim:=false  robot_state_publisher + joint_state_publisher (zero wheel angles) and the
             open-loop esp32_driver with the esp32 transport. The real transport is not
             implemented until the rewritten firmware's protocol exists; the driver then exits
@@ -158,6 +159,9 @@ def generate_launch_description():
             launch_arguments={
                 'watch_l2': LaunchConfiguration('use_l2'),
                 'watch_odom': LaunchConfiguration('ekf'),
+                # Sim only (the condition below): sim time runs slower than real time under
+                # load, so the watchdogs judge the message stamps.
+                'watchdog_clock': 'stamps',
                 **{f'watch_{name}': LaunchConfiguration(f'use_{name}')
                    for name in ('d435i', 'lidar_2d', 'ultrasonics', 'cliff_tof', 'bumpers')},
             }.items(),

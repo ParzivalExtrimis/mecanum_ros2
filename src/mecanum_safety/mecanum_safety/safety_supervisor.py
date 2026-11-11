@@ -29,7 +29,12 @@ fitted (robot.launch.py's use_* arguments); a sensor that is not watched gives n
 
 The node runs on the wall clock and its watchdogs on the steady clock, never on sim time: the
 simulation's one bridge also carries /clock, and a watchdog on a stopped clock would never fire.
-Following /clock (500 Hz) would also cost most of a core in Python. A zero command that
+Following /clock (500 Hz) would also cost most of a core in Python. In simulation,
+watchdog_clock: stamps judges each watched topic by its header stamps against the newest stamp
+of any of them, so a simulation running slower than real time (0.7 with the Gazebo window and
+RViz open) is not taken for lost sensors. The steady clock still catches a stopped clock:
+when the newest stamp stands still for stamp_stall seconds, every topic is lost
+(safety_logic.Watchdog). A zero command that
 replaces a source's command keeps that command's stamp, which the controller checks against
 its own clock; one sent on a new block carries the last command's stamp.
 
@@ -41,7 +46,8 @@ import time
 
 from geometry_msgs.msg import TwistStamped
 from mecanum_interfaces.msg import SafetyState
-from mecanum_safety.safety_logic import decide, EStop, Layout, Twist2D, Watchdog
+from mecanum_safety.safety_logic import (decide, EStop, header_stamp, Layout, Twist2D,
+                                         Watchdog)
 from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.clock import Clock, ClockType
@@ -109,15 +115,16 @@ class SafetySupervisor(Node):
         for param, topic, msg_type, big in FULL_STOP:
             if watch[param]:
                 timeouts[topic] = timeout[param[len('watch_'):]]
-                # Raw: only the arrival counts, so the clouds are never deserialized.
+                # Raw: only the arrival (and the stamp) counts, so the clouds are never
+                # deserialized.
                 self.create_subscription(
-                    msg_type, topic, lambda _, t=topic: self._feed(t),
+                    msg_type, topic, lambda raw, t=topic: self._feed_raw(t, raw),
                     reliable if big else qos_profile_sensor_data, raw=True)
         self.full_stop_topics = tuple(timeouts)
         for name in self.layout.ultrasonics:
             topic = topic_of('ultrasonic', name)
             timeouts[topic] = timeout['ultrasonics']
-            self.create_subscription(Range, topic, lambda _, t=topic: self._feed(t),
+            self.create_subscription(Range, topic, lambda raw, t=topic: self._feed_raw(t, raw),
                                      qos_profile_sensor_data, raw=True)
         self.cliff_ranges = {}
         for name in self.layout.cliffs:
@@ -133,7 +140,12 @@ class SafetySupervisor(Node):
             self.create_subscription(
                 Bool, topic, lambda msg, n=name, t=topic: self._on_bumper(n, t, msg),
                 qos_profile_sensor_data)
-        self.watchdog = Watchdog(timeouts)
+        clock = p('watchdog_clock', 'steady').value
+        if clock not in ('steady', 'stamps'):
+            raise ValueError(f"watchdog_clock must be 'steady' or 'stamps', not '{clock}'")
+        self.stamped = clock == 'stamps'
+        self.watchdog = Watchdog(
+            timeouts, stall=p('stamp_stall', 0.5).value if self.stamped else None)
         self.estop = EStop()
         latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                              durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -151,14 +163,18 @@ class SafetySupervisor(Node):
                           clock=Clock(clock_type=ClockType.STEADY_TIME))
         self._update()
         self.get_logger().info(f'Gating /cmd_vel -> {self.cmd_out.topic_name}; watching '
-                               f'{len(timeouts)} topics')
+                               f'{len(timeouts)} topics, timed by {clock}')
 
-    def _feed(self, topic):
-        self.watchdog.feed(topic, time.monotonic())
+    def _feed(self, topic, stamp=None):
+        self.watchdog.feed(topic, time.monotonic(), stamp)
+
+    def _feed_raw(self, topic, raw):
+        self._feed(topic, header_stamp(raw) if self.stamped else None)
 
     def _on_cliff(self, name, topic, msg):
         self.cliff_ranges[name] = msg.range
-        self._feed(topic)
+        stamp = msg.header.stamp
+        self._feed(topic, stamp.sec + stamp.nanosec * 1e-9 if self.stamped else None)
         self._update()
 
     def _on_bumper(self, name, topic, msg):

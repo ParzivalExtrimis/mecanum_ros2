@@ -17,7 +17,15 @@ safety_supervisor:
     ultrasonic_rear_x: -0.401
     half_width: 0.255       # body envelope; the planks span it
 
-    # STAND-IN timeouts (s, steady clock): about 3 to 5 periods of each sensor
+    # How the timeouts are timed. steady: on the steady clock (the robot). stamps: in message
+    # time, against the newest stamp of any watched topic (the simulation, whose time runs
+    # slower than real time under load); every topic is lost once the newest stamp stands
+    # still for stamp_stall s of the steady clock. safety.launch.py's watchdog_clock argument
+    # sets it; robot.launch.py passes stamps in simulation.
+    watchdog_clock: steady
+    stamp_stall: 0.5        # STAND-IN: 2 x the longest /joint_states gap measured under load
+
+    # STAND-IN timeouts (s): about 3 to 5 periods of each sensor
     timeout_lidar_2d: 0.5
     timeout_l2: 1.0
     timeout_d435i: 0.5

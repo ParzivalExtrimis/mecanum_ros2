@@ -17,7 +17,8 @@ Start the safety supervisor: /cmd_vel -> gate -> /cmd_vel_safe (docs/plan.md Pha
 
 The node stays on the wall clock, also in simulation (see safety_supervisor.py). Each watch_*
 argument is true when that sensor is fitted; robot.launch.py passes its use_*
-arguments. A sensor that is not watched gives no protection.
+arguments. A sensor that is not watched gives no protection. watchdog_clock:=stamps times the
+watchdogs in message time, for the simulation (config/safety.yaml).
 """
 
 import os
@@ -38,6 +39,8 @@ def generate_launch_description():
     return LaunchDescription([
         *[DeclareLaunchArgument(f'watch_{name}', default_value='true',
                                 description=f'Watch the {name} topics') for name in WATCHED],
+        DeclareLaunchArgument('watchdog_clock', default_value='steady',
+                              description='steady (the robot) or stamps (the simulation)'),
         Node(
             package='mecanum_safety',
             executable='safety_supervisor',
@@ -46,5 +49,6 @@ def generate_launch_description():
             parameters=[config, {
                 **{f'watch_{name}': ParameterValue(LaunchConfiguration(f'watch_{name}'),
                                                    value_type=bool) for name in WATCHED},
+                'watchdog_clock': LaunchConfiguration('watchdog_clock'),
             }]),
     ])

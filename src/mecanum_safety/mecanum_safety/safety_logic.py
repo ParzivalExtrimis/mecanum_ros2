@@ -34,6 +34,7 @@ motion that no source asked for.
 
 from dataclasses import dataclass, field
 import math
+import struct
 
 EPSILON = 1e-9
 
@@ -100,19 +101,61 @@ class Watchdog:
 
     A topic counts as lost until its first message, and again once its last message is older
     than its timeout. Time is whatever monotonic clock the caller passes in.
+
+    With ``stall`` set, age is judged in the messages' own time instead (the simulation): a
+    topic is lost once its last stamp is more than its timeout behind the newest stamp of any
+    watched topic, so a simulation slower than real time is not taken for a lost sensor. A
+    topic without stamps (std_msgs/Bool) is given the newest stamp known when it arrives. When
+    the newest stamp has not moved on for ``stall`` seconds of the caller's clock, every topic
+    is lost: the stamps cannot age when the clock stops (a paused or dead simulation, or a lost
+    clock bridge). A stamp earlier than the topic's last one, a restarted clock, forgets all
+    stamps.
     """
 
     timeouts: dict
+    stall: float = None
     last: dict = field(default_factory=dict)
+    stamps: dict = field(default_factory=dict)
+    newest: float = None
+    newest_at: float = None
 
-    def feed(self, topic, now):
-        if topic in self.timeouts:
-            self.last[topic] = now
+    def feed(self, topic, now, stamp=None):
+        if topic not in self.timeouts:
+            return
+        self.last[topic] = now
+        if self.stall is None:
+            return
+        if stamp is None:
+            if self.newest is None:
+                return
+            stamp = self.newest
+        elif stamp < self.stamps.get(topic, stamp):
+            self.stamps.clear()
+            self.newest = None
+        self.stamps[topic] = stamp
+        if self.newest is None or stamp > self.newest:
+            self.newest, self.newest_at = stamp, now
 
     def lost(self, now):
         """Return the lost topics, sorted."""
+        if self.stall is None:
+            return sorted(topic for topic, timeout in self.timeouts.items()
+                          if topic not in self.last or now - self.last[topic] > timeout)
+        if self.newest is None or now - self.newest_at > self.stall:
+            return sorted(self.timeouts)
         return sorted(topic for topic, timeout in self.timeouts.items()
-                      if topic not in self.last or now - self.last[topic] > timeout)
+                      if topic not in self.stamps or self.newest - self.stamps[topic] > timeout)
+
+
+def header_stamp(raw):
+    """
+    Return the header stamp, in seconds, of a serialized stamped message (raw bytes).
+
+    std_msgs/Header comes first in every stamped message, so the stamp follows the 4-byte CDR
+    encapsulation: int32 sec, uint32 nanosec, in the byte order the encapsulation names.
+    """
+    sec, nanosec = struct.unpack_from('<iI' if raw[1] & 1 else '>iI', raw, 4)
+    return sec + nanosec * 1e-9
 
 
 @dataclass

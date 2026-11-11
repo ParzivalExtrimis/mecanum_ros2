@@ -7,7 +7,7 @@ Top-level launch files and RViz configurations for the mecanum base.
 | `robot.launch.py` | 1 | Simulation (ros2_control drive) or hardware base (open-loop driver), L2 perception and LIO odometry |
 | `hardware_sensors.launch.py` | paused hardware stages 3H, 4H | Real L2: driver, URDF TF, self-filter, scan and the sensors RViz view; LIO with `lio:=true`. No drive node. |
 | `mapping.launch.py` | 5 | Simulation: `robot.launch.py`, slam_toolbox mapping and RViz on `rviz/mapping.rviz` |
-| `navigation.launch.py` | 6, planned | Robot, EKF, localization and Nav2 |
+| `navigation.launch.py` | 6 | Simulation: `robot.launch.py`, localization (AMCL or slam_toolbox) and Nav2, with RViz on `rviz/navigation.rviz` |
 | `mission.launch.py` | 7, planned | Navigation plus docking and the mission executive |
 
 ## `robot.launch.py`
@@ -86,6 +86,38 @@ tools/map_check.py src/mecanum_navigation/maps/restroom.yaml
 For a repeatable map, `tools/map_route.py` drives a fixed route through the restroom world
 instead of teleop. How to map with a lidar that sees only the front, and what the map misses:
 `src/mecanum_localization/README.md`, "Mapping".
+
+## `navigation.launch.py`
+
+Navigates in simulation (plan Phase 6): `robot.launch.py` (Gazebo, the drive, the EKF, the
+safety gate), `mecanum_navigation/localization.launch.py` and
+`mecanum_navigation/nav2.launch.py`. RViz starts with `rviz/navigation.rviz`: the map, the
+keepout mask, both costmaps, the voxels, the plans, the AMCL particles, the collision
+monitor's polygons and the Nav2 panel. Give goals with the "Nav2 Goal" tool and a start pose
+with "2D Pose Estimate".
+
+```bash
+ros2 launch mecanum_bringup navigation.launch.py                              # Gazebo GUI + RViz
+ros2 launch mecanum_bringup navigation.launch.py gui:=false rviz:=false       # headless
+ros2 launch mecanum_bringup navigation.launch.py localization:=slam_toolbox   # needs the pose graph
+tools/nav_check.py                                                            # the Phase 6 checks
+```
+
+| Argument | Default | Meaning |
+|---|---|---|
+| `localization` | `amcl` | `amcl` (map_server + AMCL) or `slam_toolbox` (localization mode on the pose graph). Only one publishes `map -> odom` |
+| `map` | `mecanum_navigation/maps/restroom.yaml` | The map for map_server (AMCL) |
+| `posegraph` | `mecanum_navigation/maps/restroom` | The pose graph for slam_toolbox, without `.posegraph`. It is not in git: make it with `tools/map_route.py` and `tools/save_map.py restroom`, then rebuild |
+| `keepout` | `true` | Use the keepout mask |
+| `keepout_mask` | `mecanum_navigation/maps/restroom_keepout.yaml` | The mask, from `tools/make_keepout_mask.py` |
+| `mark_max_range` | `0.4` | The largest ultrasonic range the local costmap may mark (decision 0005); 0 is the sensor's maximum. 0.4 m is the D6-a fallback, on since Phase 6 measured phantom obstacles in the doorway |
+| `rviz`, `rviz_config` | `true`, `rviz/navigation.rviz` | RViz |
+
+Every `robot.launch.py` argument can be given too. The map matches `restroom.sdf` only.
+
+Velocity commands: Nav2's go through the velocity smoother and the collision monitor to
+`/cmd_vel`, and from there through the safety gate. Teleop and the test tools publish on
+`/cmd_vel` directly, so they pass the safety gate but not the collision monitor.
 
 ## `hardware_sensors.launch.py`
 

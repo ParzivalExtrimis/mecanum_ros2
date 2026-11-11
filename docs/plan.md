@@ -160,7 +160,14 @@ Topics and frames that the simulation provides and that hardware drivers must ma
 | `/wheel/odometry` | `nav_msgs/Odometry` | `odom` → `base_footprint` | 50 Hz | 1 |
 | `/odom` | `nav_msgs/Odometry` (EKF) | `odom` → `base_footprint` | 50 Hz | 3 |
 | `/safety/state` | `mecanum_interfaces/SafetyState` | — | 10 Hz and on change | 4 |
-| `/map` | `nav_msgs/OccupancyGrid`, transient local (slam_toolbox while mapping) | `map` | every 2 s while mapping | 5 |
+| `/map` | `nav_msgs/OccupancyGrid`, transient local (slam_toolbox while mapping; map_server or slam_toolbox localization while navigating) | `map` | every 2 s while mapping; once while navigating | 5, 6 |
+| `map → odom` (TF) | AMCL or slam_toolbox localization, never both | `map` → `odom` | with each filter update | 6 |
+| `/keepout_mask` | `nav_msgs/OccupancyGrid`, transient local; 100 keepout, −1 elsewhere, on the map's grid. A static layer in both costmaps | `map` | once | 6 |
+| `/costmap/d435i/points` | `sensor_msgs/PointCloud2`, x, y, z, one point per 5 cm cube (`cloud_thinner`), for the best-effort Nav2 consumers | `d435i_optical_frame` | as the camera | 6 |
+| `/costmap/ultrasonic/<pos>` | `sensor_msgs/Range`, no echo as max range, capped at `mark_max_range` (`range_relay`) | `ultrasonic_<pos>_link` | 10 Hz | 6 |
+| `/goal_checker_selector` | `std_msgs/String`, transient local: `staging` or `precise` | — | per goal | 6 |
+| `/cmd_vel_nav`, `/cmd_vel_smoothed` | `TwistStamped`, Nav2's internal chain to the collision monitor, which publishes on `/cmd_vel` | `base_footprint` | 20 Hz while navigating | 6 |
+| `/collision_monitor_state` | `nav2_msgs/CollisionMonitorState` | — | on change | 6 |
 
 The frames come from `mecanum_description`. Gazebo-only topics live under `/sim/`, such as the
 inputs of the sim-only nodes (`/sim/ultrasonic/*`, `/sim/cliff/*`, `/sim/bumper/*`). `/l2/scan`,
@@ -597,7 +604,116 @@ The plan as written:
 - **Verify.** Map the restroom world by teleop. Wall positions match the world SDF within a few
   cm. Report the partitions and fixtures the map misses.
 
-## Phase 6: localization and Nav2
+## Phase 6: localization and Nav2 (measured 2026-11-06; D6-a decided 2026-11-05)
+
+- **Built.** `mecanum_navigation`: `config/nav2.yaml` and `config/localization.yaml` (upstream
+  with every change marked), `launch/nav2.launch.py`, `launch/localization.launch.py` (AMCL, or
+  `localization:=slam_toolbox`), `behavior_trees/` (upstream with three changes), the nodes
+  `range_relay` and `cloud_thinner`, the keepout mask (`maps/restroom_keepout*`,
+  `tools/make_keepout_mask.py`, shortcut S10). `mecanum_localization`: slam_toolbox
+  localization mode. `mecanum_bringup`: `navigation.launch.py` and `rviz/navigation.rviz`.
+  `tools/nav_check.py` drives the verification and judges it on ground truth.
+- **Owner's criteria (2026-11-05).** A goal passes if Nav2 succeeds and the ground-truth error
+  is within the goal checker's tolerance + 5 cm (staging 0.10 m / 0.10 rad; precise 0.05 m /
+  0.05 rad, reported only). No contact anywhere. AMCL within 10 cm / 3° of ground truth
+  throughout (the map's offset removed by a best fit); relocalization from 0.4 m / 25° off
+  within 10 cm / 3° after at most 3 m of travel. CPU and real-time factor reported only.
+- **Measured** (`tools/nav_check.py`, all stages, headless, all sensors on; two runs with the
+  final config, worst of the two):
+
+  | Check | Result |
+  |---|---|
+  | Goals (corridor, doorway, a 1.35 m strafe, stall, sink, lobby, home) | All succeeded; worst staging error 12.9 cm (strafe, limit 15), precise 4.7 to 5.2 cm (reported). No contact; closest 11.4 cm (the doorway's wall) |
+  | The strafe kept its heading | within 10.7° (limit 15°, nav_check's own). Earlier runs: 4 to 24°, the higher ones when passing close to a wall or the bin |
+  | Behind the glass, into the stall across its partition | Reached, closest 7.1 cm (the lobby's north wall) and 12.6 cm |
+  | Past the threshold | Refused; the robot's front stayed 28 cm short of it |
+  | Box, low box (0.10 m, under the 2D lidar), overhang (0.60 to 0.85 m) on the corridor route | Gone around in 17 to 21 s, closest 19.8 cm |
+  | Box dropped 0.9 m ahead of the moving robot | Gone around in 35 to 36 s, closest 9.2 cm |
+  | Wall across the corridor | Refused after 30 to 31 s, stopped 45 cm short, no contact |
+  | Unknown glass across the corridor (D6-a) | Stopped 10 to 18 cm short, no contact |
+  | Centred box (0.75 m each side; the 5 cm costmap sees about 0.65 m) | Not passed in 120 s; closest 3.2 cm (the wall beside it), no contact. Passing or refusing both count |
+  | Reverse: BackUp 0.6 m toward a box 0.25 m behind; −0.12 m/s straight into the collision monitor | Stopped 21.4 cm and 16.5 cm short |
+  | Relocalization from 0.4 m / 25° off | Within 10 cm / 3° for good after 1.19 m (limit 3 m) |
+  | AMCL against ground truth, 7050 to 7072 samples | Max 8.6 cm / 1.72° (limit 10 cm / 3°), median 3.7 cm / 0.27° |
+  | Real-time factor | 0.92 to 0.93 |
+  | CPU, median % of a core | Gazebo 170, bridge 36, controller 46 (max 103), planner 18 (max 58), bt_navigator 23, collision monitor 11, AMCL 11, map_server 17, EKF 14, behaviour server 14, velocity smoother 10, range_relay 11, simulated depth cloud 21 |
+  | `tools/sensor_check.py` (sensor test world) | 0 failures |
+  | `motion_test` `axes` | forward 99%, strafe 99%: PASS. Rotate 99%, translation 5.6 cm: FAIL, as since Phase 2 |
+  | `colcon test` | 320 tests, 0 failures, 8 skipped |
+
+- **One `map → odom` publisher in each mode.** With AMCL, the `/tf` publishers are AMCL, the
+  EKF, the drive controller and robot_state_publisher; with slam_toolbox, slam_toolbox
+  instead of AMCL. `test_nav2_config.py` checks the same in the configuration.
+- **slam_toolbox localization mode fails** (`localization:=slam_toolbox`, a pose graph from a
+  fresh mapping run of `tools/map_route.py`, the suite and gap stages, two runs). Both lost the
+  robot near the corridor's east end (x 4.5 m): the first goal ended 30 cm off while Nav2
+  reported success, and the error reached 95 cm. One run recovered in the restroom (1 to 3 cm
+  there; 6 failures), one did not (9 failures). AMCL is the default and the mode measured above.
+  Its pose graph and keepout mask must also come from the same session as the map it serves
+  (`mecanum_navigation/README.md`).
+- **Changed from the plan, after measuring:**
+  - **Smac State Lattice, not Smac 2D,** with the installed omnidirectional primitives (5 cm,
+    16 headings). A 2D path has no headings: the 0.83 m long robot must face the 0.9 m
+    doorway before it reaches it, and MPPI, following a 2D path, turned too late and stuck at
+    the wall. MPPI now follows the path's headings (`PathAngleCritic` mode 2,
+    `PathAlignCritic` `use_path_orientations`), with `TwirlingCritic` on.
+  - **Inflation radius 0.55 m, not 0.35 m.** It must cover the circumscribed radius (0.494 m):
+    MPPI and Smac check the footprint only where the centre's cell is inflated.
+  - **Keepout mask as a second static layer, not Nav2's keepout filter.** Filters run after
+    inflation, so the zones were not inflated and the footprint checks skipped them: the
+    robot's corner cut the end of the glass screen. The mask is unknown outside the zones and
+    the global costmap merges by maximum, so it changes no other cell.
+  - **`cloud_thinner` for the D435i.** The collision monitor and the voxel layers subscribe
+    best-effort (not configurable), and Cyclone DDS loses whole 1.2 MB best-effort messages
+    (Phase 2). Facing a wall the collision monitor received no cloud for 7 minutes and held
+    the robot stopped. The thinned cloud (one point per 5 cm cube) is under 70 kB.
+  - **Ultrasonic marks capped at 0.4 m** (`mark_max_range`, the D6-a fallback). Uncapped, the
+    cones marked the doorway's jambs across the opening; in a run of four goals through the
+    doorway that took 2 progress failures, cleared only by a recovery. Capped: none.
+  - **AMCL** sensor model (`sigma_hit` 0.05, `z_hit` 0.8, `z_rand` 0.2, `max_beams` 120) and
+    odometry noise (`alpha1..5` 0.05): with upstream values the estimate drifted 8 to 15 cm.
+  - **Recoveries** (behaviour trees). Upstream clears both costmaps entirely; the sensors look
+    forward, so the robot forgot the corridor bench behind it and a low box under the D435i,
+    and the next spin or approach hit them. The local costmap is not cleared at all (a partial
+    clear leaves Nav2's range layer not current for good, and every later goal fails); the
+    global one is cleared outside a 2 × 2 m square around the robot. "Start occupied" from
+    the planner also runs the recoveries: next to a jamb the footprint can touch a wall cell
+    12 cm from the real wall, and upstream then failed every later goal in under a second.
+  - **Collision monitor polygons** are velocity polygons: the front stop acts only when driving
+    forward above 0.08 m/s. A stop zeroes the whole command, turn included, and stopped the
+    robot's turns at the doorway's jamb.
+  - **bt_navigator `default_server_timeout`** 200 ms (upstream 20): with the whole stack on one
+    laptop, goals failed waiting for `follow_path`.
+  - **The inserted obstacles** leave a 1.10 m gap beside them (wider than the doorway). The
+    first version put them in the corridor's middle, leaving 0.65 to 0.8 m: the planner
+    refused some, and MPPI crept through others at 1 to 2 cm/s until the progress checker
+    gave up. That case is kept as the centred box.
+  - **The safety gate judges message stamps in simulation** (Phase 4's gate, found in the GUI
+    tests, 2026-11-06). With the Gazebo window and RViz open the simulation runs at about 0.7 of
+    real time, and on the steady clock the gate took slow sensors for lost ones and stopped the
+    robot every few seconds; goals then ran out of time. In sim a topic is now lost when its
+    stamp falls more than its timeout behind the newest one, or when every stamp stands still
+    for 0.5 s (a stopped clock). `tools/safety_check.py` (chain, e-stop, sensor loss): all
+    pass, the bridge's loss caught in 0.56 s. Windows open, 100 s: 0 stops (1 to 3 before).
+    Under heavy extra load the L2 and D435i clouds really are late (0.6 to 2.1 s in sim time)
+    and still stop the robot. The robot keeps the steady clock.
+  - **`tools/nav_gui_tests.sh`** opens the GUI tests in three terminals (launch, steps,
+    monitor), with Gazebo and RViz on the NVIDIA GPU.
+- **Found, not fixed:**
+  - **Slow in tight places.** About a third of the moving time MPPI commands under 5 cm/s and
+    0.1 rad/s: turning behind the glass, at the doorway, at the stall. A goal there takes 30
+    to 100 s; 17 to 19 progress failures per full run, all recovered.
+  - **Goal headings are the lattice's.** The planner reaches only its 16 headings (0°, 26.6°,
+    45° and so on), and with `tolerance` 0.10 m it can end the path at another heading near
+    the goal. The goal checker checks the path's end, so Nav2 reports success: a goal at 13°
+    ends at 0°. The suite's goals are at multiples of 90°. Phase 7's docking does the final
+    approach itself.
+  - **AMCL sits 3 to 4 cm off in the restroom and lobby,** also when standing still, while the
+    map is within 0.3 to 0.9 cm of the world there. Not explained; it uses most of the
+    10 cm budget.
+- **Decision D6: D6-a** (owner, 2026-11-05; [0005](decisions/0005-ultrasonics-and-glass-in-navigation.md)).
+
+The plan as written:
 
 - **Localization.**
   - AMCL with `OmniMotionModel` on `/scan` is the default.
@@ -699,6 +815,7 @@ Each entry works only because this is a simulation. Add entries as they are intr
 | S7 | Ultrasonic beams 6° high | Phase 2 | The cones are 60° across but only 6° high, so the floor never answers. Real ultrasound mostly reflects away from a smooth floor at this angle, but a rough or wet one may answer, and real beams are taller, so they hear low objects the simulated ones miss. |
 | S8 | 2D lidar limited to ±89.5° | Phase 2 | The model has no slot for it, so the sim sees 10.5° less on each side than the contract's ±100°. Anything that relies on the side view at the robot's front corners must be re-checked. |
 | S9 | D435i cloud computed from the depth image | Phase 2 | Exact depth with Gaussian noise, every second pixel, no colour. The real cloud comes from the RealSense driver, with stereo errors. |
+| S10 | Keepout zones from the world file | Phase 6 | `tools/make_keepout_mask.py --from-world` takes the zones (glass, partitions with a floor gap, the threshold, the tank overhang) from `restroom.sdf`, grown by 5 cm. On a real site they are measured and drawn by hand. |
 
 ## After the simulation build
 

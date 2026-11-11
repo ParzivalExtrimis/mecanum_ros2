@@ -1,0 +1,698 @@
+# Nav2 for the mecanum base in the restroom world (docs/plan.md Phase 6). Started by
+# launch/nav2.launch.py. Built from the upstream nav2_bringup/params/nav2_params.yaml (Nav2
+# 1.3.13, Jazzy); every value that differs from upstream says why.
+#
+# Command chain (the upstream remaps):
+#   controller_server, behavior_server -> /cmd_vel_nav -> velocity_smoother -> /cmd_vel_smoothed
+#   -> collision_monitor -> /cmd_vel -> safety gate (mecanum_safety) -> /cmd_vel_safe
+#
+# Every node that publishes or takes a velocity has enable_stamped_cmd_vel: true, because
+# mecanum_drive_controller takes TwistStamped only (nav2_util's default is Twist).
+#
+# Speed limits: mecanum_drive_controller clamps each axis on its own (Phase 3), so an over-limit
+# combined command changes direction. Nothing here exceeds its 0.3 / 0.3 / 0.8 limits.
+#
+# The robot's base frame is base_footprint everywhere (upstream mixes in base_link).
+# Footprint, from mecanum_description: x -0.405..0.421, y -0.258..0.258. Re-check it if
+# decision D2 moves the bumper planks.
+
+bt_navigator:
+  ros__parameters:
+    global_frame: map
+    robot_base_frame: base_footprint
+    odom_topic: /odom
+    bt_loop_duration: 10
+    # ms. Upstream 20: with the whole stack on one laptop, follow_path sometimes took longer to
+    # acknowledge, and the goal failed ("Timed out while waiting for action server").
+    default_server_timeout: 200
+    wait_for_service_timeout: 1000
+    action_server_result_timeout: 900.0
+    navigators: ["navigate_to_pose", "navigate_through_poses"]
+    navigate_to_pose:
+      plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
+    navigate_through_poses:
+      plugin: "nav2_bt_navigator::NavigateThroughPosesNavigator"
+    # Our trees add a GoalCheckerSelector (topic goal_checker_selector) so that a goal can ask
+    # for the precise checker, and their recoveries never clear the local costmap and clear
+    # the global one only outside 2 x 2 m around the robot (see the trees' header); the rest is
+    # the upstream tree. Set by launch/nav2.launch.py.
+    # default_nav_to_pose_bt_xml / default_nav_through_poses_bt_xml
+    error_code_names:
+      - compute_path_error_code
+      - follow_path_error_code
+
+controller_server:
+  ros__parameters:
+    enable_stamped_cmd_vel: true
+    controller_frequency: 20.0
+    costmap_update_timeout: 0.30
+    min_x_velocity_threshold: 0.001
+    # Upstream 0.5 is for a robot that cannot strafe; it would drop every sideways command.
+    min_y_velocity_threshold: 0.001
+    min_theta_velocity_threshold: 0.001
+    failure_tolerance: 0.3
+    progress_checker_plugins: ["progress_checker"]
+    # Two goal checkers, chosen per goal through the BT's GoalCheckerSelector; staging is the
+    # default. STAND-IN tolerances (owner, 2026-11-05).
+    goal_checker_plugins: ["staging", "precise"]
+    controller_plugins: ["FollowPath"]
+    use_realtime_priority: false
+
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      # Upstream 0.5 m in 10 s; at the 0.3 m/s limit with slowdowns near obstacles 0.5 m can
+      # take longer than 10 s. STAND-IN.
+      required_movement_radius: 0.3
+      movement_time_allowance: 15.0
+    staging:
+      plugin: "nav2_controller::SimpleGoalChecker"
+      stateful: true
+      xy_goal_tolerance: 0.10    # STAND-IN (upstream 0.25)
+      yaw_goal_tolerance: 0.10   # STAND-IN (upstream 0.25)
+    precise:
+      plugin: "nav2_controller::SimpleGoalChecker"
+      stateful: true
+      xy_goal_tolerance: 0.05    # STAND-IN
+      yaw_goal_tolerance: 0.05   # STAND-IN
+
+    FollowPath:
+      plugin: "nav2_mppi_controller::MPPIController"
+      time_steps: 56
+      model_dt: 0.05
+      batch_size: 2000
+      # Accelerations: STAND-IN, gentler than upstream's 3.0 for a heavy base on steppers;
+      # the velocity smoother uses the same values.
+      ax_max: 1.0
+      ax_min: -1.0
+      ay_max: 1.0
+      ay_min: -1.0
+      az_max: 2.0
+      vx_std: 0.2
+      vy_std: 0.2
+      wz_std: 0.4
+      vx_max: 0.3        # controller limit
+      vx_min: -0.15      # STAND-IN: reverse is capped, only the rear ultrasonics see behind
+      vy_max: 0.3        # controller limit
+      wz_max: 0.8        # controller limit
+      iteration_count: 1
+      prune_distance: 1.7
+      transform_tolerance: 0.1
+      temperature: 0.3
+      gamma: 0.015
+      motion_model: "Omni"
+      visualize: true
+      regenerate_noises: true
+      TrajectoryVisualizer:
+        trajectory_step: 5
+        time_step: 3
+      # TwirlingCritic is on, as Nav2 recommends for omnidirectional robots. PathAngleCritic
+      # follows the path's headings (mode 2), not the direction of travel, so it does not undo
+      # strafing; it makes the robot turn before it drives through the doorway.
+      critics: [
+        "ConstraintCritic", "CostCritic", "GoalCritic",
+        "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic",
+        "PreferForwardCritic", "TwirlingCritic"]
+      ConstraintCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+      GoalCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 1.4
+      GoalAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.0
+        threshold_to_consider: 0.5
+      # Penalizes reverse only (vx < 0), so forward and sideways motion are preferred.
+      PreferForwardCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 0.5
+      CostCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.81
+        near_collision_cost: 253
+        critical_cost: 300.0
+        # The footprint is a 0.83 x 0.52 m rectangle and the doorway leaves 0.19 m each side,
+        # so the full footprint is checked (upstream checks the centre only).
+        consider_footprint: true
+        collision_cost: 1000000.0
+        near_goal_distance: 1.0
+        trajectory_point_step: 2
+      PathAlignCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 14.0
+        max_path_occupancy_ratio: 0.05
+        trajectory_point_step: 4
+        threshold_to_consider: 0.5
+        offset_from_furthest: 20
+        # The lattice planner's path carries the headings to drive with (upstream false).
+        use_path_orientations: true
+      PathFollowCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        offset_from_furthest: 5
+        threshold_to_consider: 1.4
+      # Mode 2: the path's orientations (the lattice planner sets them). Upstream mode 0 (face
+      # the direction of travel), weight 2.0, max_angle_to_furthest 1.0. STAND-IN.
+      PathAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+        offset_from_furthest: 4
+        threshold_to_consider: 0.5
+        max_angle_to_furthest: 0.25
+        mode: 2
+      TwirlingCritic:
+        enabled: true
+        twirling_cost_power: 1
+        twirling_cost_weight: 10.0
+
+# Costmaps. Shared choices, all STAND-IN until the real robot is tuned:
+# - inflation_radius 0.55 covers the circumscribed radius (0.494), which MPPI's footprint
+#   check needs; cost_scaling_factor 8 keeps the doorway centre (0.45 m from each jamb) cheap.
+# - the 3D layers keep 0.04..0.90 m: the floor (and its depth noise) is below 0.04, the robot's
+#   top is 0.83.
+# - keepout_layer: the keepout mask (maps/<map>_keepout.yaml, served on /keepout_mask) as a
+#   second StaticLayer, before inflation, so its cells are inflated like walls. Not Nav2's
+#   KeepoutFilter: filters run after inflation, and Smac's and MPPI's footprint checks only run
+#   where the robot's centre is on an inflated cell, so with the filter the robot's corner cut
+#   the end of the glass screen (Phase 6). The mask is grey (unknown) outside the zones, so the
+#   layer changes no other cell.
+# - the D435i reaches the voxel layers and the collision monitor as /costmap/d435i/points, one
+#   point per 5 cm cube (cloud_thinner, launch/nav2.launch.py). They subscribe best-effort, and
+#   the full cloud is too large for that at the default socket buffers (Phase 2).
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 5.0
+      publish_frequency: 2.0
+      global_frame: odom
+      robot_base_frame: base_footprint
+      rolling_window: true
+      width: 4
+      height: 4
+      resolution: 0.05
+      footprint: "[[0.421, 0.258], [0.421, -0.258], [-0.405, -0.258], [-0.405, 0.258]]"
+      footprint_padding: 0.0
+      plugins: ["keepout_layer", "obstacle_layer", "voxel_layer", "range_layer",
+                "inflation_layer"]
+      keepout_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        enabled: $(var keepout)   # the launch file's keepout argument
+        map_topic: "/keepout_mask"
+        map_subscribe_transient_local: true
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: true
+        observation_sources: scan
+        scan:
+          topic: /scan
+          data_type: "LaserScan"
+          max_obstacle_height: 2.0
+          clearing: true
+          marking: true
+          raytrace_max_range: 6.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 5.5
+          obstacle_min_range: 0.0
+      voxel_layer:
+        plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"
+        enabled: true
+        voxel_decay: 15.0             # s, linear; the camera's frustum clears faster
+        decay_model: 0
+        voxel_size: 0.05
+        track_unknown_space: false    # true would make every cell unknown in a max combination
+        mark_threshold: 0
+        update_footprint_enabled: true
+        combination_method: 1
+        origin_z: 0.0
+        publish_voxel_map: true
+        transform_tolerance: 0.2
+        mapping_mode: false
+        observation_sources: d435i_mark d435i_clear l2_mark
+        d435i_mark:
+          data_type: PointCloud2
+          topic: /costmap/d435i/points     # cloud_thinner: 5 cm, see the costmaps note
+          marking: true
+          clearing: false
+          obstacle_range: 3.0
+          min_obstacle_height: 0.04
+          max_obstacle_height: 0.90
+          expected_update_rate: 0.0
+          observation_persistence: 0.0
+          inf_is_valid: false
+          filter: "voxel"
+          voxel_min_points: 0
+          clear_after_reading: true
+        d435i_clear:
+          data_type: PointCloud2
+          topic: /costmap/d435i/points     # cloud_thinner: 5 cm, see the costmaps note
+          marking: false
+          clearing: true
+          min_z: 0.3                    # the camera's near clip
+          max_z: 3.0                    # its far clip
+          vertical_fov_angle: 0.98      # 56 deg (848 x 480 in sim)
+          horizontal_fov_angle: 1.518   # 87 deg
+          decay_acceleration: 5.0
+          model_type: 0
+        # The L2 sees the robot's height band only beyond about 3 m (it is on the top, upright),
+        # so it marks only; its marks decay. No clearing frustum: its field of view (-6..90 deg)
+        # is not symmetric about the horizontal, which STVL's lidar model assumes.
+        l2_mark:
+          data_type: PointCloud2
+          topic: /l2/points_filtered
+          marking: true
+          clearing: false
+          obstacle_range: 6.0
+          min_obstacle_height: 0.04
+          max_obstacle_height: 0.90
+          expected_update_rate: 0.0
+          observation_persistence: 0.0
+          inf_is_valid: false
+          filter: "voxel"
+          voxel_min_points: 0
+          clear_after_reading: true
+      # Ultrasonics, decision D6-a (0005): local costmap only. They come through
+      # range_relay (launch/nav2.launch.py), which turns "no echo" (+inf, REP 117) into a
+      # max-range reading so that the layer clears the cone; the layer ignores +inf.
+      range_layer:
+        plugin: "nav2_costmap_2d::RangeSensorLayer"
+        enabled: true
+        topics: ["/costmap/ultrasonic/front_left", "/costmap/ultrasonic/front_right",
+                 "/costmap/ultrasonic/rear_left", "/costmap/ultrasonic/rear_right"]
+        input_sensor_type: "ALL"   # VARIABLE, FIXED or ALL (radiation type is not checked)
+        clear_on_max_reading: true
+        clear_threshold: 0.2
+        mark_threshold: 0.8
+        phi: 1.2
+        inflate_cone: 1.0
+        no_readings_timeout: 0.0
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        inflation_radius: 0.55
+        cost_scaling_factor: 8.0
+      always_send_full_costmap: true
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      update_frequency: 1.0
+      publish_frequency: 1.0
+      global_frame: map
+      robot_base_frame: base_footprint
+      footprint: "[[0.421, 0.258], [0.421, -0.258], [-0.405, -0.258], [-0.405, 0.258]]"
+      footprint_padding: 0.0
+      resolution: 0.05
+      track_unknown_space: true
+      plugins: ["static_layer", "keepout_layer", "obstacle_layer", "voxel_layer",
+                "inflation_layer"]
+      # Costmap-wide, read by both static layers: merge by maximum (upstream false), so the
+      # keepout layer adds its cells to the map's instead of overwriting the map. The first
+      # static layer writes onto a reset grid, where maximum and overwrite agree.
+      use_maximum: true
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: true
+      keepout_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        enabled: $(var keepout)   # the launch file's keepout argument
+        map_topic: "/keepout_mask"
+        map_subscribe_transient_local: true
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: true
+        observation_sources: scan
+        scan:
+          topic: /scan
+          data_type: "LaserScan"
+          max_obstacle_height: 2.0
+          clearing: true
+          marking: true
+          raytrace_max_range: 6.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 5.5
+          obstacle_min_range: 0.0
+      voxel_layer:
+        plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"
+        enabled: true
+        voxel_decay: 15.0
+        decay_model: 0
+        voxel_size: 0.05
+        track_unknown_space: false
+        mark_threshold: 0
+        update_footprint_enabled: true
+        combination_method: 1
+        origin_z: 0.0
+        publish_voxel_map: false
+        transform_tolerance: 0.2
+        mapping_mode: false
+        observation_sources: d435i_mark d435i_clear l2_mark
+        d435i_mark:
+          data_type: PointCloud2
+          topic: /costmap/d435i/points     # cloud_thinner: 5 cm, see the costmaps note
+          marking: true
+          clearing: false
+          obstacle_range: 3.0
+          min_obstacle_height: 0.04
+          max_obstacle_height: 0.90
+          expected_update_rate: 0.0
+          observation_persistence: 0.0
+          inf_is_valid: false
+          filter: "voxel"
+          voxel_min_points: 0
+          clear_after_reading: true
+        d435i_clear:
+          data_type: PointCloud2
+          topic: /costmap/d435i/points     # cloud_thinner: 5 cm, see the costmaps note
+          marking: false
+          clearing: true
+          min_z: 0.3
+          max_z: 3.0
+          vertical_fov_angle: 0.98
+          horizontal_fov_angle: 1.518
+          decay_acceleration: 5.0
+          model_type: 0
+        l2_mark:
+          data_type: PointCloud2
+          topic: /l2/points_filtered
+          marking: true
+          clearing: false
+          obstacle_range: 6.0
+          min_obstacle_height: 0.04
+          max_obstacle_height: 0.90
+          expected_update_rate: 0.0
+          observation_persistence: 0.0
+          inf_is_valid: false
+          filter: "voxel"
+          voxel_min_points: 0
+          clear_after_reading: true
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        inflation_radius: 0.55
+        cost_scaling_factor: 8.0
+      always_send_full_costmap: true
+
+planner_server:
+  ros__parameters:
+    expected_planner_frequency: 20.0
+    planner_plugins: ["GridBased"]
+    costmap_update_timeout: 1.0
+    # Smac State Lattice with the installed omnidirectional primitives (5 cm grid, 16 headings:
+    # forward, sideways, diagonal and in-place turns), checked against the full footprint. The
+    # plan named Smac 2D; it was replaced after the first measurements (docs/plan.md Phase 6):
+    # a 2D path has no headings, and the 0.83 x 0.52 m robot has to face the 0.9 m doorway
+    # before it reaches it. MPPI, following a 2D path, turned too late and stuck at the wall.
+    GridBased:
+      plugin: "nav2_smac_planner::SmacPlannerLattice"
+      allow_unknown: false
+      tolerance: 0.10
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      max_planning_time: 3.0
+      analytic_expansion_ratio: 3.5
+      analytic_expansion_max_length: 3.0
+      analytic_expansion_max_cost: 200.0
+      analytic_expansion_max_cost_override: false
+      # The robot does not drive backwards by choice (reverse is capped, behind is nearly
+      # blind); it turns in place instead.
+      allow_reverse_expansion: false
+      reverse_penalty: 2.0
+      change_penalty: 0.05
+      non_straight_penalty: 1.05
+      cost_penalty: 2.0
+      # STAND-IN: turning costs more than strafing, so a sideways move keeps the heading.
+      rotation_penalty: 5.0
+      retrospective_penalty: 0.015
+      lattice_filepath: "$(find-pkg-share nav2_smac_planner)/sample_primitives/5cm_resolution/0.5m_turning_radius/omni/output.json"
+      lookup_table_size: 20.0
+      cache_obstacle_heuristic: false
+      smooth_path: true
+      smoother:
+        max_iterations: 1000
+        w_smooth: 0.3
+        w_data: 0.2
+        tolerance: 1.0e-10
+        do_refinement: true
+        refinement_num: 2
+
+smoother_server:
+  ros__parameters:
+    smoother_plugins: ["simple_smoother"]
+    simple_smoother:
+      plugin: "nav2_smoother::SimpleSmoother"
+      tolerance: 1.0e-10
+      max_its: 1000
+      do_refinement: true
+
+behavior_server:
+  ros__parameters:
+    enable_stamped_cmd_vel: true
+    local_costmap_topic: local_costmap/costmap_raw
+    global_costmap_topic: global_costmap/costmap_raw
+    local_footprint_topic: local_costmap/published_footprint
+    global_footprint_topic: global_costmap/published_footprint
+    cycle_frequency: 10.0
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
+    spin:
+      plugin: "nav2_behaviors::Spin"
+    backup:
+      plugin: "nav2_behaviors::BackUp"
+    drive_on_heading:
+      plugin: "nav2_behaviors::DriveOnHeading"
+    wait:
+      plugin: "nav2_behaviors::Wait"
+    assisted_teleop:
+      plugin: "nav2_behaviors::AssistedTeleop"
+    local_frame: odom
+    global_frame: map
+    robot_base_frame: base_footprint
+    transform_tolerance: 0.1
+    simulate_ahead_time: 2.0
+    max_rotational_vel: 0.8      # controller limit (upstream 1.0)
+    min_rotational_vel: 0.4
+    rotational_acc_lim: 2.0      # as MPPI's az_max (upstream 3.2)
+
+waypoint_follower:
+  ros__parameters:
+    loop_rate: 20
+    stop_on_failure: false
+    action_server_result_timeout: 900.0
+    waypoint_task_executor_plugin: "wait_at_waypoint"
+    wait_at_waypoint:
+      plugin: "nav2_waypoint_follower::WaitAtWaypoint"
+      enabled: true
+      waypoint_pause_duration: 200
+
+velocity_smoother:
+  ros__parameters:
+    enable_stamped_cmd_vel: true
+    smoothing_frequency: 20.0
+    # Stamp with the smoothing time (upstream false keeps the controller's last stamp): after a
+    # goal the smoother decelerates for up to velocity_timeout, and mecanum_drive_controller
+    # rejects commands older than its 0.25 s reference timeout.
+    stamp_smoothed_velocity_with_smoothing_time: true
+    scale_velocities: false
+    feedback: "OPEN_LOOP"
+    # vy enabled (upstream 0.0); the controller's limits; reverse capped as in MPPI.
+    max_velocity: [0.3, 0.3, 0.8]
+    min_velocity: [-0.15, -0.3, -0.8]
+    max_accel: [1.0, 1.0, 2.0]
+    max_decel: [-1.0, -1.0, -2.0]
+    odom_topic: "odom"
+    odom_duration: 0.1
+    deadband_velocity: [0.0, 0.0, 0.0]
+    velocity_timeout: 1.0
+
+# Between the smoother and the safety gate. Polygons in base_footprint, all sizes STAND-IN.
+# Direction-dependent polygons are velocity polygons (holonomic: the direction is atan2(vy,
+# vx)), so a wall behind the robot never stops it from driving forward, and the reverse.
+collision_monitor:
+  ros__parameters:
+    enable_stamped_cmd_vel: true
+    base_frame_id: "base_footprint"
+    odom_frame_id: "odom"
+    cmd_vel_in_topic: "cmd_vel_smoothed"
+    cmd_vel_out_topic: "cmd_vel"
+    state_topic: "collision_monitor_state"
+    transform_tolerance: 0.2
+    source_timeout: 1.0
+    base_shift_correction: true
+    stop_pub_timeout: 2.0
+    polygons: ["FrontStop", "FrontSlowdown", "RearStop", "FootprintApproach"]
+    # Moving forward (within 69 deg of +x): stop for anything within 0.15 m ahead above 8 cm/s,
+    # slow down within 0.5 m above 2 cm/s. Not when turning in place, standing or creeping: a
+    # stop zeroes the whole command, turn included, and MPPI's turns near a jamb carry a little
+    # forward speed; it stuck the robot at the doorway. FootprintApproach checks the slow moves
+    # and the turns against the footprint. 3 cm wider
+    # than the footprint each side, so the doorway's jambs (0.19 m away) do not trigger them.
+    # Velocity polygons must cover every velocity, and the first sub-polygon that matches is
+    # used: "still" and "other" are point-sized polygons inside the footprint, where no sensor
+    # returns a point. (Block style only: the ROS parameter parser takes no YAML flow mappings;
+    # a polygon needs four points.)
+    FrontStop:
+      type: "velocity_polygon"
+      action_type: "stop"
+      holonomic: true
+      min_points: 4
+      visualize: true
+      polygon_pub_topic: "polygon_front_stop"
+      enabled: true
+      sources_names: ["scan", "d435i", "us_front_left", "us_front_right"]
+      velocity_polygons: ["still", "ahead", "other"]
+      still:
+        points: "[[0.01, 0.01], [0.01, -0.01], [-0.01, -0.01], [-0.01, 0.01]]"
+        linear_min: 0.0
+        linear_max: 0.08
+        theta_min: -1.0
+        theta_max: 1.0
+        direction_start_angle: -3.1416
+        direction_end_angle: 3.1416
+      ahead:
+        points: "[[0.571, 0.288], [0.571, -0.288], [0.421, -0.288], [0.421, 0.288]]"
+        linear_min: 0.08
+        linear_max: 1.0
+        theta_min: -1.0
+        theta_max: 1.0
+        direction_start_angle: -1.2
+        direction_end_angle: 1.2
+      other:
+        points: "[[0.01, 0.01], [0.01, -0.01], [-0.01, -0.01], [-0.01, 0.01]]"
+        linear_min: 0.08
+        linear_max: 1.0
+        theta_min: -1.0
+        theta_max: 1.0
+        direction_start_angle: 1.2
+        direction_end_angle: -1.2
+    FrontSlowdown:
+      type: "velocity_polygon"
+      action_type: "slowdown"
+      slowdown_ratio: 0.4
+      holonomic: true
+      min_points: 4
+      visualize: true
+      polygon_pub_topic: "polygon_front_slowdown"
+      enabled: true
+      sources_names: ["scan", "d435i", "us_front_left", "us_front_right"]
+      velocity_polygons: ["still", "ahead", "other"]
+      still:
+        points: "[[0.01, 0.01], [0.01, -0.01], [-0.01, -0.01], [-0.01, 0.01]]"
+        linear_min: 0.0
+        linear_max: 0.02
+        theta_min: -1.0
+        theta_max: 1.0
+        direction_start_angle: -3.1416
+        direction_end_angle: 3.1416
+      ahead:
+        points: "[[0.921, 0.338], [0.921, -0.338], [0.421, -0.338], [0.421, 0.338]]"
+        linear_min: 0.02
+        linear_max: 1.0
+        theta_min: -1.0
+        theta_max: 1.0
+        direction_start_angle: -1.2
+        direction_end_angle: 1.2
+      other:
+        points: "[[0.01, 0.01], [0.01, -0.01], [-0.01, -0.01], [-0.01, 0.01]]"
+        linear_min: 0.02
+        linear_max: 1.0
+        theta_min: -1.0
+        theta_max: 1.0
+        direction_start_angle: 1.2
+        direction_end_angle: -1.2
+    # Reversing: the rear ultrasonics are the only near-field sensor behind.
+    RearStop:
+      type: "velocity_polygon"
+      action_type: "stop"
+      holonomic: true
+      min_points: 4
+      visualize: true
+      polygon_pub_topic: "polygon_rear_stop"
+      enabled: true
+      sources_names: ["us_rear_left", "us_rear_right"]
+      velocity_polygons: ["still", "behind", "idle"]
+      # "still": a standing or turning robot; "idle": every direction except reversing.
+      idle:
+        points: "[[0.01, 0.01], [0.01, -0.01], [-0.01, -0.01], [-0.01, 0.01]]"
+        linear_min: 0.0
+        linear_max: 1.0
+        theta_min: -1.0
+        theta_max: 1.0
+        direction_start_angle: -1.92
+        direction_end_angle: 1.92
+      still:
+        points: "[[0.01, 0.01], [0.01, -0.01], [-0.01, -0.01], [-0.01, 0.01]]"
+        linear_min: 0.0
+        linear_max: 0.01
+        theta_min: -1.0
+        theta_max: 1.0
+        direction_start_angle: -3.1416
+        direction_end_angle: 3.1416
+      behind:
+        points: "[[-0.405, 0.288], [-0.405, -0.288], [-0.555, -0.288], [-0.555, 0.288]]"
+        linear_min: 0.01
+        linear_max: 1.0
+        theta_min: -1.0
+        theta_max: 1.0
+        direction_start_angle: 1.92
+        direction_end_angle: -1.92
+    FootprintApproach:
+      type: "polygon"
+      action_type: "approach"
+      footprint_topic: "/local_costmap/published_footprint"
+      time_before_collision: 1.2
+      simulation_time_step: 0.1
+      min_points: 6
+      visualize: false
+      enabled: true
+      sources_names: ["scan", "d435i"]
+    observation_sources: ["scan", "d435i", "us_front_left", "us_front_right",
+                          "us_rear_left", "us_rear_right"]
+    scan:
+      type: "scan"
+      topic: "/scan"
+      min_height: 0.04
+      max_height: 0.90
+      enabled: true
+    d435i:
+      type: "pointcloud"
+      # Thinned to 5 cm by cloud_thinner: the source is best-effort, and the full cloud
+      # (1 to 1.6 MB) was lost for minutes facing a wall, which held the robot stopped.
+      topic: "/costmap/d435i/points"
+      min_height: 0.04
+      max_height: 0.90
+      enabled: true
+    us_front_left:
+      type: "range"
+      topic: "/ultrasonic/front_left"
+      obstacles_angle: 0.035
+      enabled: true
+    us_front_right:
+      type: "range"
+      topic: "/ultrasonic/front_right"
+      obstacles_angle: 0.035
+      enabled: true
+    us_rear_left:
+      type: "range"
+      topic: "/ultrasonic/rear_left"
+      obstacles_angle: 0.035
+      enabled: true
+    us_rear_right:
+      type: "range"
+      topic: "/ultrasonic/rear_right"
+      obstacles_angle: 0.035
+      enabled: true
+
+# Keepout zones (launch/nav2.launch.py): the mask from maps/<map>_keepout.yaml, read by the
+# costmaps' keepout_layer.
+keepout_mask_server:
+  ros__parameters:
+    topic_name: "/keepout_mask"
+    frame_id: "map"
+    # yaml_filename: set by the launch file
