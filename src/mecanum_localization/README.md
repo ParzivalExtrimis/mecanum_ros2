@@ -128,9 +128,10 @@ rotation is not known.
 
 **E1 is the default** ([decision 0003](../../docs/decisions/0003-default-odometry-wheels-and-l2-gyro.md),
 D1): LIO is not an EKF input, and `robot.launch.py` runs it only with `lio:=true` in
-simulation. On hardware the wheel state will be the echoed step pulse count, since the
-closed-loop stepper drivers report only faults; 0003 explains why that is treated as an
-encoder, and why the wheel covariances are not reduced for it.
+simulation. On hardware the wheel state is the motor encoder count read through the encoder
+tap ([decision 0006](../../docs/decisions/0006-wheel-state-from-tapped-encoders.md), which
+replaced 0003's echoed step pulses); the wheel covariances are not reduced for it, since the
+encoders cannot see slip.
 
 `config/ekf_e2.yaml`, `ekf_e3a.yaml` and `ekf_e3b.yaml` are the candidates of plan Phase 3: this
 file plus the D435i gyro, LIO's twist or LIO's pose as a differential, each with no TF.

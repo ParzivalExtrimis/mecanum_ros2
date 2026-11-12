@@ -15,9 +15,10 @@ The robot model is in `mecanum_description`, built from the reference URDF
 [docs/Washroom_Robot_Prototype_Sensors_and_BOM.pdf](docs/Washroom_Robot_Prototype_Sensors_and_BOM.pdf).
 
 - **Base:** a 0.79 × 0.51 m body, 0.74 m tall, on four 0.205 m mecanum wheels in an X-roller
-  layout (wheelbase 0.472 m, track 0.430 m). The motors have **position and velocity
-  encoders**. In simulation the drive runs on ros2_control; the hardware path keeps the
-  open-loop driver until the ESP32 hardware plugin exists.
+  layout (wheelbase 0.472 m, track 0.430 m). The motors are closed-loop steppers whose
+  **encoders are read through an encoder tap** (optocouplers into the ESP32, decision 0006).
+  In simulation the drive runs on ros2_control with a model of those encoders; the hardware
+  path keeps the open-loop driver until the ESP32 hardware plugin exists.
 - **Motor control:** an ESP32 on the network, with each motor individually addressable. The
   protocol is pending the firmware rewrite.
 - **Sensors:**
@@ -51,6 +52,7 @@ Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
 | `mecanum_simulation` | done: ros2_control drive and the sensor suite (plan Phase 2) | Gazebo worlds, sim-only xacro (mecanum friction, sensors, ground truth), bridge, sim-only sensor nodes |
 | `mecanum_base` | done (open-loop driver, hardware path only) | ESP32 driver node, mecanum kinematics, motion test |
 | `mecanum_controllers` | done, Phase 1 | ros2_control xacro (mock or Gazebo hardware), `mecanum_drive_controller` and `joint_state_broadcaster` config, mock kinematics test |
+| `mecanum_hardware` | encoder model and sim plugin done (2026-11-11); ESP32 plugin in hardware stage 5H | The tapped wheel encoder model (`WheelEncoder`), the Gazebo hardware plugin `SimEncoderSystem` that reports the wheel state through it |
 | `mecanum_interfaces` | messages done; mission interfaces in Phase 7 | Motor command and debug messages, `SafetyState`, task and mission interfaces later |
 | `mecanum_lidar` | driver done, hardware test paused | Unitree L2 driver (`/l2/points`, `/l2/imu`, no TF) on the vendored SDK, bench-test launch, RViz config |
 | `mecanum_localization` | self-filter, cloud-to-scan, LIO pipeline, EKF, slam_toolbox mapping and localization mode done | Self-filter, cloud-to-scan, LIO and its odom adapter, EKF, slam_toolbox, AMCL |
@@ -68,15 +70,19 @@ Unknown values are marked as stand-ins. See [STANDINS.md](STANDINS.md).
   source publishes `TwistStamped` on `/cmd_vel`; wheel odometry owns `odom -> base_footprint`
   until the EKF.
 - **[0003: Default odometry, echoed wheel motion and the L2 gyro](docs/decisions/0003-default-odometry-wheels-and-l2-gyro.md).**
-  Decision D1: the EKF on the wheels and the L2 gyro (E1); LIO off in simulation. The drive's
-  closed-loop steppers report only faults, so the hardware wheel state is the echoed step
-  pulse count, with the reasoning and the validation tests.
+  Decision D1: the EKF on the wheels and the L2 gyro (E1); LIO off in simulation. It took the
+  hardware wheel state from the echoed step pulses, since the steppers then reported only
+  faults; replaced by 0006.
 - **[0004: Bumper protrusion deferred, sideways cliff gap accepted](docs/decisions/0004-safety-bumper-protrusion-and-side-cliffs.md).**
   Decisions D2 and D5: the lidar and the front ultrasonics stand past the front plank, noted
   and left; the cliff sensors cannot see a drop beside the robot, accepted for sites with none.
 - **[0005: Ultrasonics and glass in navigation](docs/decisions/0005-ultrasonics-and-glass-in-navigation.md).**
   Decision D6: known glass is a keepout zone; the ultrasonics feed the collision monitor and a
   range layer in the local costmap only, its marks capped at 0.4 m; unknown glass is a stop.
+- **[0006: Wheel state from the tapped motor encoders](docs/decisions/0006-wheel-state-from-tapped-encoders.md).**
+  An encoder tap brings the motor encoders to the ESP32: the wheel state is the measured
+  count, its velocity the count difference; the emitted pulses become the following-error
+  check. Simulated by `mecanum_hardware/SimEncoderSystem`.
 - **[Encoder upgrade guide](docs/encoder_upgrade.md).** The steps to move to ros2_control with
   measured wheel state: `mecanum_controllers`, `mecanum_hardware`, stamped `cmd_vel` and an
   EKF. Plan Phase 1 follows its simulation steps.

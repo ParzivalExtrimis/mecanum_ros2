@@ -8,6 +8,11 @@ track's decisions and shortcuts are recorded where the hardware work will meet t
 findings are kept in [section 6](#6-paused-work-3h-and-4h) and in the procedure documents, so
 they can resume without redoing anything.
 
+**Next (2026-11-11): the drive.** With the encoder tap
+([decision 0006](decisions/0006-wheel-state-from-tapped-encoders.md)), stage
+[5H](#5h-esp32-drive-on-the-tapped-encoders) is the drive transition plan, and the next
+hardware work.
+
 **Superseded strategy (2026-10-27).** The robot model was replaced (model v2: the L2 upright on
 the robot's top, plus a D435i, a 2D lidar, ultrasonics, cliff sensors and bumpers), and the new
 motors have encoders. `docs/plan.md` was rewritten as an end-to-end simulation build with a new
@@ -63,7 +68,14 @@ At the end of each sim phase, and whenever a sim-only shortcut is taken:
 - **RealSense D435i** (owned) and **Jetson Orin Nano Super** (owned), per the sensor placement
   and BOM document (`docs/Washroom_Robot_Prototype_Sensors_and_BOM.pdf`).
 - **The robot base,** pushable by hand with unpowered motors. Whether it slides sideways on its
-  rollers is not yet checked. The new motors have position and velocity encoders.
+  rollers is not yet checked.
+- **The drive:** Leadshine CS-M234120 closed-loop steppers with CS-D808 drivers (pulse and
+  direction in, a fault output). The drivers close the position loop on the motor encoders.
+- **The encoder tap (2026-11-11).** Each motor's A and B encoder outputs at its driver go
+  through a 6N137 optocoupler (8 in all) and a 5 V to 3.3 V logic level converter into the
+  ESP32, read as square waves ([decision 0006](decisions/0006-wheel-state-from-tapped-encoders.md)).
+  Built by the owner; **its electrics are not verified and are out of this project's scope**
+  (see stage 5H, "Not verified").
 - **The development laptop,** which runs everything for now.
 
 ### Not available yet
@@ -71,7 +83,7 @@ At the end of each sim phase, and whenever a sim-only shortcut is taken:
 | Item | Blocks |
 |---|---|
 | ESP32 firmware protocol (framing, rates, timeout, units, motor IDs, watchdog) | 5H, 7H-b, 8H |
-| ESP32 state reporting of the new encoders | The encoder upgrade (`docs/encoder_upgrade.md`) on hardware |
+| ESP32 firmware for the encoder tap: counting, following error, state report (`docs/encoder_upgrade.md` section 0) | Stage 5H, and with it the EKF on hardware |
 | The BOM parts: RPLIDAR C1, ultrasonics, cliff ToF, bumper switches, E-stop, drive relay, sensor hub | Their drivers; any driving (E-stop) |
 | Onboard computer OS and ROS distro on the Jetson Orin Nano Super | Untethered runs |
 | Physical dock and its design | 8H |
@@ -109,7 +121,8 @@ The hardware stages, procedures and tools depend on these. Changing one is a rev
 | Filtered cloud and scan | `/l2/points_filtered` in `l2_lidar`; `/scan` in `base_footprint` | 3H, 4H, 6H, 7H |
 | Odometry | `/odom` (`nav_msgs/Odometry`, `odom → base_footprint`, planar) | 4H to 8H, `tools/lio_marks.py` |
 | TF ownership | `map → odom`: slam_toolbox or AMCL. `odom → base_footprint`: the odometry adapter (an EKF after the encoder upgrade). The rest: robot_state_publisher. | All |
-| Drive input | `/cmd_vel` (Twist) into `esp32_driver`; zero on timeout | 5H, 7H-b, 8H |
+| Drive input | Since the sim build: every source publishes `TwistStamped` on `/cmd_vel`; the safety gate forwards `/cmd_vel_safe` to `mecanum_drive_controller` (ros2_control). On hardware the open-loop `esp32_driver` (`Twist` on `/cmd_vel`) stays until stage 5H replaces it. | 5H, 7H-b, 8H |
+| Wheel state | ros2_control position and velocity state per wheel joint, from tapped encoder counts through `mecanum_hardware`'s `WheelEncoder` (decision 0006); `/joint_states`, `/wheel/odometry` | 5H onward |
 | Hardware launch | `mecanum_bringup hardware_sensors.launch.py` with `lio:=`, `lio_config:=`, `replay:=` | 3H, 4H |
 | Recording | `ros2 bag record /l2/points /l2/imu /odom /lio/raw_odom /tf_static`, started before LIO | 4H onward; replayable through `replay:=true` |
 | Mount | The properties `l2_mount_x/y/z` and `l2_cable_yaw` in `mecanum_description/urdf/sensors/unitree_l2.xacro`: upright, (−0.100, 0, 0.767) m in `base_footprint`, cable to the rear (stand-in) | 3H; frames, self-filter and sim follow |
@@ -127,7 +140,7 @@ it is wrong, and when to re-score it.
 | A3 | **The simulated L2 represents the real one well enough** for LIO, costmaps and the blind zone. | Real pattern: about 39 meridian lines per revolution, precessing; sim: a fixed 360 × 32 grid. Noise 5 to 8 times lower in sim. | Low (as of now) | Sim results for LIO and costmaps do not transfer; re-tune on hardware. | 4H, 6H, 7H | Phase 4 decision |
 | A4 | **The real mount matches the URDF** closely enough that only xacro properties change. | New mount (upright on a standoff) unmeasured. Its height is a stand-in: the STEP and the PDF disagree by 40 mm. The previous mast's provisional errors (floor 8 cm low, 1.9° tilt) do not carry over. | Medium | Re-measure with the ceiling check, then shim the standoff or change `l2_mount_*` / `l2_cable_yaw`. Self-filter and costmap heights re-tuned. Architecture unaffected. | 3H, then all | 3H stage 2 |
 | A5 | **The rear ultrasonics cover rear safety** in the near field, with the L2 beyond about 3 m. | The upright L2 sees nothing low within about 3 m in any direction, and the 2D lidar sees only the front 200°. Simulated (plan Phase 2): the rear ultrasonics hold their range, but in a 6° high beam at 0.30 m, so low objects pass under them (the 5 cm threshold and the 9 cm wall do), and a real beam may hear the floor. Stopping on them is plan Phase 6. | Medium | Reverse motion restricted further, or another rear sensor. | 7H-b, 8H | Plan Phase 6 |
-| A6 | **Superseded (2026-10-27):** the motors have encoders; the drive moves to ros2_control (plan Phase 1). Previously: **Open-loop drive through the ESP32,** no ros2_control (decision 0001); the firmware takes wheel commands and stops on link loss. | Firmware protocol unknown. | Medium | If the firmware runs closed-loop wheel speeds or reports encoders, move to ros2_control earlier (`docs/encoder_upgrade.md`). The `/cmd_vel` contract survives. | 5H, 7H-b, 8H | When the protocol is known |
+| A6 | **Re-scored (2026-11-11):** the motor encoders are read through the encoder tap (decision 0006) and the drive moves to ros2_control on hardware with `mecanum_hardware/Esp32System` (stage 5H). Confidence **Medium**: the firmware and the tap's electrics are unverified. Earlier (2026-10-27) superseded; originally: **Open-loop drive through the ESP32,** no ros2_control (decision 0001); the firmware takes wheel commands and stops on link loss. | Firmware protocol unknown. | Medium | If the firmware runs closed-loop wheel speeds or reports encoders, move to ros2_control earlier (`docs/encoder_upgrade.md`). The `/cmd_vel` contract survives. | 5H, 7H-b, 8H | When the protocol is known |
 | A7 | **Superseded (2026-10-27):** wheel speed is closed-loop with encoders; no open-loop calibration phase. Previously: **Open-loop calibration from LIO odometry** gives commanded and achieved velocity within tolerance on the real floor. | Sim only, with an ideal plant and dry friction. Restroom floors can be wet. | Low | Closed-loop speed control (encoders) or online velocity correction. | 5H, 7H-b, 8H | Phase 5 |
 | A8 | **The onboard computer can run the stack** (L2 driver, LIO, slam_toolbox or AMCL, Nav2 with MPPI and the voxel layer). | rko_lio used 6 to 15% of one laptop core. Nav2 not yet measured. | Medium | A bigger computer, or lighter components (for example a 2D costmap). The vendored L2 SDK supports aarch64. | All untethered work | Phase 7 |
 | A9 | **The L2 link is reliable for a full mission,** and the stack survives a dropout. | Ethernet stream stopped once for 23 min after 15.5 min. LIO did not recover. Serial stopped after about 7 s. | Low | Driver reconnect logic; LIO reset and the adapter re-zeroing; mission abort on sensor loss. Possibly a hardware cause: cable, power, network config. | 4H onward | Before 4H resumes |
@@ -146,7 +159,7 @@ Things the sim track does that hardware must replace or re-check. Each sim phase
 | S1 | Ground truth (`/sim/ground_truth/odom`) for evaluation (`gt_compare`) and for ending `motion_test` segments | Phase 4 | 4H: tape marks and `tools/lio_marks.py` |
 | S2 | LIO sim config: deskew off (no time field), start-up initialization off (spawn settling) | Phase 4 | 4H: `rko_lio_hardware.yaml` (deskew and initialization on) |
 | S3 | Simulated L2: fixed 360 × 32 grid, one full sweep per message, instant render, low noise | Phase 3 | 3H stage 3 (compare), 4H |
-| S4 | Simulated drive: `sim_motor_plant`, JointController, anisotropic friction, 110.2% rotation, no watchdog | Phase 2 | 5H |
+| S4 | Simulated drive. Since the new plan's Phase 1: ros2_control on Gazebo, anisotropic friction; since 2026-11-11 the wheel state through the encoder tap model (`SimEncoderSystem`: 4000 counts per revolution, count-difference velocity, one-cycle delay, following-error fault). Still ideal: exact velocity tracking (no stepper dynamics or driver alarm), no tap glitches. Previously `sim_motor_plant` and JointController. | Phase 2 | 5H |
 | S5 | Perfect extrinsics; the robot starts level and still; no people or moving objects | Phases 3, 4 | 3H stage 2, 4H, 7H |
 | S6 | World: primitive restroom; no mirrors or wet floor, and glass only as a visibility mask | Phase 2 | 6H, 7H |
 | S7 | Dock and mission poses known exactly from the world file | Phase 8 (planned) | 8H: `record_pose.py` on the real map |
@@ -197,25 +210,61 @@ replaces measured stand-ins in `STANDINS.md`, and stops for the owner's review.
   through it first.
 - **Acceptance.** Drift within the Phase 4 targets (1% of the path, 2° of yaw).
 
-### 5H: ESP32 drive and calibration
+### 5H: ESP32 drive on the tapped encoders
 
-- **Confidence: Medium-Low.** A6 (firmware), A7 (open-loop calibration on a real floor), the
-  missing e-stop.
-- **Depends on.** Phase 5, 4H; the ESP32 protocol; a way to stop the robot; contracts: drive
-  input, odometry; A2, A6, A7.
-- **Progress kept.** The driver's transport interface (`Esp32Transport` in `transport.py`),
-  `motion_test`, the calibration file format.
+Rewritten 2026-11-11 for the encoder tap ([decision 0006](decisions/0006-wheel-state-from-tapped-encoders.md)).
+The open-loop calibration of the old plan is gone: the wheel state is measured.
+
+- **Confidence: Medium.** The firmware is not written; the tap's electrics are unverified; the
+  E-stop and drive relay are not available yet.
+- **Depends on.** The ESP32 firmware (`docs/encoder_upgrade.md` section 0); a way to stop the
+  robot; contracts: drive input, wheel state, odometry; A6, A8.
+- **Progress kept.**
+  - `mecanum_hardware`'s `WheelEncoder` (counts to position, velocity from count differences,
+    report delay, following-error fault), unit tested and running in simulation through
+    `SimEncoderSystem`.
+  - `mecanum_controllers` (the controller, its limits and the `/cmd_vel_safe` reference), the
+    safety gate with its `joint_states` watchdog, the EKF E1, `motion_test`, `gt_compare`.
+  - The fault path, checked in simulation: a frozen wheel count trips the following error, the
+    wheels stop, `/joint_states` stops and the gate blocks.
+- **Not verified (out of scope, revisit only on failure).** The tap's electrics: the 6N137
+  optocouplers, the level converter, their edge timing, and any loading of the drivers' encoder
+  lines. No electrical test is part of this stage. If a step below fails, these are the first
+  suspects:
+  - counts drift from the emitted pulses while no driver alarm shows;
+  - a wheel counts only one way, or at half or a quarter of the expected rate (one channel
+    dead or stuck);
+  - the drivers alarm, or behave differently, with the tap connected;
+  - counts are lost only at the highest speeds.
 - **Steps.**
-  1. Implement the `esp32` transport against the protocol, tested on a loopback fake, as
-     `mecanum_lidar` was.
-  2. On blocks: wheel directions and signs with `motion_test`; losing the link stops the
-     motors.
-  3. On the floor at low speed, after confirming how to stop the robot.
-  4. Calibration with `calibrate_node` and LIO odometry, at two battery levels.
-- **Acceptance.** Commanded and achieved velocity agree within the Phase 5 tolerance on all
-  three axes.
-- **Architecture-sensitive.** Firmware that closes the wheel-speed loop or reports encoders
-  (A6): then follow `docs/encoder_upgrade.md` instead of open-loop calibration.
+  1. **Firmware** (section 0 of `docs/encoder_upgrade.md`): counting on the pulse counter units,
+     emitted pulses, following error, the state report and the watchdog. The protocol is fixed
+     with the owner.
+  2. **`mecanum_hardware/Esp32System`:** the serial link, the same `WheelEncoder` per wheel,
+     faults to `ERROR`; tested against a loopback fake ESP32 first, as `mecanum_lidar` was.
+     `hardware:=esp32` in `mecanum.ros2_control.xacro`; `robot.launch.py sim:=false` runs
+     `controllers.launch.py` instead of `esp32_driver`.
+  3. **On blocks, wheels in the air** (functional checks only):
+     - each wheel's sign: `motion_test` forward, strafe and rotate turn the right wheels the
+       right way, and the counts agree in sign with the step direction;
+     - counts per wheel revolution: a mark on the wheel, 10 turns, against 4000 per turn;
+       replaces the STAND-IN;
+     - emitted pulses and counts agree over minutes of back-and-forth at several speeds (the
+       following error stays small and returns to near zero);
+     - the following-error limit: hold a wheel by hand at low speed and check the fault trips,
+       all wheels stop and the gate blocks; set the limit from the largest error seen in normal
+       running, with margin;
+     - link loss stops the motors (the watchdog).
+  4. **On the floor, at low speed,** after confirming how to stop the robot: measured straight
+     lines, strafes and squares on real tiles; fit the wheel radius and the centre-to-wheel
+     distance; set the wheel covariances and the AMCL `alpha*` values from what is left.
+  5. **Hand over the TF:** the EKF E1 owns `odom → base_footprint` on hardware; the L2 gyro's
+     covariance is set (its driver publishes zero); LIO's default on hardware is reconsidered.
+  6. **Retire** the open-loop `esp32_driver`, `drive_core.py`, `transport.py` and
+     `wheel_calibration.yaml` in `mecanum_base` (`docs/encoder_upgrade.md` section 7).
+- **Acceptance.** Counts per revolution confirmed; signs right; following error bounded in
+  normal running and tripping when a wheel is held; wheel odometry on the floor within the plan
+  Phase 3 targets (2% of the path, 2°) before slip is fitted (STAND-IN targets).
 
 ### 6H: map the real restroom
 
@@ -290,3 +339,4 @@ Kept so that the work resumes where it stopped.
 | 2026-10-27 | Branch `feature/model-v2`: the robot model is being replaced (new meshes, geometry and additional sensors). The previous model's meshes, dimensions and L2 mast were removed from the URDF and the dependent configs. The Mount contract, A4 and A5 need re-scoring for the new model, and the 3H/4H mount data describe the previous mast. |
 | 2026-10-30 | Plan Phase 2 done: every sensor is simulated, on the plan's sensor contract. A5 gained its first simulation data. For hardware: the 2D lidar's slot is not modelled (sim ±89.5°, real ±100°), `/scan` on `hardware_sensors.launch.py` stays the L2 band until a 2D lidar driver exists, and large best-effort messages need bigger socket buffers (D435i images and clouds; `src/mecanum_simulation/README.md`, "Known issues"). |
 | 2026-10-27 | Model v2 written from the reference URDF (`mecanum_description/refs/washroom_robot.urdf`): the L2 upright at 0.767 m, the D435i, 2D lidar, ultrasonics, cliff ToF and bumpers. The motors have encoders. `docs/plan.md` rewritten as an end-to-end simulation build; this register is no longer updated per phase. Updated: hardware facts, the Mount contract (and a new Other sensors contract), A4, A5, A13. Superseded: A1, A2, A6, A7, A11. `docs/hardware_l2_test.md` and `docs/hardware_lio_test.md` updated for the upright mount. |
+| 2026-11-11 | Encoder tap (decision 0006): the motor encoders reach the ESP32 through 6N137 optocouplers and a level converter. Hardware facts, the Drive input contract and a new Wheel state contract, A6 re-scored, S4 updated, stage 5H rewritten as the drive transition plan. The tap's electrics are recorded as not verified and out of scope. Other stages are not yet rewritten for the new plan. |

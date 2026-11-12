@@ -14,11 +14,15 @@ reference is remapped to `/cmd_vel` (all sources publish stamped there), and
 `enable_odom_tf` is `true` until the EKF of section 4 exists (plan Phase 3). Sections 0, 2, 4,
 7 and the hardware steps of 8 are open.
 
-**Amended (2026-11-03):** the drive uses closed-loop steppers (Leadshine CS-M234120 with CS-D808
-drivers), whose encoders close the loop inside the driver and never reach the MCU. The only
-output is a fault signal. The wheel state is therefore the echoed step pulse count, not a
-measured encoder state, and section 0's encoder requirements are replaced by the echo rules of
-[decision 0003](decisions/0003-default-odometry-wheels-and-l2-gyro.md).
+**Amended (2026-11-03), then (2026-11-11):** the drive uses closed-loop steppers (Leadshine
+CS-M234120 with CS-D808 drivers), whose encoders close the loop inside the driver. Decision 0003
+therefore used the echoed step pulse count. Since 2026-11-11 an **encoder tap** (6N137
+optocouplers and a 5 V to 3.3 V level converter) brings each motor's A and B encoder signals to
+the ESP32, and the wheel state is the measured count again:
+[decision 0006](decisions/0006-wheel-state-from-tapped-encoders.md). Section 0 is rewritten for
+the tap; section 2's plugin uses `mecanum_hardware`'s `WheelEncoder`, which the simulation
+already runs (`SimEncoderSystem`). The hardware steps are planned in
+[`hardware_transition.md`](hardware_transition.md), stage 5H.
 
 The names and parameters below were checked against ROS 2 Jazzy:
 
@@ -39,21 +43,27 @@ You can also read the controller's generated parameter header at
 
 ## 0. Firmware requirements, before any ROS work
 
-The ESP32 must provide the following before the migration is worth doing:
+Rewritten 2026-11-11 for the encoder tap (decision 0006). The ESP32 must provide:
 
-- **Per-wheel position.** Report encoder ticks, plus counts per *wheel* revolution after the
-  gearbox. Positions must be continuous and must not wrap between reports.
-- **Per-wheel velocity.** Measure it on the ESP32, not by differencing on the Jetson, and
-  report it at 50 Hz or more.
-- **A timestamp or sequence number on each state report,** so stale or dropped reports can be
-  detected.
+- **Per-wheel counts from the tap.** Decode A and B of each motor in the pulse counter units
+  (x4), with the glitch filter on, and extend them to continuous 64-bit counts that never wrap
+  between reports. Document the counts per *wheel* revolution (STAND-IN: 4000, direct drive).
+- **The emitted pulses, counted per wheel,** as today, and the per-wheel **following error**:
+  emitted pulses scaled to encoder counts, minus the measured counts. Over the limit, stop all
+  wheels and raise a fault bit.
+- **One report per cycle, at 50 Hz or more:** the four counts, the MCU timestamp, a sequence
+  number, the driver fault bits and the following-error fault bits. Velocity is *not* measured
+  on the ESP32: the plugin derives it from count differences (decision 0006).
 - **One sign convention for all wheels.** Positive means the wheel rolls the robot forward.
-  Document it per wheel, or apply it in the plugin.
-- **Measured latency** from command to wheel response, and from measurement to report.
+  Document it per wheel, or apply it in the plugin. The tap's A/B order sets the count sign
+  independently of the step direction, so check both.
+- **Measured latency** from command to wheel response, and from count latch to report.
 - **Documented watchdog behaviour:** the timeout, and what the motors do when it fires.
-- **Recommended: speed PID on the ESP32.** Commands then become wheel speed targets in rad/s
-  instead of open-loop values, and the per-wheel scale and deadband calibration largely
-  disappears.
+- **Commands stay step rates.** The drivers close the position loop, so no speed PID is needed
+  on the ESP32; commands are wheel speed targets in rad/s, converted to step rates.
+
+The tap's electrics are out of this project's scope and not verified here (decision 0006,
+"Gaps").
 
 ## 1. New package `mecanum_controllers`
 
@@ -152,8 +162,11 @@ Carry each setting over from the current driver config:
 
 ## 2. New package `mecanum_hardware`
 
-This is a C++ ament_cmake package with pluginlib. It provides a
-`hardware_interface::SystemInterface` that is exported as `mecanum_hardware/Esp32System`.
+This is a C++ ament_cmake package with pluginlib. **It exists since 2026-11-11** with the
+encoder model `WheelEncoder` (decision 0006) and the simulation plugin
+`mecanum_hardware/SimEncoderSystem`. The hardware plugin to add is a
+`hardware_interface::SystemInterface` exported as `mecanum_hardware/Esp32System`, which feeds
+the MCU's counts through the same `WheelEncoder`.
 
 | Method | Responsibility |
 |---|---|
@@ -163,8 +176,8 @@ This is a C++ ament_cmake package with pluginlib. It provides a
 | `on_deactivate` / `on_shutdown` / `on_error` | Send zeros to all motors. |
 | `export_state_interfaces` | Position and velocity per wheel. |
 | `export_command_interfaces` | Velocity per wheel. |
-| `read()` | Take the latest ESP32 state report. Convert ticks to rad and rad/s, apply per-wheel sign, and check its age. Return an error if the report is stale. |
-| `write()` | Convert wheel rad/s to the ESP32 command. That is a rad/s target if the firmware runs PID. Otherwise it is the sign, scale, deadband and max mapping. Then send. |
+| `read()` | Take the latest ESP32 state report, apply the per-wheel sign, and pass each count to its `WheelEncoder` (position in rad, velocity from the count change over the read period). Check the report's age and sequence. Return an error if it is stale, or on any fault bit. |
+| `write()` | Pass each wheel's rad/s to its `WheelEncoder` (the commanded position), convert it to a step rate with the per-wheel sign, and send. |
 
 Port this logic from `mecanum_base`:
 - `mecanum_base/wheel_calibration.py` provides the command mapping, if still needed.
@@ -248,7 +261,7 @@ In `gz_bridge.yaml` and `sim.launch.py`:
 | `mecanum_base/config/wheel_calibration.yaml` | Move the values that remain into the hardware plugin parameters (section 2), then remove it with the driver. With firmware PID there is no open-loop scale or deadband to fit; `motion_test` checks wheel speed tracking. |
 | `mecanum_simulation/sim_motor_plant.py` | Removed in plan Phase 1 (2026-10-28), with `plant_model.py`, `sim_plant.yaml`, the `sim` transport and `MotorCommands`. |
 | `mecanum_bringup/launch/*` | Include `controllers.launch.py`. Drop the driver node and joint_state_publisher. |
-| `STANDINS.md` | Remove the calibration stand-ins that no longer apply. Add the encoder counts per revolution until they are confirmed. |
+| `STANDINS.md` | Remove the calibration stand-ins that no longer apply. The encoder counts per revolution, the report delay and the following-error limit are listed (2026-11-11) until they are confirmed. |
 
 ## 8. Verification order
 

@@ -4,6 +4,9 @@
   [0002](0002-ros2-control-with-measured-wheel-state.md): the motors report no encoder state,
   and the wheel state comes from echoed step pulses instead (see "The wheel state without
   encoders").
+  Amended (2026-11-11) by [0006](0006-wheel-state-from-tapped-encoders.md): an encoder tap now
+  reads the motor encoders, so the wheel state is the measured count; the section "The wheel
+  state without encoders" is replaced, and the echo is kept only as a cross-check.
 - **Date:** 2026-11-03
 - **Revisit when:**
   - the floor tests on the real robot (see "Consequences") show large wheel slip on tiles;
@@ -61,6 +64,10 @@
   - **Ultrasonics.** A single range per sensor, with no bearing, cannot give motion.
 
 ### The wheel state without encoders
+
+> **Replaced by [0006](0006-wheel-state-from-tapped-encoders.md) (2026-11-11).** Kept for the
+> record: the motor encoders are now read through a tap, and the echo below is only a
+> cross-check.
 
 The wheel odometry is computed from the **echoed command**: the step pulses the MCU actually
 emits, after its ramps and limiters. This is treated as equivalent to a motor encoder, for the

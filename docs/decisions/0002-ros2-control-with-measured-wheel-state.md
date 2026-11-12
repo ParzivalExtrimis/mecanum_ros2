@@ -4,7 +4,9 @@
   [0001](0001-open-loop-drive-without-ros2-control.md) in simulation; on hardware, 0001's
   open-loop driver stays until the ESP32 hardware plugin exists. Amended (2026-11-03) by
   [0003](0003-default-odometry-wheels-and-l2-gyro.md): the motors report no encoder state, and
-  the hardware wheel state comes from echoed step pulses.
+  the hardware wheel state comes from echoed step pulses. Amended again (2026-11-11) by
+  [0006](0006-wheel-state-from-tapped-encoders.md): an encoder tap reads the motor encoders, so
+  the wheel state is measured, as this record first assumed.
 - **Date:** 2026-10-28
 - **Revisit when:** the EKF takes over `odom -> base_footprint` (plan Phase 3), or the ESP32
   firmware's state reporting is defined ([encoder_upgrade.md](../encoder_upgrade.md),

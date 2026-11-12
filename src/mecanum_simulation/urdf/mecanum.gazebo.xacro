@@ -18,9 +18,10 @@
 
   2. The drive: ros2_control, not in this file. mecanum_sim.urdf.xacro includes
      mecanum_controllers/urdf/mecanum.ros2_control.xacro with hardware=sim, which adds the
-     gz_ros2_control plugin. It commands the wheel joint velocities and reads their measured
-     positions and velocities from physics (ideal encoders) for joint_state_broadcaster and
-     mecanum_drive_controller.
+     gz_ros2_control plugin with mecanum_hardware/SimEncoderSystem. It commands the wheel joint
+     velocities and reports their positions and velocities as the tapped encoders would
+     (quantized counts, velocity from count differences, a report delay; decision 0006) to
+     joint_state_broadcaster and mecanum_drive_controller.
 
   3. Ground truth: OdometryPublisher on gz topic /sim/ground_truth/odom, bridged to the ROS
      topic of the same name. Evaluation only: its frame labels (sim_gt_world, sim_gt_base) are

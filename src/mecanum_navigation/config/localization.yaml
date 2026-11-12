@@ -21,7 +21,8 @@ amcl:
     # Odometry noise, upstream 0.2 each. The EKF's odometry stays within 1 cm over the 29 m
     # mapping route (Phase 5); at 0.2 the particles spread so fast that the estimate drifted
     # 10 to 13 cm where the 2D lidar sees little (the lobby, facing the open corridor).
-    # STAND-IN: set from the real base's measured odometry error (steppers, no encoders).
+    # STAND-IN: set from the real base's measured odometry error (tapped motor encoders,
+    # decision 0006; slip on tiles unmeasured).
     alpha1: 0.05
     alpha2: 0.05
     alpha3: 0.05

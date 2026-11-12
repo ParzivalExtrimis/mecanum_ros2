@@ -9,7 +9,7 @@ ros2_control files live here, never in `mecanum_description`.
 
 | Path | Content |
 |---|---|
-| `urdf/mecanum.ros2_control.xacro` | Macro `mecanum_ros2_control(prefix, hardware)`: one system with the four wheel joints, each with a velocity command interface and position and velocity state interfaces. `hardware` is `mock` (`mock_components/GenericSystem`) or `sim` (`gz_ros2_control/GazeboSimSystem`, plus the gz_ros2_control plugin). |
+| `urdf/mecanum.ros2_control.xacro` | Macro `mecanum_ros2_control(prefix, hardware)`: one system with the four wheel joints, each with a velocity command interface and position and velocity state interfaces. `hardware` is `mock` (`mock_components/GenericSystem`) or `sim` (`mecanum_hardware/SimEncoderSystem`: Gazebo physics with the tapped encoder model, decision 0006; plus the gz_ros2_control plugin). Its `counts_per_wheel_rev`, `report_delay_cycles` and `following_error_limit` are STAND-INs. |
 | `urdf/mecanum_mock.urdf.xacro` | The description plus the macro on mock hardware, for dry runs |
 | `config/controllers.yaml` | Controller manager at 50 Hz, the drive controller (geometry, limits, frames, covariances) and the broadcaster |
 | `launch/controllers.launch.py` | The spawners; with `hardware:=mock` also robot_state_publisher and `ros2_control_node` |
@@ -17,7 +17,8 @@ ros2_control files live here, never in `mecanum_description`.
 
 The simulation includes the macro from `mecanum_simulation/urdf/mecanum_sim.urdf.xacro` and
 starts `controllers.launch.py` once the robot is spawned. The ESP32 hardware plugin
-(`mecanum_hardware`) does not exist yet; see `docs/encoder_upgrade.md`, section 2.
+(`mecanum_hardware/Esp32System`) does not exist yet; see `docs/hardware_transition.md`, stage
+5H, and `docs/encoder_upgrade.md`, section 2.
 
 ## Topics
 

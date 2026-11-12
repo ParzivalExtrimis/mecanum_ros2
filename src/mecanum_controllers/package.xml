@@ -16,6 +16,8 @@
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>mecanum_description</exec_depend>
+  <!-- The simulation plugin, mecanum_hardware/SimEncoderSystem -->
+  <exec_depend>mecanum_hardware</exec_depend>
   <exec_depend>mecanum_drive_controller</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>xacro</exec_depend>

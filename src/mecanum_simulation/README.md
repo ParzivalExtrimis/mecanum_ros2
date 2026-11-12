@@ -6,8 +6,11 @@ description, the simulated sensor suite and the ros_gz bridge.
 
 The drive runs on ros2_control with Gazebo hardware (`mecanum_controllers`,
 [decision 0002](../../docs/decisions/0002-ros2-control-with-measured-wheel-state.md)): the
-wheel joints are velocity-commanded, and their measured positions and velocities come from
-physics. These are ideal encoders, with no noise or quantization (shortcut S2 in
+wheel joints are velocity-commanded, and their positions and velocities come from physics
+through the encoder tap model of `mecanum_hardware/SimEncoderSystem`
+([decision 0006](../../docs/decisions/0006-wheel-state-from-tapped-encoders.md)): whole counts at
+4000 per wheel revolution, velocity from count differences, one cycle of report delay, and the
+following-error fault. No glitches or slip sensing (shortcut S2 in
 [docs/plan.md](../../docs/plan.md)).
 
 ## Data flow
@@ -15,9 +18,9 @@ physics. These are ideal encoders, with no noise or quantization (shortcut S2 in
 ```
 /cmd_vel (geometry_msgs/TwistStamped)
   -> mecanum_drive_controller     inverse kinematics, limits, 0.25 s reference timeout
-  -> gz_ros2_control (GazeboSimSystem, inside Gazebo)
+  -> gz_ros2_control (SimEncoderSystem around GazeboSimSystem, inside Gazebo)
   -> wheel joint velocities -> anisotropic roller friction -> the chassis moves
-  -> measured wheel states -> joint_state_broadcaster -> /joint_states
+  -> exact wheel angles -> encoder counts -> wheel states -> joint_state_broadcaster -> /joint_states
                            -> mecanum_drive_controller -> /wheel/odometry
 
 gz OdometryPublisher -> /sim/ground_truth/odom   evaluation only, never TF or /odom

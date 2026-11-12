@@ -17,7 +17,10 @@ obsolete:
   robot, 0.80 m up. It sees the walls above the robot and the ceiling, but nothing near the
   floor closer than about 3 m. Near-field obstacles are now the job of the new sensors.
 - **The motors now have position and velocity encoders.** Wheel odometry exists, so the drive
-  can move to ros2_control, and odometry no longer depends on LIO alone.
+  can move to ros2_control, and odometry no longer depends on LIO alone. (2026-11-03: the
+  closed-loop stepper drivers turned out to keep the encoders to themselves, so 0003 used the
+  echoed step pulses. 2026-11-11: an encoder tap now reads them, decision 0006; see
+  "Encoder tap" below.)
 
 The previous plan's decisions are therefore withdrawn:
 - the open-loop drive (decision 0001);
@@ -99,7 +102,7 @@ recommendation, and work stops until the owner chooses.
 | **Cliff ToF** ×4 | Underside corners, 0.12 m, pointing down | The floor below each corner | **Drop detection** (stairs, a step down, a missing floor), through the safety supervisor |
 | **Bumpers** F+R | Planks across the full width, 0.06–0.09 m | Contact | Last-resort contact stop, through the safety supervisor |
 | **E-stop** | Rear face (not modelled) | — | A latched stop; a topic in simulation |
-| **Wheel encoders** ×4 | Motors | Wheel position and velocity | **Wheel odometry** through `mecanum_drive_controller`, the EKF's main motion input |
+| **Wheel encoders** ×4 | Motors, read by the ESP32 through the encoder tap ([0006](decisions/0006-wheel-state-from-tapped-encoders.md)) | Wheel position (quadrature counts, 4000 per wheel revolution, STAND-IN) and velocity from count differences | **Wheel odometry** through `mecanum_drive_controller`, the EKF's main motion input; the following-error check against the emitted pulses |
 
 ### State estimation
 
@@ -235,7 +238,8 @@ the L2's height band as a scan, is off by default, for comparison only, until Ph
 - **LIO tracks on the upright L2, so far.** Unlike the previous model (18.5% loop error),
   rko_lio stays within 0.23% on the restroom loop. The corridor world, its hard case, was not
   re-run; Phase 3 evaluates it as candidate E3.
-- **Shortcut S2:** ideal encoders, with no quantization or noise.
+- **Shortcut S2:** ideal encoders, with no quantization or noise. (Narrowed on 2026-11-11:
+  the encoder tap model adds quantization and a report delay; see "Encoder tap".)
 - **The ESP32 hardware plugin (`mecanum_hardware`) is out of scope.** `mecanum_base`'s driver
   stays for the hardware path (`sim:=false`), with the `mock` and `esp32` transports.
 
@@ -396,10 +400,11 @@ The plan as written:
 - **Decision D1: E1** ([0003](decisions/0003-default-odometry-wheels-and-l2-gyro.md)). LIO is
   out of the EKF and off by default in simulation; on hardware it stays on until the hardware
   plugin exists. Visual odometry on the D435i is deferred to hardware, and 2D scan matching on
-  the C1 (rf2o) is not used, with the reasons in 0003. The real drive has no encoder feedback
-  (closed-loop steppers with a fault output only), so the wheel state on hardware comes from the
-  echoed step pulses; 0003 gives the reasoning, the rules for the MCU and the plugin, and the
-  validation tests.
+  the C1 (rf2o) is not used, with the reasons in 0003. The real drive gave no encoder feedback
+  then (closed-loop steppers with a fault output only), so 0003 took the wheel state on hardware
+  from the echoed step pulses. Since 2026-11-11 an encoder tap reads the motor encoders, and
+  [0006](decisions/0006-wheel-state-from-tapped-encoders.md) replaces the echo with the measured
+  count; E1 is unchanged.
 
 The plan as written:
 
@@ -800,6 +805,32 @@ The plan as written:
 
 ---
 
+## Encoder tap (2026-11-11, decision 0006)
+
+The owner fitted an encoder tap: each motor's A/B encoder outputs reach the ESP32 through 6N137
+optocouplers and a level converter, so the wheel state on hardware is the measured count, not
+0003's echoed pulses ([0006](decisions/0006-wheel-state-from-tapped-encoders.md)).
+
+- **Built:** package `mecanum_hardware` with the encoder model `WheelEncoder` and the Gazebo
+  hardware plugin `SimEncoderSystem`, which wraps `GazeboSimSystem`. It reports whole counts
+  (4000 per wheel revolution), the velocity from count differences, and one cycle of report
+  delay. It integrates the commands into a commanded position and faults on a following error
+  over 0.5 rad. All of these values are STAND-INs.
+- **Measured** (2026-11-12, restroom `loop` × 2, 24.6 m):
+
+  | Check | Result |
+  |---|---|
+  | `/joint_states` wheel positions | whole counts (0 of 50 messages off) |
+  | `/wheel/odometry` vs ground truth | final 0.029 m (0.12%), max 0.095 m (0.39%), yaw max 1.10°: PASS (Phase 2: 0.40%, 0.82°) |
+  | `/odom` (EKF E1) vs ground truth | final 0.004 m, max 0.088 m (0.36%), yaw max 0.19°: PASS |
+  | Following error in normal driving | at most 1 count (0.0016 rad) on every wheel |
+  | Fault: front-left count frozen while driving at 0.1 m/s | fault at 0.508 rad; the controllers deactivate; `/joint_states` stops; the robot stops (ground-truth speed 0); the gate blocks with "lost /joint_states" |
+
+- **Gotcha:** gz_ros2_control calls `write()` on every physics step but `read()` once per control
+  period. The commanded position is therefore integrated in `read()`. The first version did it in
+  `write()` and reported a 650 rad following error.
+- **Hardware:** the drive transition is stage 5H of `docs/hardware_transition.md`.
+
 ## Sim-only shortcuts
 
 Each entry works only because this is a simulation. Add entries as they are introduced.
@@ -807,7 +838,7 @@ Each entry works only because this is a simulation. Add entries as they are intr
 | # | Shortcut | Introduced | Effect |
 |---|---|---|---|
 | S1 | Gazebo ground truth (`/sim/ground_truth/odom`) | carried over | Evaluation only (`gt_compare`, dock error). Never used for control or odometry. |
-| S2 | Ideal wheel encoders | Phase 1 | No quantization, noise or latency. Slip comes only from the friction model. |
+| S2 | Ideal wheel encoders | Phase 1; narrowed 2026-11-11 | Since the encoder tap model ([0006](decisions/0006-wheel-state-from-tapped-encoders.md)): 4000 counts per wheel revolution, velocity from count differences, a one-cycle report delay, the following-error fault. Still ideal: no electrical glitches on the tap, no coupling backlash; slip comes only from the friction model, and the drive tracks its velocity command exactly (no stepper dynamics). |
 | S3 | Idealized sensors | Phase 2 | Gaussian noise only. No sonar crosstalk or multipath, no IR depth artefacts on shiny surfaces, no motion distortion in the lidars, a regular L2 scan pattern. |
 | S4 | Glass via visibility masks | Phase 2 | Glass is hidden from the lidars and the camera by a Gazebo visibility mask and seen only by the ultrasonics. Real glass is partly visible and partly not. |
 | S5 | The E-stop is a topic | Phase 4 | No hardware stop circuit. With no `/estop` publisher the supervisor is not latched. |

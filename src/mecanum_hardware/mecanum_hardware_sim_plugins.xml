@@ -1,0 +1,11 @@
+<library path="mecanum_hardware_sim">
+  <class
+    name="mecanum_hardware/SimEncoderSystem"
+    type="mecanum_hardware::SimEncoderSystem"
+    base_class_type="gz_ros2_control::GazeboSimSystemInterface">
+    <description>
+      GazeboSimSystem with the wheel state of the tapped quadrature encoders (decision 0006):
+      quantized counts, velocity from count differences, report delay, following-error fault.
+    </description>
+  </class>
+</library>

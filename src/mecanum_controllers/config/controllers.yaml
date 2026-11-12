@@ -4,7 +4,8 @@
 #
 # Topics, remapped in launch/controllers.launch.py:
 #   /cmd_vel           geometry_msgs/TwistStamped in base_footprint, the reference
-#   /wheel/odometry    nav_msgs/Odometry from the measured wheel states
+#   /wheel/odometry    nav_msgs/Odometry from the measured wheel states (the tapped encoders:
+#                      mecanum_hardware/SimEncoderSystem in simulation, decision 0006)
 #   /joint_states      from joint_state_broadcaster
 controller_manager:
   ros__parameters:
@@ -55,6 +56,8 @@ mecanum_drive_controller:
 
     # STAND-IN: odometry covariances are guesses (x, y, z, roll, pitch, yaw; vx, vy, vz, wx,
     # wy, wz); set them from the drift measured in docs/plan.md Phase 3. vy is larger: the
-    # rollers slip most sideways.
+    # rollers slip most sideways. The wheel state is the tapped encoder count (decision 0006),
+    # almost free of noise, but blind to slip: do not lower these for the encoders, set them
+    # from the floor tests (docs/hardware_transition.md, stage 5H).
     pose_covariance_diagonal: [0.001, 0.002, 1.0e+6, 1.0e+6, 1.0e+6, 0.002]
     twist_covariance_diagonal: [0.001, 0.004, 1.0e+6, 1.0e+6, 1.0e+6, 0.002]
