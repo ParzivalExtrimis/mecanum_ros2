@@ -215,8 +215,14 @@ replaces measured stand-ins in `STANDINS.md`, and stops for the owner's review.
 Rewritten 2026-11-11 for the encoder tap ([decision 0006](decisions/0006-wheel-state-from-tapped-encoders.md)).
 The open-loop calibration of the old plan is gone: the wheel state is measured.
 
-- **Confidence: Medium.** The firmware is not written; the tap's electrics are unverified; the
-  E-stop and drive relay are not available yet.
+**The drive part runs from [`hardware_drive_test.md`](hardware_drive_test.md)** (2026-11-12):
+the serial protocol, the test stages T0 to T5 (T0, the fake ESP32, passed), the limit rule and
+the results log. Steps 1 to 4 below map onto it: step 1 is the sketch, step 2 is T0 and T1,
+step 3 is T2, step 4 is T3 to T5.
+
+- **Confidence: Medium.** The firmware is written but not yet on the board; the tap's
+  electrics are unverified; there is no E-stop or drive relay (stops: the power lead and the
+  software).
 - **Depends on.** The ESP32 firmware (`docs/encoder_upgrade.md` section 0); a way to stop the
   robot; contracts: drive input, wheel state, odometry; A6, A8.
 - **Progress kept.**
@@ -238,12 +244,16 @@ The open-loop calibration of the old plan is gone: the wheel state is measured.
   - counts are lost only at the highest speeds.
 - **Steps.**
   1. **Firmware** (section 0 of `docs/encoder_upgrade.md`): counting on the pulse counter units,
-     emitted pulses, following error, the state report and the watchdog. The protocol is fixed
-     with the owner.
+     emitted pulses, following error, the state report and the watchdog. **Written
+     2026-11-12** as one sketch, `firmware/mecanum_drive_esp32/`; the owner builds and uploads
+     it (its README has the steps). The protocol is in `hardware_drive_test.md`, section 1.
   2. **`mecanum_hardware/Esp32System`:** the serial link, the same `WheelEncoder` per wheel,
-     faults to `ERROR`; tested against a loopback fake ESP32 first, as `mecanum_lidar` was.
-     `hardware:=esp32` in `mecanum.ros2_control.xacro`; `robot.launch.py sim:=false` runs
-     `controllers.launch.py` instead of `esp32_driver`.
+     faults to `ERROR`. **Written and tested on a fake ESP32 2026-11-12** (T0).
+     `hardware:=esp32` in `mecanum.ros2_control.xacro`; `drive_test.launch.py` runs it with the
+     safety gate. `robot.launch.py sim:=false` still runs `esp32_driver` until 5H passes. Found
+     on the fake: the installed `mecanum_drive_controller` does not stop on a reference timeout
+     when acceleration limits are set, so the ESP32's backstop is the only ramp for now
+     (`hardware_drive_test.md`, section 8).
   3. **On blocks, wheels in the air** (functional checks only):
      - each wheel's sign: `motion_test` forward, strafe and rotate turn the right wheels the
        right way, and the counts agree in sign with the step direction;
@@ -340,3 +350,4 @@ Kept so that the work resumes where it stopped.
 | 2026-10-30 | Plan Phase 2 done: every sensor is simulated, on the plan's sensor contract. A5 gained its first simulation data. For hardware: the 2D lidar's slot is not modelled (sim ±89.5°, real ±100°), `/scan` on `hardware_sensors.launch.py` stays the L2 band until a 2D lidar driver exists, and large best-effort messages need bigger socket buffers (D435i images and clouds; `src/mecanum_simulation/README.md`, "Known issues"). |
 | 2026-10-27 | Model v2 written from the reference URDF (`mecanum_description/refs/washroom_robot.urdf`): the L2 upright at 0.767 m, the D435i, 2D lidar, ultrasonics, cliff ToF and bumpers. The motors have encoders. `docs/plan.md` rewritten as an end-to-end simulation build; this register is no longer updated per phase. Updated: hardware facts, the Mount contract (and a new Other sensors contract), A4, A5, A13. Superseded: A1, A2, A6, A7, A11. `docs/hardware_l2_test.md` and `docs/hardware_lio_test.md` updated for the upright mount. |
 | 2026-11-11 | Encoder tap (decision 0006): the motor encoders reach the ESP32 through 6N137 optocouplers and a level converter. Hardware facts, the Drive input contract and a new Wheel state contract, A6 re-scored, S4 updated, stage 5H rewritten as the drive transition plan. The tap's electrics are recorded as not verified and out of scope. Other stages are not yet rewritten for the new plan. |
+| 2026-11-12 | Stage 5H drive work: the ESP32 sketch (owner uploads), `mecanum_hardware/Esp32System`, the fake ESP32, `drive_test.launch.py`, the tuning tools and `docs/hardware_drive_test.md` (protocol, T0 to T5, limit rule). T0 passed. `mecanum_drive_controller` 4.42.1 found to leave three wheels running after a reference timeout when acceleration limits are set: no controller acceleration limits on the hardware. |

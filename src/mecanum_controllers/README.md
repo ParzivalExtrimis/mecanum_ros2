@@ -9,16 +9,20 @@ ros2_control files live here, never in `mecanum_description`.
 
 | Path | Content |
 |---|---|
-| `urdf/mecanum.ros2_control.xacro` | Macro `mecanum_ros2_control(prefix, hardware)`: one system with the four wheel joints, each with a velocity command interface and position and velocity state interfaces. `hardware` is `mock` (`mock_components/GenericSystem`) or `sim` (`mecanum_hardware/SimEncoderSystem`: Gazebo physics with the tapped encoder model, decision 0006; plus the gz_ros2_control plugin). Its `counts_per_wheel_rev`, `report_delay_cycles` and `following_error_limit` are STAND-INs. |
+| `urdf/mecanum.ros2_control.xacro` | Macro `mecanum_ros2_control(prefix, hardware)`: one system with the four wheel joints, each with a velocity command interface and position and velocity state interfaces. `hardware` is `mock` (`mock_components/GenericSystem`), `sim` (`mecanum_hardware/SimEncoderSystem`: Gazebo physics with the tapped encoder model, decision 0006; plus the gz_ros2_control plugin) or `esp32` (`mecanum_hardware/Esp32System`, the real drive; its `esp32_*` parameters). Its `counts_per_wheel_rev`, `report_delay_cycles` and `following_error_limit` are STAND-INs. |
 | `urdf/mecanum_mock.urdf.xacro` | The description plus the macro on mock hardware, for dry runs |
+| `urdf/mecanum_esp32.urdf.xacro` | The description plus the macro on the ESP32 drive; every ESP32 parameter is a xacro arg |
+| `config/controllers_hardware.yaml` | Overlay for the real drive: low STAND-IN speed limits, the controller owns `odom → base_footprint`, and no acceleration limits (the installed controller does not stop on a reference timeout with them; `docs/hardware_drive_test.md`, section 8) |
 | `config/controllers.yaml` | Controller manager at 50 Hz, the drive controller (geometry, limits, frames, covariances) and the broadcaster |
-| `launch/controllers.launch.py` | The spawners; with `hardware:=mock` also robot_state_publisher and `ros2_control_node` |
+| `launch/controllers.launch.py` | The spawners; with `hardware:=mock` or `hardware:=esp32` (`port:=...` and the other ESP32 args) also robot_state_publisher and `ros2_control_node` |
 | `test/test_mock_kinematics.py` | Launch test on mock hardware |
+| `test/test_esp32_fake.py` | Launch test of the real-drive stack on `mecanum_hardware`'s fake ESP32 (`ROS_DOMAIN_ID=92`): odometry, limits, the reference timeout stop, the fault and link-loss stops and their recovery |
 
 The simulation includes the macro from `mecanum_simulation/urdf/mecanum_sim.urdf.xacro` and
-starts `controllers.launch.py` once the robot is spawned. The ESP32 hardware plugin
-(`mecanum_hardware/Esp32System`) does not exist yet; see `docs/hardware_transition.md`, stage
-5H, and `docs/encoder_upgrade.md`, section 2.
+starts `controllers.launch.py` once the robot is spawned. On the robot,
+`mecanum_bringup drive_test.launch.py` starts `controllers.launch.py hardware:=esp32` with the
+safety gate; the procedure is `docs/hardware_drive_test.md` (stage 5H of
+`docs/hardware_transition.md`).
 
 ## Topics
 

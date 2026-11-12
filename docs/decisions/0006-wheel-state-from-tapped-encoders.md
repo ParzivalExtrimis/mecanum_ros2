@@ -7,7 +7,10 @@
   measured again, as 0002 first assumed.
 - **Date:** 2026-11-11
 - **Revisit when:**
-  - the ESP32 firmware or the hardware plugin (`mecanum_hardware/Esp32System`) is written;
+  - the ESP32 firmware or the hardware plugin (`mecanum_hardware/Esp32System`) is written
+    (done 2026-11-12, [`hardware_drive_test.md`](../hardware_drive_test.md): both follow this
+    decision unchanged; the plugin feeds the MCU's counts to the same `WheelEncoder`, and the
+    MCU checks the following error against its own pulses);
   - the block tests of stage 5H (`docs/hardware_transition.md`) show counts that disagree with
     the emitted pulses, or the counts per wheel revolution differ from 4000;
   - the floor tests show slip large enough to need a second translation source.

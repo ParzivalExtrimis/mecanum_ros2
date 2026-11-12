@@ -9,6 +9,7 @@ Top-level launch files and RViz configurations for the mecanum base.
 | `mapping.launch.py` | 5 | Simulation: `robot.launch.py`, slam_toolbox mapping and RViz on `rviz/mapping.rviz` |
 | `navigation.launch.py` | 6 | Simulation: `robot.launch.py`, localization (AMCL or slam_toolbox) and Nav2, with RViz on `rviz/navigation.rviz` |
 | `mission.launch.py` | 7, planned | Navigation plus docking and the mission executive |
+| `drive_test.launch.py` | hardware stage 5H | The real drive: `mecanum_controllers` on the ESP32 (`hardware:=esp32`), the safety gate watching `/joint_states`, RViz on `rviz/drive_test.rviz` (`rviz:=true`). For teleop and tuning; `docs/hardware_drive_test.md` |
 
 ## `robot.launch.py`
 
@@ -118,6 +119,27 @@ Every `robot.launch.py` argument can be given too. The map matches `restroom.sdf
 Velocity commands: Nav2's go through the velocity smoother and the collision monitor to
 `/cmd_vel`, and from there through the safety gate. Teleop and the test tools publish on
 `/cmd_vel` directly, so they pass the safety gate but not the collision monitor.
+
+## `drive_test.launch.py`
+
+Drives the real base on the ESP32 drive (hardware stage 5H; procedure, protocol and results in
+`docs/hardware_drive_test.md`). It starts `mecanum_controllers/controllers.launch.py
+hardware:=esp32` (robot_state_publisher, `ros2_control_node` on `mecanum_hardware/Esp32System`,
+the spawners, with `config/controllers_hardware.yaml`), the safety gate watching `/joint_states`
+only (no sensor is fitted for this stage), and RViz with `rviz:=true`. There is no EKF: the
+drive controller publishes `odom → base_footprint`. Every ESP32 argument passes through
+(`port`, `pulses_per_rev`, `counts_per_wheel_rev`, `motor_for_wheel`, `dir_invert`,
+`enc_invert`, `watchdog_ms`, `accel_backstop`, `max_wheel_speed`, `following_error_limit`).
+
+```bash
+ros2 launch mecanum_bringup drive_test.launch.py port:=/dev/serial/by-id/<the DevKitC> rviz:=true
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true \
+  -p frame_id:=base_footprint -p speed:=0.1 -p turn:=0.3
+tools/drive_monitor.py      # per-wheel state; tools/drive_tune.py for the ladders
+```
+
+`robot.launch.py sim:=false` still starts the open-loop `esp32_driver`; it moves to this drive
+once stage 5H passes.
 
 ## `hardware_sensors.launch.py`
 

@@ -1,0 +1,33 @@
+# Overlay on controllers.yaml for the real drive (controllers.launch.py hardware:=esp32), loaded
+# after it: only the values below change. Stage 5H of docs/hardware_transition.md; the test
+# procedure that raises these values is docs/hardware_drive_test.md (stages T3 to T5).
+#
+# Every limit here is a STAND-IN, deliberately low for the first floor runs: the only stops on
+# the floor are the power lead and the software. They are raised one step at a time, each step
+# confirmed by the owner, under the limit rule in docs/hardware_drive_test.md, and the chosen
+# values are recorded in decision 0007 (to be written at the end of T5).
+mecanum_drive_controller:
+  ros__parameters:
+    # No EKF on the hardware yet: the drive controller owns odom -> base_footprint, from the
+    # encoder counts (remapped to /tf in controllers.launch.py).
+    enable_odom_tf: true
+
+    # Speed limits (m/s, rad/s): STAND-IN, T3 starting values.
+    #
+    # No acceleration limits here, on purpose: mecanum_drive_controller 4.42.1 (Jazzy) leaves
+    # three wheels running when its reference times out while an acceleration limit is set.
+    # On a timeout it feeds one zero reference through the limiter (one ramp step down), then
+    # writes zero to the front-left wheel only: the other three keep their last command
+    # (`||` short-circuits the four set_value calls in update_and_write_commands). Teleop key
+    # releases, the safety gate's single zero on a block and a stopped gate all end in that
+    # timeout. Without limits the first step is already zero, so every wheel stops.
+    # Found on the fake ESP32 (docs/hardware_drive_test.md, T0). Fixed upstream on the jazzy
+    # branch of ros2_controllers (checked 2026-11-12), not yet in the installed release:
+    # revisit when a newer release is installed (dpkg -l ros-jazzy-mecanum-drive-controller),
+    # and rerun test_esp32_fake.py with limits set. Until then the ramps are the ESP32's acceleration backstop, per wheel
+    # (accel_backstop in the xacro, rad/s^2 at the wheel), for starts and stops alike.
+    linear:
+      x: {max_velocity: 0.1, min_velocity: -0.1}
+      y: {max_velocity: 0.1, min_velocity: -0.1}
+    angular:
+      z: {max_velocity: 0.3, min_velocity: -0.3}

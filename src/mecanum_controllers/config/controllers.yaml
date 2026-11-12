@@ -48,6 +48,9 @@ mecanum_drive_controller:
 
     # STAND-IN: speed limits, as max_vx / max_vy / max_wz of esp32_driver; raise them once
     # stopping and tracking are shown to be good. min_velocity is the negative bound.
+    # Do not add acceleration limits (max_acceleration etc.) with the installed controller
+    # 4.42.1: a reference timeout then leaves three wheels running. See
+    # controllers_hardware.yaml.
     linear:
       x: {max_velocity: 0.3, min_velocity: -0.3}
       y: {max_velocity: 0.3, min_velocity: -0.3}

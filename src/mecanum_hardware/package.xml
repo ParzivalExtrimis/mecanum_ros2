@@ -3,12 +3,14 @@
 <package format="3">
   <name>mecanum_hardware</name>
   <version>0.0.1</version>
-  <description>ros2_control hardware for the mecanum base: the tapped wheel encoder model (decision 0006) and the Gazebo system plugin that reports the wheel state through it. The ESP32 plugin follows on hardware.</description>
+  <description>ros2_control hardware for the mecanum base: the tapped wheel encoder model (decision 0006) and the Gazebo system plugin that reports the wheel state through it. and the ESP32 drive plugin (Esp32System, over USB serial to firmware/mecanum_drive_esp32).</description>
   <maintainer email="claude.raseksha@gmail.com">hegde-aryan</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <depend>mecanum_interfaces</depend>
+  <depend>rclcpp_lifecycle</depend>
   <!-- Simulation plugin only; skipped by CMake where Gazebo is not installed -->
   <depend>gz_ros2_control</depend>
   <depend>gz_sim_vendor</depend>

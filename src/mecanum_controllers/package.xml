@@ -24,14 +24,19 @@
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+  <test_depend>builtin_interfaces</test_depend>
+  <test_depend>controller_manager_msgs</test_depend>
   <test_depend>geometry_msgs</test_depend>
   <test_depend>launch_testing</test_depend>
   <test_depend>launch_testing_ament_cmake</test_depend>
+  <test_depend>lifecycle_msgs</test_depend>
   <test_depend>mecanum_base</test_depend>
+  <test_depend>mecanum_interfaces</test_depend>
   <test_depend>nav_msgs</test_depend>
   <test_depend>python3-pytest</test_depend>
   <test_depend>rclpy</test_depend>
   <test_depend>sensor_msgs</test_depend>
+  <test_depend>tf2_msgs</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

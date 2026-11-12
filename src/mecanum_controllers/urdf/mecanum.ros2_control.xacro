@@ -11,11 +11,15 @@
           GazeboSimSystem inside) with the wheel state of the tapped encoders: quantized counts,
           velocity from count differences, a report delay, the following-error fault. Also adds
           the gz_ros2_control plugin, which hosts the controller manager inside Gazebo
-  The ESP32 hardware plugin (mecanum_hardware/Esp32System) is not written yet; it uses the same
-  encoder model (docs/hardware_transition.md, stage 5H).
+    esp32 mecanum_hardware/Esp32System: the real drive, the ESP32 firmware
+          (firmware/mecanum_drive_esp32) over USB serial, with the same encoder model. Its
+          parameters come from the macro's esp32_* arguments (urdf/mecanum_esp32.urdf.xacro,
+          mecanum_bringup drive_test.launch.py), so tuning needs no edit here
+          (docs/hardware_drive_test.md).
 
-  Included by mecanum_simulation/urdf/mecanum_sim.urdf.xacro (sim) and
-  urdf/mecanum_mock.urdf.xacro (mock), never by mecanum_description.
+  Included by mecanum_simulation/urdf/mecanum_sim.urdf.xacro (sim),
+  urdf/mecanum_mock.urdf.xacro (mock) and urdf/mecanum_esp32.urdf.xacro (esp32), never by
+  mecanum_description.
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
@@ -29,7 +33,20 @@
     </joint>
   </xacro:macro>
 
-  <xacro:macro name="mecanum_ros2_control" params="prefix hardware">
+  <!-- esp32_* defaults: STAND-INs until docs/hardware_drive_test.md stages T2 to T5 measure them
+       (STANDINS.md). Motor order and inverts are per motor 1..4 of the firmware's pin map. -->
+  <xacro:macro name="mecanum_ros2_control"
+               params="prefix hardware
+                       esp32_port:=/dev/ttyUSB0
+                       esp32_pulses_per_rev:=1600
+                       esp32_counts_per_wheel_rev:=4000
+                       esp32_motor_for_wheel:='0 1 2 3'
+                       esp32_dir_invert:='0 0 0 0'
+                       esp32_enc_invert:='0 0 0 0'
+                       esp32_watchdog_ms:=200
+                       esp32_accel_backstop:=2.5
+                       esp32_max_wheel_speed:=3.5
+                       esp32_following_error_limit:=0.5">
     <ros2_control name="${prefix}mecanum_base" type="system">
       <hardware>
         <xacro:if value="${hardware == 'mock'}">
@@ -45,6 +62,33 @@
           <param name="report_delay_cycles">1</param>
           <!-- STAND-IN: rad at the wheel; 0 turns the check off -->
           <param name="following_error_limit">0.5</param>
+        </xacro:if>
+        <xacro:if value="${hardware == 'esp32'}">
+          <plugin>mecanum_hardware/Esp32System</plugin>
+          <param name="port">${esp32_port}</param>
+          <param name="baud">921600</param>
+          <!-- STAND-IN: the CS-D808 DIP setting; measured in stage T2 -->
+          <param name="pulses_per_rev">${esp32_pulses_per_rev}</param>
+          <!-- STAND-IN: 1000-line encoder, x4, direct drive; measured in stage T2 -->
+          <param name="counts_per_wheel_rev">${esp32_counts_per_wheel_rev}</param>
+          <!-- STAND-IN: motor index (0..3) driving FL FR RL RR; found in stage T2 -->
+          <param name="motor_for_wheel">${esp32_motor_for_wheel}</param>
+          <!-- STAND-IN: per motor, so that positive rolls the robot forward; stage T2 -->
+          <param name="dir_invert">${esp32_dir_invert}</param>
+          <param name="enc_invert">${esp32_enc_invert}</param>
+          <!-- The ESP32 stops without a command for this long (ms) -->
+          <param name="watchdog_ms">${esp32_watchdog_ms}</param>
+          <!-- STAND-IN: the ESP32's ramp (rad/s^2 at the wheel), for starts and stops. It is
+               the only acceleration limit for now (config/controllers_hardware.yaml says why):
+               2.5 = 0.26 m/s^2 along x or y, 0.57 rad/s^2 in rotation. Set in stage T5 -->
+          <param name="accel_backstop">${esp32_accel_backstop}</param>
+          <!-- STAND-IN: the ESP32 clamps wheel speeds above this (rad/s; 3.5 = 0.36 m/s at the
+               rim); raised with the speed ladder of stage T5 -->
+          <param name="max_wheel_speed">${esp32_max_wheel_speed}</param>
+          <!-- STAND-IN: rad at the wheel; set in stage T2 from normal running -->
+          <param name="following_error_limit">${esp32_following_error_limit}</param>
+          <param name="state_timeout_ms">100</param>
+          <param name="connect_timeout_s">3.0</param>
         </xacro:if>
       </hardware>
       <xacro:mecanum_wheel_interfaces prefix="${prefix}" wheel="front_left"/>

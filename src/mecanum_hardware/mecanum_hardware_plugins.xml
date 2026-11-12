@@ -1,0 +1,11 @@
+<library path="mecanum_hardware_esp32">
+  <class
+    name="mecanum_hardware/Esp32System"
+    type="mecanum_hardware::Esp32System"
+    base_class_type="hardware_interface::SystemInterface">
+    <description>
+      The real drive: the ESP32 firmware (firmware/mecanum_drive_esp32) over USB serial, with the
+      wheel state from the tapped encoder counts (decision 0006).
+    </description>
+  </class>
+</library>
