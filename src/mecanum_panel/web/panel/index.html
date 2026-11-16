@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<!-- Copyright 2026 Aryan Hegde. Licensed under the Apache License, Version 2.0. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=800, height=480, initial-scale=1, user-scalable=no">
+<title>Robot panel</title>
+<link rel="stylesheet" href="panel.css">
+<script src="/config.js"></script>
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<div id="frame">
+  <header id="status" title="Tap for Health">
+    <span class="title">Robot panel</span>
+    <span class="mode" id="sb-mode">Connecting…</span>
+    <span class="spacer"></span>
+    <span class="ind" id="sb-safe"></span>
+    <span class="ind" id="sb-brake"></span>
+    <span class="ind" id="sb-arm"></span>
+    <span class="ind" id="sb-lidar"></span>
+    <span class="ind" id="sb-link"></span>
+    <div class="err" id="sb-err"></div>
+  </header>
+  <main id="content"></main>
+  <div id="actions"></div>
+  <button id="stop" data-cmd="stop">STOP<small>Base halts, arm stows</small></button>
+  <div id="overlay"></div>
+  <div id="linklost">
+    <h1>Link lost</h1>
+    <p>This panel has not heard from the robot for over a second. STOP on this screen would not
+       reach it.</p>
+    <p>Use STOP on the controller, or press the e-stop on the robot.</p>
+  </div>
+</div>
+</body>
+</html>

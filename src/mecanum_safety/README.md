@@ -20,7 +20,7 @@ drives the robot). The hardware path is unchanged until the hardware plugin exis
 | `mecanum_safety/safety_supervisor.py` | The node |
 | `config/safety.yaml` | Positions (from the URDF), thresholds, watchdog timeouts and clock |
 | `launch/safety.launch.py` | The node, with a `watch_<sensor>` argument per sensor group |
-| `test/test_safety_logic.py` | Every rule, corner, plank, the latch and the watchdog timing |
+| `test/test_safety_logic.py` | Every rule, corner, plank, the latch, the watchdog timing and the bypass (never over the e-stop) |
 | `test/test_layout.py` | The positions in `safety.yaml` against the URDF |
 | `test/test_supervisor_launch.py` | The node with fake sensors: each topic silenced in turn, then the cliff, bumper and e-stop inputs |
 
@@ -39,6 +39,14 @@ replaced with zero, never reduced.
 | Loss of `/scan`, `/l2/points_filtered`, `/d435i/depth/color/points`, `/joint_states`, `/odom` | no message within the timeout | Stops everything |
 | Loss of `/ultrasonic/<pos>` | as above | Guards its face (front or rear) |
 | Loss of `/cliff/<pos>` or `/bumper/<plank>` | as above | As a cliff or a pressed plank |
+| `/safety/bypass` (`std_msgs/Bool`) | true, refreshed within `bypass_timeout` (0.5 s, steady clock) | Every rule above but the e-stop is skipped |
+
+- **The bypass** is for the booth demo's Manual mode with its safety checks off
+  (`docs/demo_app.md`): the demo supervisor refreshes it at 5 Hz and sends false when Manual
+  ends. While it holds, only the e-stop stops the base. The blocks are still worked out and
+  listed in `reasons`, `bypassed` is set, and the gate logs "Would block (bypassed): ...". A
+  bypass that is not refreshed expires, so a dead publisher cannot leave the gate open. Nothing
+  else publishes it.
 
 - **Before the first message,** a topic counts as lost. The robot cannot move until every
   watched sensor is up.
@@ -51,7 +59,7 @@ replaced with zero, never reduced.
   command's stamp. When the sources go quiet the gate sends nothing, so the controller's 0.25 s
   reference timeout still applies.
 - **`/safety/state`** is published at 10 Hz and on every change: `estop_latched`, `stopped` (all
-  motion blocked), and `reasons`, for example `cliff front_left`, `bumper front` or
+  motion blocked), `bypassed`, and `reasons`, for example `cliff front_left`, `bumper front` or
   `lost /scan`.
 
 ## Clocks and executor

@@ -81,6 +81,9 @@ def generate_launch_description():
         launch_arguments={
             'world': LaunchConfiguration('world'),
             'gui': LaunchConfiguration('gui'),
+            'x': LaunchConfiguration('x'),
+            'y': LaunchConfiguration('y'),
+            'yaw': LaunchConfiguration('yaw'),
             **{sensor: LaunchConfiguration(sensor) for sensor in OTHER_SENSORS},
             'use_l2': LaunchConfiguration('use_l2'),
         }.items(),
@@ -103,6 +106,10 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'world', default_value=os.path.join(sim_share, 'worlds', 'restroom.sdf'),
             description='Gazebo world (sim only)'),
+        DeclareLaunchArgument('x', default_value='0.0', description='Spawn x (m, sim only)'),
+        DeclareLaunchArgument('y', default_value='-1.0', description='Spawn y (m, sim only)'),
+        DeclareLaunchArgument('yaw', default_value='0.0',
+                              description='Spawn yaw (rad, sim only)'),
         DeclareLaunchArgument('use_l2', default_value='true',
                               description='Include the Unitree L2 in the robot model'),
         *[DeclareLaunchArgument(sensor, default_value='true',

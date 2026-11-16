@@ -1,0 +1,18 @@
+# A request to the demo supervisor (mecanum_demo, /supervisor/command). The supervisor decides;
+# a refused command changes nothing and says why.
+#
+# Actions and their args:
+#   start_mode <1..5>            run_feature <key> [loop]
+#   stop    reset    resume    go_home
+#   teleop_start    teleop_stop    teleop_skip    teleop_cancel
+#   save_run    discard_run
+#   manual_sub <drive|arm>    manual_teleop    exit_manual    manual_checks <on|off>
+#   hold_skip (no holds until this loop ends)    hold_check <on|off>
+
+string action
+string[] args
+string request_id
+---
+bool accepted
+string reason
+string request_id

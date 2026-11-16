@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<!-- Copyright 2026 Aryan Hegde. Licensed under the Apache License, Version 2.0. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Booth demo dashboard</title>
+<style>
+  body { margin: 0; font: 14px Inter, 'Noto Sans', sans-serif; background: #EEF1F0; color: #141716; }
+  .wrap { max-width: 1560px; margin: 0 auto; padding: 16px; display: grid;
+          grid-template-columns: minmax(0, 1fr) 840px; gap: 16px; align-items: start; }
+  .card { background: #fff; border: 1px solid #DCE2E0; border-radius: 14px; padding: 12px; }
+  .ctitle { font-size: 13px; font-weight: 600; color: #4A5452; margin: 0 0 8px; }
+  .tv { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000;
+        border: 10px solid #111; border-radius: 8px; overflow: hidden; }
+  .tv iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .dev { background: #1E2224; border-radius: 22px; padding: 20px; }
+  .dev iframe { display: block; width: 800px; height: 480px; border: 0; border-radius: 6px; }
+  #simcard iframe { width: 100%; height: 420px; border: 0; }
+  h1 { font-size: 22px; margin: 16px 16px 0; }
+  .sub { margin: 4px 16px 0; color: #4A5452; }
+  .links a { margin-right: 12px; }
+</style>
+<script src="/config.js"></script>
+</head>
+<body>
+<h1>Booth demo dashboard</h1>
+<p class="sub links">Open each on its own: <a href="panel/" target="_blank">panel</a>
+<a href="tv/" target="_blank">TV</a> <a href="sim/" target="_blank">sim controls</a></p>
+<div class="wrap">
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <div class="card"><p class="ctitle">TV on the right wall</p>
+      <div class="tv"><iframe src="tv/" title="TV"></iframe></div></div>
+    <div class="card" id="simcard"><iframe src="sim/" title="Simulation controls"></iframe></div>
+  </section>
+  <aside>
+    <div class="card"><p class="ctitle">Robot panel (800 × 480, actual size)</p>
+      <div class="dev"><iframe src="panel/" title="Robot panel"></iframe></div></div>
+  </aside>
+</div>
+<script>
+  if (!(window.DEMO_CONFIG && window.DEMO_CONFIG.simControls)) {
+    document.getElementById('simcard').style.display = 'none';
+  }
+</script>
+</body>
+</html>

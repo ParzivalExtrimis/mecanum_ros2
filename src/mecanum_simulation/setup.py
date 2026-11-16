@@ -41,6 +41,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'booth_visitor = mecanum_simulation.booth_visitor:main',
             'sim_bumper = mecanum_simulation.sim_bumper:main',
             'sim_depth_cloud = mecanum_simulation.sim_depth_cloud:main',
             'sim_range_sensor = mecanum_simulation.sim_range_sensor:main',

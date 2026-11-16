@@ -238,3 +238,21 @@ def test_header_stamp_of_a_real_serialized_message():
     msg.header.stamp.sec, msg.header.stamp.nanosec = 1234, 750_000_000
     msg.header.frame_id = 'us'
     assert header_stamp(serialize_message(msg)) == 1234.75
+
+
+def test_a_bypass_ignores_cliffs_bumpers_and_lost_sensors():
+    decision = decide(LAYOUT, estop_latched=False, lost=['/scan', '/cliff/front_left'],
+                      full_stop_topics=FULL_STOP, cliff_ranges={'front_right': math.inf},
+                      floor_distance=0.119, cliff_margin=0.05,
+                      bumpers_pressed={'front': True}, topic_of=topic_of, bypass=True)
+    assert decision.bypassed and not decision.stopped
+    assert allowed(decision, FORWARD) and allowed(decision, CW)
+    # What would block is still reported.
+    assert 'lost /scan' in decision.reasons and 'bumper front' in decision.reasons
+
+
+def test_a_bypass_never_overrides_the_estop():
+    decision = decide(LAYOUT, estop_latched=True, lost=[], full_stop_topics=FULL_STOP,
+                      cliff_ranges={}, floor_distance=0.119, cliff_margin=0.05,
+                      bumpers_pressed={}, topic_of=topic_of, bypass=True)
+    assert decision.stopped and decision.gate(FORWARD) == Twist2D()

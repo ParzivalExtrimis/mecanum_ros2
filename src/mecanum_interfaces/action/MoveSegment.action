@@ -1,0 +1,19 @@
+# One prewritten base move of the booth demo (mecanum_demo segment_driver, /demo/move_segment).
+
+string MOVE = "move"   # straight holonomic move to target x, y, turning to the heading on the way
+string TURN = "turn"   # turn in place to target.theta by the shorter way
+string SPIN = "spin"   # turn in place by delta_yaw (may exceed a full turn)
+
+string kind
+geometry_msgs/Pose2D target   # map frame
+bool keep_heading             # move: keep the current heading, ignore target.theta
+float32 delta_yaw             # spin: signed angle
+bool slow                     # use the slow speed limits (precision moves)
+string label
+---
+bool success
+string error                  # "", "blocked", "no_progress", "no_pose", "canceled"
+string message
+---
+float32 remaining_s
+float32 progress              # 0..1

@@ -23,6 +23,7 @@ safety_supervisor:
     # still for stamp_stall s of the steady clock. safety.launch.py's watchdog_clock argument
     # sets it; robot.launch.py passes stamps in simulation.
     watchdog_clock: steady
+    bypass_timeout: 0.5     # /safety/bypass holds this long after its last true message
     stamp_stall: 0.5        # STAND-IN: 2 x the longest /joint_states gap measured under load
 
     # STAND-IN timeouts (s): about 3 to 5 periods of each sensor

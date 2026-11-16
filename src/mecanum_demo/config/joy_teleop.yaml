@@ -1,0 +1,23 @@
+# The booth controller's drive mapping for teleop_twist_joy (demo.launch.py joy:=true). Its
+# commands go to /manual/cmd_vel, which the demo supervisor passes on only in Manual driving
+# (with its speed caps, without the panel's heartbeat). Button 1 is STOP on the supervisor
+# (joy_stop_button).
+# STAND-IN: an Xbox-layout pad. Hold LB (button 4) to drive; left stick moves, right stick turns.
+# Set the axes and buttons for the real controller.
+teleop_twist_joy_node:
+  ros__parameters:
+    publish_stamped_twist: true
+    frame: base_footprint
+    require_enable_button: true
+    enable_button: 4
+    enable_turbo_button: -1
+    axis_linear:
+      x: 1
+      y: 0
+    scale_linear:
+      x: 0.2
+      y: 0.2
+    axis_angular:
+      yaw: 3
+    scale_angular:
+      yaw: 0.6

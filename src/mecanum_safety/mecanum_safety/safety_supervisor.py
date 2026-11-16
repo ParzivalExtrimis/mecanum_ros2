@@ -38,6 +38,11 @@ when the newest stamp stands still for stamp_stall seconds, every topic is lost
 replaces a source's command keeps that command's stamp, which the controller checks against
 its own clock; one sent on a new block carries the last command's stamp.
 
+Bypass: /safety/bypass (std_msgs/Bool) true turns the sensor blocks off, so that only the
+e-stop stops the robot. The demo supervisor (mecanum_demo) sends it at 5 Hz in Manual driving
+with its safety checks off, on the operator's judgement. It holds for bypass_timeout (0.5 s,
+steady clock) after the last true message, so a stopped sender cannot leave the gate open.
+
 Outputs: /cmd_vel_safe, /safety/state (mecanum_interfaces/SafetyState, 10 Hz and on change).
 Service ~/reset (std_srvs/Trigger) clears a latched e-stop once /estop is false.
 """
@@ -153,6 +158,9 @@ class SafetySupervisor(Node):
         self.create_subscription(TwistStamped, p('cmd_in_topic', '/cmd_vel').value,
                                  self._on_cmd, 10)
         self.create_service(Trigger, '~/reset', self._on_reset)
+        self.bypass_timeout = p('bypass_timeout', 0.5).value
+        self.bypass_until = -float('inf')
+        self.create_subscription(Bool, '/safety/bypass', self._on_bypass, 10)
 
         self.decision = None
         self.last_cmd = None
@@ -186,6 +194,10 @@ class SafetySupervisor(Node):
         self.estop.update(msg.data)
         self._update()
 
+    def _on_bypass(self, msg):
+        self.bypass_until = time.monotonic() + self.bypass_timeout if msg.data else -float('inf')
+        self._update()
+
     def _on_reset(self, _, response):
         response.success, response.message = self.estop.reset()
         self.get_logger().info(response.message)
@@ -201,12 +213,20 @@ class SafetySupervisor(Node):
             self.layout, estop_latched=self.estop.latched,
             lost=self.watchdog.lost(time.monotonic()), full_stop_topics=self.full_stop_topics,
             cliff_ranges=self.cliff_ranges, floor_distance=self.floor_distance,
-            cliff_margin=self.cliff_margin, bumpers_pressed=self.bumpers, topic_of=topic_of)
-        changed = self.decision is None or decision.reasons != self.decision.reasons
+            cliff_margin=self.cliff_margin, bumpers_pressed=self.bumpers, topic_of=topic_of,
+            bypass=time.monotonic() < self.bypass_until)
+        was = self.decision
+        changed = (was is None or decision.reasons != was.reasons
+                   or decision.bypassed != was.bypassed)
         self.decision = decision
         if changed:
+            if was is not None and decision.bypassed != was.bypassed:
+                self.get_logger().warn(
+                    'Sensor blocks bypassed (Manual, checks off): only the e-stop stops the '
+                    'robot' if decision.bypassed else 'Sensor blocks back on')
             if decision.reasons:
-                self.get_logger().warn(f'Blocked: {", ".join(decision.reasons)}')
+                self.get_logger().warn(('Would block (bypassed): ' if decision.bypassed
+                                        else 'Blocked: ') + ', '.join(decision.reasons))
             else:
                 self.get_logger().info('Clear')
             # A new block stops a command already in force, without waiting for the next one.
@@ -217,6 +237,7 @@ class SafetySupervisor(Node):
             state.header.stamp = self.get_clock().now().to_msg()
             state.estop_latched = self.estop.latched
             state.stopped = decision.stopped
+            state.bypassed = decision.bypassed
             state.reasons = list(decision.reasons)
             self.state_pub.publish(state)
 

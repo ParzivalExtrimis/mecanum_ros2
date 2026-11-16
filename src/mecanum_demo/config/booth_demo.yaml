@@ -1,0 +1,190 @@
+# The booth demo's site data: where the marked spots are, what each feature does and which
+# features each mode plays. Read by demo_supervisor and segment_driver (mecanum_demo); nothing
+# here is compiled in, so a new booth needs only this file and a new map.
+#
+# Frames: every pose is in the map frame, metres and radians. In simulation the map frame is
+# the world frame of mecanum_simulation/worlds/booth.sdf (shortcut S11). Translated from
+# docs/Booth demo simulator.html: its x is x here, its z is -y, and its headings W, E and S
+# are yaw pi, 0 and -pi/2.
+
+# The robot's outline as Nav2 uses it (mecanum_navigation/config/nav2.yaml), from base_footprint.
+# STAND-IN: from the URDF; measure the real robot with the arm stowed.
+footprint:
+  front: 0.421
+  rear: 0.405
+  half_width: 0.258
+
+# STAND-IN: every pose below was fitted to the 2 x 2 m booth estimated from a photo, for the
+# real 0.83 x 0.52 m footprint (the simulator assumed 0.70 x 0.51 m). Record them again in the
+# real booth's map.
+poses:
+  home: [-0.50, 0.35]      # 8 cm from the left wall when facing it
+  w1: [-0.50, -0.16]       # beside home
+  stage: [0.46, -0.425]    # centre stage; the spin leaves about 4 cm to the counter and bowl
+  b1: [0.46, -0.235]       # beside centre stage
+  a1: [-0.25, -0.20]       # near the dock
+  a2: [-0.25, 0.30]        # in line with the toilet
+  dock: [-0.173, 0.30]     # bumper 5 cm from the bowl's front edge
+
+headings:
+  W: 3.14159265            # facing the left wall (home)
+  E: 0.0                   # facing the toilet
+  S: -1.57079633           # facing the aisle
+
+location_labels:
+  home: At home
+  dock: Docked
+  stage: At centre stage
+  b1: Beside centre stage
+  w1: Beside home
+  a1: Near the dock
+  a2: Beside the toilet
+  other: Off the marked spots
+
+# The robot counts as "at" a spot within these. STAND-IN: the simulator used 0.06 m / 0.12 rad
+# on exact poses; these leave room for AMCL's error.
+location_tolerance: 0.10
+heading_tolerance: 0.20
+
+# Speeds of the prewritten moves. STAND-IN: within the simulated drive limits (0.3 m/s,
+# 0.8 rad/s); the hardware limits are 0.1 m/s and 0.3 rad/s until the drive tests raise them.
+speeds:
+  linear: 0.25
+  linear_slow: 0.12
+  angular: 0.7
+  linear_accel: 0.4
+  angular_accel: 1.2
+
+# The visitor hold. Someone counts when at least hold_min_points lidar points lie within
+# hold_radius of the robot's outline and more than hold_map_margin from anything on the map (or
+# inside static_zones), continuously for hold_confirm_s. They hold a moving step; it resumes
+# after the area has been clear for hold_clear_s. Relaxed on 2026-11-16 (owner) from 0.45 m,
+# 0.10 m, 3 points and no confirmation, which held for nobody in GUI runs.
+# STAND-IN: try them with real people at the booth front.
+hold_radius: 0.35
+hold_map_margin: 0.20
+hold_min_points: 10
+hold_confirm_s: 0.5
+hold_clear_s: 3.0
+# Fixtures that the 2D map cannot hold, because they are above or below the 2D lidar's plane
+# (0.13 m), but that the L2 sees: the hold detector ignores points inside these polygons (map
+# frame). Here the toilet tank (z 0.4..0.8 m in booth.sdf), grown by 3 cm. STAND-IN: draw the
+# real booth's ones by hand, as the keepout zones of Phase 6.
+static_zones:
+  toilet_tank: [[0.81, 0.08], [1.0, 0.08], [1.0, 0.52], [0.81, 0.52]]
+# Teleop: Mode 4 falls back to the replay after gate_fallback_s without START; a live session
+# ends after live_idle_s without leader motion.
+gate_fallback_s: 20.0
+live_idle_s: 15.0
+# The placeholder arm takes this long to stow after a stop or at the end of teleop.
+arm_stow_s: 1.4
+
+# Features. Each is a list of steps:
+#   {move: <pose>, heading: <W|E|S>, label: ..., slow: true}   heading omitted = keep heading
+#   {turn: <W|E|S>, label: ...}
+#   {spin: <rad>, label: ...}
+#   {arm: <deploy|scrub|stow|wave>, duration: <s>, label: ...}   arm placeholder, see below
+#                                  (STAND-IN durations, shortcut S13)
+#   {teleop: true, label: ...}                                    opens the teleop gate
+# needs: where the robot must be (at: one of these spots; facing: a heading; not_at).
+# nominal_s is the feature's length for the ETA before it starts.
+#
+# Arm steps are placeholders: the arm is not part of this workspace. The supervisor shows the
+# step, waits its duration and carries on, and says so in /supervisor/state's notice.
+features:
+  leave_home:
+    label: Leave home
+    needs: {at: [home], reason: Needs to start at home}
+    nominal_s: 9.0
+    steps:
+      - {move: w1, heading: W, label: Sidestep out of home}
+      - {move: b1, heading: W, label: Glide across the booth}
+      - {move: stage, heading: W, label: Sidestep to centre stage}
+  spin:
+    label: Spin
+    loopable: true
+    needs: {at: [stage], reason: Needs to be at centre stage}
+    nominal_s: 15.0
+    steps:
+      - {spin: -9.42477796, label: Spin flourish}
+  dock:
+    label: Dock
+    needs: {at: [stage], facing: E, reason: 'Needs centre stage, facing the toilet'}
+    nominal_s: 12.0
+    steps:
+      - {move: b1, heading: E, label: Sidestep toward the toilet}
+      - {move: a1, heading: E, label: Glide toward the toilet}
+      - {move: a2, heading: E, label: Slide in sideways}
+      - {move: dock, heading: E, label: Precision dock, slow: true}
+  replay:
+    label: Replay
+    loopable: true
+    arm: true
+    needs: {at: [dock], reason: Needs to be docked}
+    nominal_s: 9.0
+    steps:
+      - {arm: deploy, duration: 1.6, label: Arm deploys}
+      - {arm: scrub, duration: 6.0, label: 'Replaying recorded demo #{last_demo}'}
+      - {arm: stow, duration: 1.4, label: Arm stows}
+  teleop:
+    label: Teleop
+    loopable: true
+    arm: true
+    needs: {}
+    nominal_s: 0.0
+    steps:
+      - {teleop: true, label: Teleop session}
+  back_out:
+    label: Back out
+    needs: {at: [dock], reason: Needs to be docked}
+    nominal_s: 12.0
+    steps:
+      - {move: a2, heading: E, label: Back out, slow: true}
+      - {move: a1, heading: E, label: Slide out}
+      - {move: b1, heading: E, label: Glide clear}
+      - {move: stage, heading: E, label: Sidestep to centre stage}
+  greet:
+    label: Greet
+    loopable: true
+    needs: {at: [stage], reason: Needs to be at centre stage}
+    nominal_s: 12.0
+    steps:
+      - {turn: S, label: Turn to face the aisle}
+      - {arm: wave, duration: 3.0, label: Greet the aisle}
+      - {turn: W, label: Turn toward home}
+  go_home:
+    label: Go home
+    needs: {not_at: [home], reason: Already at home}
+    nominal_s: 14.0
+    # Built from where the robot is. The robot is too long to turn anywhere in the booth but
+    # centre stage, so it goes there first (keeping its heading), turns to home_heading, then
+    # follows `then` into home. Already facing home_heading on a spot of `then`, it carries
+    # on from there. A spot not listed goes by "other".
+    route:
+      dock: [a2, a1, b1, stage]
+      a2: [a1, b1, stage]
+      a1: [b1, stage]
+      b1: [stage]
+      w1: [b1, stage]
+      stage: []
+      other: [stage]     # not used: off the spots, it goes back to the nearest one first
+    turn_at: stage
+    home_heading: W
+    then: [b1, w1, home]
+    route_labels: {a2: Back out, a1: Slide out, b1: Glide clear, stage: Sidestep to centre stage}
+    then_labels: {b1: Sidestep clear, w1: Glide toward home, home: Sidestep into home}
+
+# The order of the feature chips on the panel.
+feature_order: [leave_home, spin, dock, replay, teleop, back_out, greet, go_home]
+
+# Modes 1, 4 and 5 loop their playlist; away from home, 1 and 4 go home first.
+modes:
+  '1': {label: Mode 1 · Show loop, playlist: [leave_home, spin, dock, replay, back_out, greet, go_home]}
+  '2': {label: Mode 2 · Go home}
+  '3': {label: Mode 3 · Manual}
+  '4': {label: Mode 4 · Show loop + teleop, playlist: [leave_home, spin, dock, teleop, back_out, greet, go_home]}
+  '5': {label: Mode 5 · Teleop in place, playlist: [teleop]}
+  single: {label: Single feature}
+
+# Demonstrations recorded before this run (the counter on the TV). STAND-IN.
+demo_count: 37

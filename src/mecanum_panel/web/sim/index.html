@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<!-- Copyright 2026 Aryan Hegde. Licensed under the Apache License, Version 2.0. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Simulation controls</title>
+<style>
+  body { margin: 0; padding: 14px; font: 14px/1.4 Inter, 'Noto Sans', sans-serif; color: #141716;
+         background: #fff; }
+  h3 { margin: 0 0 8px; font-size: 13px; color: #4A5452; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  button { min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid #B9C2C0;
+           background: #fff; font: 500 14px inherit; cursor: pointer; }
+  button.on { background: #0F6E56; color: #fff; border-color: #0F6E56; }
+  #estop { min-height: 52px; border: 3px solid #F2A93B; background: #C9302C; color: #fff;
+           font-weight: 600; font-size: 16px; }
+  #estop.on { background: #5F5E5A; border-color: #888780; }
+  label { display: flex; gap: 8px; align-items: center; }
+  .note { color: #4A5452; font-size: 12px; margin: 4px 0 12px; }
+  ol { list-style: none; margin: 0; padding: 0; font-size: 13px; max-height: 210px; overflow: auto; }
+  li { padding: 4px 0; border-top: 1px solid #EEF1F0; display: flex; gap: 10px; }
+  time { color: #6F7D7B; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  #link { font-size: 12px; color: #6F7D7B; }
+</style>
+<script src="/config.js"></script>
+<script type="module" src="sim.js"></script>
+</head>
+<body>
+<h3>Simulation controls <span id="link"></span></h3>
+<div class="bar">
+  <button id="visitor">Visitor leans in</button>
+  <button id="estop">E-STOP (hardware)</button>
+</div>
+<label><input type="checkbox" id="arm"> Arm checks pass (development switch)</label>
+<p class="note">The visitor is a cylinder in Gazebo, moved to the booth front. The e-stop button
+publishes /estop as the real button will. The arm switch makes the teleop gate's arm checks
+pass, to preview the Live and Ended screens; the arm itself is not integrated.</p>
+<h3>Supervisor</h3>
+<ol id="log"></ol>
+</body>
+</html>

@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Booth demo simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,sans-serif;background:#EEF1F0;color:#141716}
+.wrap{max-width:1560px;margin:0 auto;padding:20px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+h1{margin:0;font-family:'Space Grotesk',Inter,sans-serif;font-size:28px;font-weight:600}
+.sub{margin:4px 0 0;color:#4A5452;font-size:14px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:20px;align-items:start}
+@media(max-width:1120px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:#fff;border:1px solid #DCE2E0;border-radius:16px;padding:14px}
+.ctitle{font-size:13px;font-weight:600;color:#4A5452;margin:0 0 10px}
+#view3d{position:relative;height:540px;border-radius:12px;overflow:hidden;background:#DDE3E1}
+#view3d canvas{display:block}
+.ovl{position:absolute;left:12px;top:12px;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none}
+.pill{padding:6px 10px;border-radius:8px;font-size:13px;font-weight:600}
+#toast{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);background:#141716;color:#fff;padding:10px 14px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.lb{min-height:40px;padding:0 14px;border-radius:10px;border:1px solid #B9C2C0;background:#fff;color:#141716;font:500 14px Inter,sans-serif;cursor:pointer}
+.lb:hover{background:#F2F5F4}.lb.on{background:#0F6E56;color:#fff;border-color:#0F6E56}
+.lb:focus-visible,.btn:focus-visible,.chip:focus-visible{outline:2px solid #378ADD;outline-offset:2px}
+.spacer{flex:1}
+.row2{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:20px;margin-top:20px}
+@media(max-width:800px){.row2{grid-template-columns:minmax(0,1fr)}}
+#tv{width:100%;height:auto;display:block;border-radius:8px;background:#0B1012;border:10px solid #111}
+#log{list-style:none;margin:0;padding:0;font-size:13px;max-height:330px;overflow:auto}
+#log li{padding:6px 0;border-top:1px solid #EEF1F0;display:flex;gap:10px}
+#log time{color:#6F7D7B;font-variant-numeric:tabular-nums;flex-shrink:0}
+.dev{background:#1E2224;border-radius:22px;padding:12px}
+.scr{background:#0E1416;border-radius:10px;color:#F2F5F4;min-height:520px;display:flex;flex-direction:column;overflow:hidden}
+.sbar{height:42px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid #22302F;font-size:12px;color:#C9D3D1;gap:8px}
+.sbar b{font-family:'Space Grotesk',Inter,sans-serif;font-size:15px;color:#F2F5F4;font-weight:600}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.pb{padding:14px;display:flex;flex-direction:column;gap:12px;flex:1}
+.h2{font-family:'Space Grotesk',Inter,sans-serif;font-size:21px;font-weight:600}
+.big{font-family:'Space Grotesk',Inter,sans-serif;font-size:36px;font-weight:600}
+.mut{color:#9AA8A6;font-size:13px}
+.rowx{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mbtn{display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-height:84px;padding:10px 12px;background:#1A2428;border:1px solid #2F3D41;border-radius:12px;color:#F2F5F4;font-family:Inter,sans-serif;text-align:left;cursor:pointer}
+.mbtn:hover{border-color:#2BB39A}
+.mbtn .t{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600}
+.mbtn .n{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:#2F3D41;font-size:12px}
+.mbtn .d{font-size:12px;color:#9AA8A6;line-height:1.35}
+.mbtn.full{grid-column:1 / -1;min-height:56px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{min-height:40px;padding:0 12px;border-radius:10px;border:1px solid #2F3D41;background:#1A2428;color:#F2F5F4;font:500 13px Inter,sans-serif;cursor:pointer}
+.chip.sel{border-color:#2BB39A;background:#163731}
+.chip.na{color:#6F7D7B}
+.btn{min-height:48px;padding:0 14px;border-radius:12px;border:1px solid #2F3D41;background:#1A2428;color:#F2F5F4;font:500 15px Inter,sans-serif;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.btn small{font-size:12px;color:#9AA8A6;font-weight:400}
+.btn.tall{min-height:76px}
+.btn.go{background:#2BB39A;color:#04211B;border:0;font-weight:600}.btn.go small{color:#0B3B31}
+.btn.stop{background:#C9302C;color:#fff;border:0;font-weight:600;font-size:22px;font-family:'Space Grotesk',Inter,sans-serif}.btn.stop small{color:#FFE1E0;font-family:Inter}
+.btn:disabled{opacity:.38;cursor:not-allowed}
+.btns{display:grid;gap:8px;grid-template-columns:1fr 1fr}
+.seg{display:flex;border:1px solid #2F3D41;border-radius:10px;overflow:hidden}
+.seg button{min-height:40px;padding:0 14px;border:0;background:#1A2428;color:#9AA8A6;font:500 13px Inter,sans-serif;cursor:pointer}
+.seg button.on{background:#2F3D41;color:#F2F5F4}
+.ms{display:grid;gap:4px}
+.ms .b{height:6px;border-radius:3px}
+.ms .l{font-size:11px;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.banner{border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:3px}
+.banner .h2{font-size:20px}
+.b-hold{background:#F2A93B;color:#2A1A00}.b-hold .s{color:#3D2600}
+.b-stop{background:#2A1416;border:1px solid #E5484D}.b-stop .s{color:#F4C7C7}
+.b-live{background:#3A1414;border:1px solid #E5484D;flex-direction:row;justify-content:space-between;align-items:center}
+.b-info{background:#14263A;border:1px solid #378ADD}.b-info .s{color:#B5D4F4}
+.check{display:flex;align-items:center;gap:10px;min-height:40px;background:#1A2428;border-radius:10px;padding:6px 12px;font-size:14px}
+.check .r{margin-left:auto;font-size:12px;color:#9AA8A6;text-align:right}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.tile{background:#1A2428;border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:4px}
+.tile .v{font-family:'Space Grotesk',Inter,sans-serif;font-size:22px;font-weight:600}
+.dpad{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.dpad .btn{min-height:52px;font-size:13px;user-select:none;touch-action:none}
+.dpad .btn.act{border-color:#2BB39A;background:#163731}
+#pad{width:100%;height:auto;display:block;border-radius:10px;touch-action:none;cursor:grab;background:#E9EEEC}
+.hint{font-size:13px;color:#4A5452;margin:8px 0 0;line-height:1.45}
+.tog{display:flex;align-items:center;gap:8px;font-size:14px;margin-top:10px}
+.tog input{width:18px;height:18px}
+.estop{margin-top:12px;width:100%;min-height:56px;border-radius:12px;border:3px solid #F2A93B;background:#C9302C;color:#fff;font:600 17px 'Space Grotesk',Inter,sans-serif;cursor:pointer}
+.estop.on{background:#5F5E5A;border-color:#888780}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;color:#4A5452}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+kbd{font-family:inherit;font-size:12px;border:1px solid #2F3D41;border-radius:4px;padding:0 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<div>
+<h1>Booth demo simulator</h1>
+<p class="sub">Toilet-cleaning robot in a 2 × 2 m booth (estimated from the photo). One supervisor drives the robot panel, the 3D booth and the TV.</p>
+</div>
+<div class="legend">
+<span><i class="sw" style="background:#1D9E75"></i>Robot</span>
+<span><i class="sw" style="background:#F1EFE8;border:1px solid #B4B2A9"></i>Toilet</span>
+<span><i class="sw" style="background:#7F77DD"></i>Visitor</span>
+<span><i class="sw" style="background:#ffffff;border:1px dashed #888"></i>Floor tape: home and dock</span>
+</div>
+</header>
+<div class="grid">
+<section>
+<div class="card">
+<div id="view3d"><div class="ovl" id="ovl"></div><div id="toast"></div></div>
+<div class="bar">
+<button class="lb on" data-cam="aisle">Aisle view</button>
+<button class="lb" data-cam="top">Top view</button>
+<button class="lb" data-cam="counter">From the counter</button>
+<span class="spacer"></span>
+<button class="lb" id="visitor">Visitor leans in</button>
+<div class="seg" style="border-color:#B9C2C0" role="group" aria-label="Simulation speed">
+<button class="lb on" data-speed="1" style="border:0;border-radius:0">1×</button>
+<button class="lb" data-speed="2" style="border:0;border-radius:0">2×</button>
+<button class="lb" data-speed="4" style="border:0;border-radius:0">4×</button>
+</div>
+</div>
+</div>
+<div class="row2">
+<div class="card">
+<p class="ctitle">TV on the right wall</p>
+<canvas id="tv" width="640" height="360" aria-label="TV view: counter, milestones, booth map, lidar or wrist camera, caption"></canvas>
+</div>
+<div class="card">
+<p class="ctitle">Supervisor log</p>
+<ol id="log"></ol>
+</div>
+</div>
+</section>
+<aside style="display:flex;flex-direction:column;gap:20px">
+<div class="dev">
+<div class="scr">
+<div class="sbar">
+<span><b>Robot panel</b> <span id="sbMode" style="margin-left:6px;color:#9AA8A6"></span></span>
+<span style="display:flex;gap:10px;white-space:nowrap"><span id="sbBrake"></span><span id="sbArm"></span><span><i class="dot" style="background:#7FD8B6"></i>Lidar</span></span>
+</div>
+<div id="pbody" style="display:flex;flex-direction:column;flex:1"></div>
+</div>
+</div>
+<div class="card">
+<p class="ctitle">Leader arm at the counter (simulated)</p>
+<canvas id="pad" width="400" height="260" aria-label="Leader arm pad: drag the handle"></canvas>
+<p class="hint">Drag the handle to move the leader arm. Before START, park it in the ring so the robot arm does not jump. Reach up the pad to extend over the bowl; the brush lowers and scrubs. The hollow ring shows where the robot arm actually is.</p>
+<label class="tog"><input type="checkbox" id="leaderOk" checked> Leader arm streaming on CAN</label>
+<button class="estop" id="estop">E-STOP (hardware)</button>
+</div>
+</aside>
+</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const PI=Math.PI;const $=id=>document.getElementById(id);
+const wrap=a=>Math.atan2(Math.sin(a),Math.cos(a));const sm=s=>s*s*(3-2*s);const lerp=(a,b,s)=>a+(b-a)*s;const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+const OB=[[0.3,1.0,-0.49,-0.11],[-1,-0.05,0.6,1.1],[0.495,0.945,-0.985,-0.535]];
+const P={home:{x:-0.55,z:-0.35},w1:{x:-0.55,z:0.15},stage:{x:0.45,z:0.5},b1:{x:0.45,z:0.22},a1:{x:-0.25,z:0.2},a2:{x:-0.25,z:-0.3},dock:{x:-0.1,z:-0.3}};
+const HD={W:PI/2,E:-PI/2,S:PI};const HW=0.255,HL=0.35;const PERSON={x:0.45,z:1.25,r:0.17};
+const rp={x:P.home.x,z:P.home.z,yaw:HD.W};
+function corners(x,z,y){const c=Math.cos(y),s=Math.sin(y);return[[-HW,-HL],[HW,-HL],[HW,HL],[-HW,HL]].map(q=>[x+q[0]*c+q[1]*s,z-q[0]*s+q[1]*c]);}
+function toLocal(px,pz,x,z,y){const c=Math.cos(y),s=Math.sin(y),dx=px-x,dz=pz-z;return[dx*c-dz*s,dx*s+dz*c];}
+function collides(x,z,y){const cs=corners(x,z,y);for(const q of cs){if(q[0]<-1||q[0]>1||q[1]<-1||q[1]>1.0)return true;for(const b of OB){if(q[0]>b[0]+0.003&&q[0]<b[1]-0.003&&q[1]>b[2]+0.003&&q[1]<b[3]-0.003)return true;}}
+for(const b of OB){for(const q of [[b[0],b[2]],[b[1],b[2]],[b[1],b[3]],[b[0],b[3]]]){const l=toLocal(q[0],q[1],x,z,y);if(Math.abs(l[0])<HW-0.003&&Math.abs(l[1])<HL-0.003)return true;}}return false;}
+function gapTo(px,pz,x,z,y){const l=toLocal(px,pz,x,z,y);return Math.hypot(Math.max(Math.abs(l[0])-HW,0),Math.max(Math.abs(l[1])-HL,0));}
+let showP=false;
+function personBlocks(x=rp.x,z=rp.z,y=rp.yaw){return showP&&gapTo(PERSON.x,PERSON.z,x,z,y)-PERSON.r<0.45;}
+function loc(){for(const k of['home','dock','stage','w1','b1','a1','a2']){if(Math.hypot(rp.x-P[k].x,rp.z-P[k].z)<0.06)return k;}return'other';}
+function facing(h){return Math.abs(wrap(rp.yaw-HD[h]))<0.12;}
+const LOCN={home:'At home',dock:'Docked',stage:'At centre stage',b1:'Beside centre stage',w1:'Beside home',a1:'Near the dock',a2:'Beside the toilet',other:'Off the marked spots'};
+
+const W3=$('view3d');
+const scene=new THREE.Scene();
+const cam=new THREE.PerspectiveCamera(42,W3.clientWidth/W3.clientHeight,0.03,60);
+const ren=new THREE.WebGLRenderer({antialias:true,alpha:true});ren.setPixelRatio(Math.min(devicePixelRatio,2));ren.setSize(W3.clientWidth,W3.clientHeight);W3.prepend(ren.domElement);
+const ctl=new THREE.OrbitControls(cam,ren.domElement);ctl.enableDamping=true;ctl.maxPolarAngle=PI*0.49;ctl.minDistance=0.7;ctl.maxDistance=8;
+const CAMS={aisle:[[0.7,1.65,3.3],[0,0.55,-0.1]],top:[[0,4.4,0.06],[0,0,0.1]],counter:[[-0.75,1.55,1.35],[0.15,0.5,-0.3]]};
+function setCam(k){cam.position.set(...CAMS[k][0]);ctl.target.set(...CAMS[k][1]);ctl.update();document.querySelectorAll('[data-cam]').forEach(b=>b.classList.toggle('on',b.dataset.cam===k));}
+setCam('aisle');
+scene.add(new THREE.HemisphereLight(0xffffff,0x8a8a80,0.95));const dl=new THREE.DirectionalLight(0xffffff,0.5);dl.position.set(1,4,3);scene.add(dl);
+const M=(c,o={})=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:0.7,metalness:0.05},o));
+const UP=new THREE.Vector3(0,1,0);
+function box(w,h,d,m,x,y,z,p=scene){const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);b.position.set(x,y,z);p.add(b);return b;}
+function cyl(r1,r2,h,m,x,y,z,p=scene){const c=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,24),m);c.position.set(x,y,z);p.add(c);return c;}
+function link(mesh,a,b){const d=new THREE.Vector3().subVectors(b,a);const L=d.length();mesh.position.copy(a).addScaledVector(d,0.5);mesh.scale.set(1,Math.max(L,1e-4),1);if(L>1e-5)mesh.quaternion.setFromUnitVectors(UP,d.normalize());}
+box(6,0.02,2.6,M(0xa8322b),0,-0.012,2.3);box(2.0,0.02,2.0,M(0xb8433a),0,-0.011,0);
+const wallM=M(0xf4f2ee);box(2.08,2.4,0.04,wallM,0,1.2,-1.02);box(0.04,2.4,2.04,wallM,-1.02,1.2,0);box(0.04,2.4,2.04,wallM,1.02,1.2,0);
+const led=new THREE.MeshBasicMaterial({color:0xc77dff});box(0.03,2.2,0.03,led,-1.0,1.1,1.0);box(0.03,2.2,0.03,led,1.0,1.1,1.0);
+const tvCanvas=$('tv');const tvx=tvCanvas.getContext('2d');const ttex=new THREE.CanvasTexture(tvCanvas);
+box(0.04,0.5,0.84,M(0x1a1a1a),0.985,1.45,-0.45);
+const tvm=new THREE.Mesh(new THREE.PlaneGeometry(0.8,0.45),new THREE.MeshBasicMaterial({map:ttex}));tvm.position.set(0.962,1.45,-0.45);tvm.rotation.y=-PI/2;scene.add(tvm);
+const T=new THREE.Group();T.position.set(0.65,0,-0.30);T.rotation.y=-PI/2;scene.add(T);
+const white=M(0xf7f6f2,{roughness:0.35});
+box(0.22,0.3,0.3,white,0,0.15,0,T);
+const bowl=cyl(0.19,0.14,0.14,white,0,0.35,0.08,T);bowl.scale.z=1.3;
+const inner=cyl(0.15,0.15,0.005,M(0xbfd9e6,{roughness:0.2}),0,0.42,0.08,T);inner.scale.z=1.3;
+const seat=new THREE.Mesh(new THREE.TorusGeometry(0.155,0.025,10,32),white);seat.rotation.x=PI/2;seat.position.set(0,0.43,0.08);seat.scale.y=1.3;T.add(seat);
+box(0.38,0.36,0.16,white,0,0.58,-0.27,T);
+const germs=[];
+for(let i=0;i<7;i++){const a=i/7*PI*2;const mat=new THREE.MeshBasicMaterial({color:0x7CFC5A,transparent:true});const g=new THREE.Mesh(new THREE.SphereGeometry(0.016,10,10),mat);g.position.set(Math.cos(a)*0.11,0.435,0.08+Math.sin(a)*0.14);T.add(g);germs.push({g,mat,clean:false,a:1,w:null});}
+T.updateMatrixWorld();germs.forEach(o=>{o.w=T.localToWorld(o.g.position.clone());});
+function resetGerms(){germs.forEach(o=>{o.clean=false;o.a=1;o.g.visible=true;});}
+const germsCleared=()=>germs.filter(o=>o.clean).length;
+box(0.95,0.86,0.5,M(0xf2f0ea),-0.525,0.43,0.85);box(0.99,0.04,0.54,M(0xffffff),-0.525,0.88,0.85);
+const lm=M(0x5F5E5A);cyl(0.04,0.045,0.06,lm,-0.2,0.93,0.8);
+const ll1=cyl(0.018,0.018,1,lm,0,0,0),ll2=cyl(0.015,0.015,1,lm,0,0,0);
+const chM=M(0x2c2c2a);cyl(0.25,0.25,0.03,chM,0.72,0.03,-0.76);cyl(0.03,0.03,0.4,chM,0.72,0.24,-0.76);box(0.46,0.08,0.46,chM,0.72,0.46,-0.76);box(0.46,0.5,0.06,chM,0.72,0.78,-0.97);
+function tape(x0,x1,z0,z1){const m=new THREE.LineBasicMaterial({color:0xffffff});scene.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([[x0,z0],[x1,z0],[x1,z1],[x0,z1]].map(p=>new THREE.Vector3(p[0],0.004,p[1]))),m));return m;}
+tape(-0.91,-0.19,-0.615,-0.085);const dockTape=tape(-0.46,0.26,-0.565,-0.035);
+const spinM=new THREE.MeshBasicMaterial({color:0x5DCAA5,transparent:true,opacity:0.25,side:THREE.DoubleSide});
+const spinR=new THREE.Mesh(new THREE.RingGeometry(0.42,0.44,72),spinM);spinR.rotation.x=-PI/2;spinR.position.set(0.45,0.005,0.5);scene.add(spinR);
+const R=new THREE.Group();scene.add(R);
+const bodyM=M(0xf2f0ea),teal=M(0x1D9E75),dark=M(0x2c2c2a);
+box(0.51,0.66,0.7,bodyM,0,0.47,0,R);box(0.515,0.05,0.705,teal,0,0.72,0,R);box(0.4,0.02,0.6,M(0xd3d1c7),0,0.81,0,R);
+cyl(0.05,0.05,0.07,dark,0,0.84,0.25,R);
+cyl(0.03,0.03,0.12,M(0x888780),0.18,0.87,-0.27,R);cyl(0.03,0.03,0.12,M(0x888780),-0.18,0.87,-0.27,R);
+const panelMat=new THREE.MeshBasicMaterial({color:0x5DCAA5});box(0.22,0.13,0.01,panelMat,0,0.6,0.352,R);
+const wheels=[];const rollM=M(0x1D9E75),hubM=M(0x444441);
+[[-0.27,-0.26,1],[0.27,-0.26,-1],[-0.27,0.26,-1],[0.27,0.26,1]].forEach(w=>{const g=new THREE.Group();g.position.set(w[0],0.075,w[1]);R.add(g);const hub=new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.055,0.062,16),hubM);hub.rotation.z=PI/2;g.add(hub);for(let k=0;k<8;k++){const rg=new THREE.Group();rg.rotation.x=k/8*PI*2;g.add(rg);const rb=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.018,0.022),rollM);rb.position.y=0.065;rb.rotation.y=w[2]*PI/4;rg.add(rb);}wheels.push({g,sx:w[0],sz:w[1]});});
+const armM=M(0x5F5E5A),jM=M(0x1D9E75);const B=new THREE.Vector3(0,0.9,-0.25);
+cyl(0.055,0.06,0.09,armM,0,0.855,-0.25,R);
+const l1=cyl(0.028,0.028,1,armM,0,0,0,R),l2=cyl(0.024,0.024,1,armM,0,0,0,R);
+const ej=new THREE.Mesh(new THREE.SphereGeometry(0.038,16,12),jM);R.add(ej);const wj=new THREE.Mesh(new THREE.SphereGeometry(0.03,16,12),jM);R.add(wj);
+const brush=new THREE.Group();R.add(brush);cyl(0.015,0.015,0.05,armM,0,-0.025,0,brush);cyl(0.055,0.055,0.02,M(0x0F6E56),0,-0.055,0,brush);
+for(let k=0;k<10;k++){const a=k/10*PI*2;box(0.008,0.03,0.008,M(0xEF9F27),Math.cos(a)*0.04,-0.078,Math.sin(a)*0.04,brush);}
+const hoseG=new THREE.BufferGeometry().setFromPoints([0,0,0,0].map(()=>new THREE.Vector3()));R.add(new THREE.Line(hoseG,new THREE.LineBasicMaterial({color:0x378ADD})));
+const wristCam=new THREE.PerspectiveCamera(70,4/3,0.02,5);wj.add(wristCam);wristCam.position.set(0,0.02,-0.06);wristCam.rotation.x=-PI/2+0.4;
+const wristRen=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});wristRen.setPixelRatio(1);wristRen.setSize(320,240);wristRen.setClearColor(0x262C2F);
+const L1=0.36,L2=0.36;const STOW=new THREE.Vector3(0,1.08,-0.36);
+function ik(t){const rel=new THREE.Vector3().subVectors(t,B);const r=Math.hypot(rel.x,rel.z)||1e-4;const v=rel.y;let d=Math.min(Math.hypot(r,v),L1+L2-1e-3);const a1=Math.atan2(v,r)+Math.acos(clamp((L1*L1+d*d-L2*L2)/(2*L1*d),-1,1));const hx=rel.x/r,hz=rel.z/r;const e=new THREE.Vector3(B.x+hx*L1*Math.cos(a1),B.y+L1*Math.sin(a1),B.z+hz*L1*Math.cos(a1));const dir=new THREE.Vector3().subVectors(t,e);if(dir.length()>L2)dir.setLength(L2);const w=e.clone().add(dir);link(l1,B,e);link(l2,e,w);ej.position.copy(e);wj.position.copy(w);brush.position.copy(w);const p=hoseG.attributes.position;const o=0.035;[[B.x+o,B.y,B.z],[e.x+o,e.y,e.z],[w.x+o,w.y,w.z],[w.x,w.y-0.07,w.z]].forEach((q,i)=>p.setXYZ(i,q[0],q[1],q[2]));p.needsUpdate=true;}
+const person=new THREE.Group();person.position.set(PERSON.x,0,PERSON.z);person.visible=false;scene.add(person);
+const pM=M(0x7F77DD);cyl(0.15,0.17,1.15,pM,0,0.575,0,person);const hd=new THREE.Mesh(new THREE.SphereGeometry(0.11,16,12),pM);hd.position.y=1.28;person.add(hd);
+const NR=72;const rayG=new THREE.BufferGeometry();rayG.setAttribute('position',new THREE.BufferAttribute(new Float32Array(NR*6),3));
+const rayM=new THREE.LineBasicMaterial({color:0x1D9E75,transparent:true,opacity:0.35});scene.add(new THREE.LineSegments(rayG,rayM));
+function rayBox(ox,oz,dx,dz,x0,x1,z0,z1){let tn=-1e9,tf=1e9;if(Math.abs(dx)<1e-9){if(ox<x0||ox>x1)return 1e9;}else{let a=(x0-ox)/dx,b=(x1-ox)/dx;if(a>b)[a,b]=[b,a];tn=Math.max(tn,a);tf=Math.min(tf,b);}if(Math.abs(dz)<1e-9){if(oz<z0||oz>z1)return 1e9;}else{let a=(z0-oz)/dz,b=(z1-oz)/dz;if(a>b)[a,b]=[b,a];tn=Math.max(tn,a);tf=Math.min(tf,b);}return(tn<=tf&&tn>0)?tn:1e9;}
+function rayCirc(ox,oz,dx,dz,cx,cz,r){const fx=ox-cx,fz=oz-cz;const b=fx*dx+fz*dz,c=fx*fx+fz*fz-r*r;const h=b*b-c;if(h<0)return 1e9;const t=-b-Math.sqrt(h);return t>0?t:1e9;}
+function cast(ox,oz,dx,dz){let tm=2.4;
+if(dx<0){const t=(-1-ox)/dx,hz=oz+dz*t;if(t>0&&hz>=-1&&hz<=1&&t<tm)tm=t;}
+if(dx>0){const t=(1-ox)/dx,hz=oz+dz*t;if(t>0&&hz>=-1&&hz<=1&&t<tm)tm=t;}
+if(dz<0){const t=(-1-oz)/dz,hx=ox+dx*t;if(t>0&&hx>=-1&&hx<=1&&t<tm)tm=t;}
+for(const b of OB){const t=rayBox(ox,oz,dx,dz,b[0],b[1],b[2],b[3]);if(t<tm)tm=t;}
+if(showP){const t=rayCirc(ox,oz,dx,dz,PERSON.x,PERSON.z,PERSON.r);if(t<tm)tm=t;}return tm;}
+
+const arm={cur:STOW.clone(),stowed:true};
+const scrubPt=(th,y=0.51)=>new THREE.Vector3(0.11*Math.cos(th),y,-0.67+0.14*Math.sin(th));
+const pad={x:0.5,y:0.92,dirty:false,down:false};
+function padTarget(){const t=clamp((0.92-pad.y)/0.72,0,1);return new THREE.Vector3((pad.x-0.5)*0.4,lerp(1.08,0.51,Math.min(1,t*2.6)),-(0.36+0.44*t));}
+const padMatched=()=>Math.hypot(pad.x-0.5,(pad.y-0.92)*0.65)<0.06;
+
+let demos=37,lastDemo=37,simSpeed=1,clock=0,manBlocked=false,saveFlash=0;
+const sup={state:'idle',mode:null,playlist:[],pi:0,loopStart:0,loop:false,segs:[],si:0,feat:null,runs:1,selFeat:'spin',selLoop:false,msg:'',manualSub:'drive',gate:null,live:null,ended:null,anim:null,clearT:0,origin:null};
+const FN={leaveHome:'Leave home',spin:'Spin',dock:'Dock',replay:'Replay',teleop:'Teleop',backOut:'Back out',greet:'Greet',goHome:'Go home'};
+const MN={1:'Mode 1 · Show loop',2:'Mode 2 · Go home',3:'Mode 3 · Manual',4:'Mode 4 · Show loop + teleop',5:'Mode 5 · Teleop in place',single:'Single feature'};
+const PL={1:['leaveHome','spin','dock','replay','backOut','greet','goHome'],4:['leaveHome','spin','dock','teleop','backOut','greet','goHome'],5:['teleop']};
+const LOOPABLE=['spin','greet','replay','teleop'];
+const EST={leaveHome:4.8,spin:3.5,dock:8.0,replay:9.0,backOut:7.4,greet:5.6,goHome:5.2,teleop:0};
+const NEEDS={
+leaveHome:()=>loc()==='home'||'Needs to start at home',
+spin:()=>loc()==='stage'||'Needs to be at centre stage',
+dock:()=>(loc()==='stage'&&facing('E'))||'Needs centre stage, facing the toilet',
+replay:()=>loc()==='dock'||'Needs to be docked',
+teleop:()=>true,
+backOut:()=>loc()==='dock'||'Needs to be docked',
+greet:()=>loc()==='stage'||'Needs to be at centre stage',
+goHome:()=>loc()!=='home'||'Already at home'};
+const mvS=(k,h,label,slow)=>({k:'move',x:P[k].x,z:P[k].z,h,label,slow});
+function compileGoHome(){const s=[];const L=loc();if(L==='home')return s;
+const route={dock:['a2','a1','b1'],a2:['a1','b1'],a1:['b1'],b1:[],stage:['b1'],w1:null,other:[]}[L];
+if(L==='dock')s.push(mvS('a2',null,'Back out',true));
+if(route){const lab={a2:'Back out',a1:'Slide out',b1:L==='stage'?'Sidestep clear':'Glide clear'};route.forEach(k=>{if(!(L==='dock'&&k==='a2'))s.push(mvS(k,null,lab[k]));});s.push(mvS('w1',null,'Glide toward home'));}
+s.push({k:'turn',h:'W',label:'Turn toward home'});
+s.push(mvS('home','W','Sidestep into home'));return s;}
+function compile(f){switch(f){
+case'leaveHome':return[mvS('w1','W','Sidestep out of home'),mvS('b1','W','Glide across the booth'),mvS('stage','W','Sidestep to centre stage')];
+case'spin':return[{k:'turn',d:-3*PI,label:'Spin flourish',dur:3.5}];
+case'dock':return[{k:'reset'},mvS('b1','E','Sidestep toward the toilet'),mvS('a1','E','Glide toward the toilet'),mvS('a2','E','Slide in sideways'),mvS('dock','E','Precision dock',true)];
+case'replay':return[{k:'arm',a:'deploy',dur:1.6,label:'Arm deploys'},{k:'arm',a:'scrub',dur:6,label:'Replaying recorded demo #'+lastDemo},{k:'arm',a:'stow',dur:1.4,label:'Arm stows'}];
+case'teleop':return[{k:'teleop',label:'Teleop session'}];
+case'backOut':return[mvS('a2','E','Back out',true),mvS('a1','E','Slide out'),mvS('b1','E','Glide clear'),mvS('stage','E','Sidestep to centre stage')];
+case'greet':return[{k:'turn',h:'S',label:'Turn to face the aisle'},{k:'arm',a:'wave',dur:3,label:'Greet the aisle'},{k:'turn',h:'W',label:'Turn toward home'}];
+case'goHome':return compileGoHome();}}
+function pathClear(s){for(let i=1;i<=16;i++){const e=i/16;if(collides(lerp(s.from.x,s.x,e),lerp(s.from.z,s.z,e),lerp(s.from.y,s.ty,e)))return false;}return true;}
+function startSeg(){const s=sup.segs[sup.si];if(!s){featureDone();return;}
+s.t=0;s.from={x:rp.x,z:rp.z,y:rp.yaw};
+if(s.k==='reset'){resetGerms();nextSeg();return;}
+if(s.k==='move'){s.ty=s.h?rp.yaw+wrap(HD[s.h]-rp.yaw):rp.yaw;const d=Math.hypot(s.x-rp.x,s.z-rp.z);s.dur=Math.max(0.5,d/(s.slow?0.14:0.32),Math.abs(s.ty-rp.yaw)/1.4);}
+if(s.k==='turn'){s.x=rp.x;s.z=rp.z;if(s.d!==undefined){if(!s.started){s.endH=wrap(rp.yaw+s.d);s.ty=rp.yaw+s.d;}else{s.ty=rp.yaw+wrap(s.endH-rp.yaw);s.dur=Math.max(0.5,Math.abs(s.ty-rp.yaw)/1.4);}}else{s.ty=rp.yaw+wrap(HD[s.h]-rp.yaw);if(Math.abs(s.ty-rp.yaw)<0.03){nextSeg();return;}s.dur=Math.max(0.5,Math.abs(s.ty-rp.yaw)/1.4);}}
+if(s.k==='move'||s.k==='turn'){s.started=true;if(!pathClear(s)){fault('Path blocked during "'+s.label+'". Drive the robot clear in Manual, then retry.');return;}}
+if(s.k==='arm'){s.af=arm.cur.clone();arm.stowed=false;}
+if(s.k==='teleop'){enterGate();return;}}
+function nextSeg(){sup.si++;startSeg();}
+function startFeature(f){const n=NEEDS[f]();if(n!==true){fault(FN[f]+': '+n);return;}sup.feat=f;sup.segs=compile(f);sup.si=0;log('Feature: '+FN[f]);setState('running');startSeg();}
+function featureDone(){sup.pi++;if(sup.pi>=sup.playlist.length){if(sup.loop){sup.pi=sup.loopStart;sup.runs++;log('Loop '+sup.runs+' starts');}else{finish();return;}}startFeature(sup.playlist[sup.pi]);}
+function finish(){if(sup.mode===3){sup.feat=null;setState('manual');log('Back to manual control');return;}log((MN[sup.mode]||'Mode')+' finished');sup.mode=null;sup.feat=null;sup.playlist=[];setState('idle');}
+function startPlaylist(pl,ls,loop,mode){Object.assign(sup,{playlist:pl,loopStart:ls,loop,mode,pi:0,runs:1});log('Start '+(MN[mode]||mode));startFeature(pl[0]);}
+function startMode(m){if(m===3){sup.mode=3;sup.manualSub='drive';log('Start '+MN[3]);setState('manual');return;}
+if(m===2){if(loc()==='home'){toast('Already at home');return;}startPlaylist(['goHome'],0,false,2);return;}
+let pl=PL[m].slice(),ls=0;if(m!==5&&loc()!=='home'){pl=['goHome',...pl];ls=1;}startPlaylist(pl,ls,true,m);}
+function stepRunning(dt){const s=sup.segs[sup.si];if(!s)return;
+if(s.k==='move'||s.k==='turn'||(s.k==='arm'&&s.a==='wave')){if(personBlocks()){sup.clearT=0;setState('hold');log('Hold: someone is close');return;}}
+if(s.k==='move'||s.k==='turn'){s.t+=dt;const e=sm(clamp(s.t/s.dur,0,1));rp.x=lerp(s.from.x,s.x,e);rp.z=lerp(s.from.z,s.z,e);rp.yaw=lerp(s.from.y,s.ty,e);if(s.t>=s.dur){rp.x=s.x;rp.z=s.z;rp.yaw=wrap(s.ty);nextSeg();}}
+else if(s.k==='arm'){s.t+=dt;const e=clamp(s.t/s.dur,0,1);
+if(s.a==='deploy'){if(e<0.55)arm.cur.copy(s.af).lerp(scrubPt(0,0.72),sm(e/0.55));else arm.cur.copy(scrubPt(0,0.72)).lerp(scrubPt(0),sm((e-0.55)/0.45));}
+else if(s.a==='scrub')arm.cur.copy(scrubPt(e*4*PI));
+else if(s.a==='stow'){if(e<0.4)arm.cur.copy(s.af).lerp(new THREE.Vector3(s.af.x,0.75,s.af.z),sm(e/0.4));else arm.cur.copy(new THREE.Vector3(s.af.x,0.75,s.af.z)).lerp(STOW,sm((e-0.4)/0.6));}
+else if(s.a==='wave'){const b=Math.min(1,Math.min(e,1-e)*5);arm.cur.set(Math.sin(s.t*6)*0.15*b,lerp(1.08,1.2,b),lerp(-0.36,-0.42,b));}
+if(s.t>=s.dur){if(s.a==='stow'||s.a==='wave'){arm.cur.copy(STOW);arm.stowed=true;}nextSeg();}}}
+function stepHold(dt){if(personBlocks())sup.clearT=0;else{sup.clearT+=dt;if(sup.clearT>=3){log('Area clear: resuming');setState('running');}}}
+function enterGate(){sup.gate={t:0};setState('gate');log('Teleop gate: waiting for START');}
+function gateChecks(){return[{l:'Base parked, brakes on',ok:true,d:LOCN[loc()]},{l:'Arm stowed and holding',ok:arm.stowed,d:''},{l:'Leader arm streaming on CAN',ok:$('leaderOk').checked,d:$('leaderOk').checked?'Counter station':'No data'},{l:'Leader matches robot pose',ok:padMatched(),d:padMatched()?'Matched':'Park the handle in the ring'}];}
+function stepGate(dt){sup.gate.t+=dt;if(sup.mode===4&&sup.gate.t>20){log('No START in 20 s: falling back to replay');startFeature('replay');}}
+function startLive(){if(!gateChecks().every(c=>c.ok))return;sup.live={t:0,idle:0,c0:germsCleared()};pad.dirty=false;setState('live');log('Teleop START · recording demo #'+(demos+1));}
+function stepLive(dt){if(!$('leaderOk').checked){endTeleop('Leader link lost');return;}sup.live.t+=dt;const tgt=padTarget();const d=arm.cur.distanceTo(tgt);const mx=0.5*dt;arm.cur.lerp(tgt,d>mx?mx/d:1);arm.stowed=false;if(pad.dirty){sup.live.idle=0;pad.dirty=false;}else sup.live.idle+=dt;if(sup.live.idle>15)endTeleop('Auto-ended after 15 s with no leader motion');}
+function endTeleop(reason){sup.ended={reason,len:sup.live.t,cleared:germsCleared()-sup.live.c0};sup.anim={from:arm.cur.clone(),t:0,next:'ended'};log('Teleop ended: '+reason);setState('endstow');}
+function stepStow(dt){const a=sup.anim;a.t+=dt;const e=clamp(a.t/1.4,0,1);const mid=new THREE.Vector3(a.from.x,Math.max(a.from.y,0.75),a.from.z);if(e<0.4)arm.cur.copy(a.from).lerp(mid,sm(e/0.4));else arm.cur.copy(mid).lerp(STOW,sm((e-0.4)/0.6));if(e>=1){arm.cur.copy(STOW);arm.stowed=true;setState(a.next);}}
+function stop(msg){const s=sup.state;if(['idle','stopped','stopping','estop'].includes(s))return;sup.origin={state:s};sup.msg=msg||'Stopped by staff';log('STOP: '+sup.msg);if(!arm.stowed){sup.anim={from:arm.cur.clone(),t:0,next:'stopped'};setState('stopping');}else setState('stopped');}
+function fault(msg){sup.origin={state:'running'};sup.msg=msg;log('Fault: '+msg);if(!arm.stowed){sup.anim={from:arm.cur.clone(),t:0,next:'stopped'};setState('stopping');}else setState('stopped');}
+function resume(){const o=sup.origin&&sup.origin.state;if(o==='manual'){setState('manual');log('Resumed manual');return;}if(!sup.feat){setState('idle');return;}log('Resume');
+if(['replay','greet','teleop'].includes(sup.feat)){startFeature(sup.feat);return;}const n=NEEDS[sup.feat]();setState('running');startSeg();}
+function goHomeNow(){if(loc()==='home'){sup.mode=null;sup.feat=null;setState('idle');return;}startPlaylist(['goHome'],0,false,2);}
+function resetMode(){const m=sup.mode;if(m===1||m===4||m===5){log('Reset: home, then restart');if(m===5&&loc()==='home'){startMode(5);return;}if(m===5){startPlaylist(['goHome','teleop'],1,true,5);return;}startMode(m);}else goHomeNow();}
+function stepManual(dt){manBlocked=false;if(sup.manualSub!=='drive'||!arm.stowed)return;const f=(inp.f-inp.b),l=(inp.r-inp.l),w=(inp.ccw-inp.cw);if(!f&&!l&&!w)return;
+const vf=f*0.25,vl=l*0.22,vw=w*0.8;const c=Math.cos(rp.yaw),s=Math.sin(rp.yaw);const lx=vl*dt,lz=-vf*dt;const nx=rp.x+lx*c+lz*s,nz=rp.z-lx*s+lz*c,ny=rp.yaw+vw*dt;
+if(personBlocks(nx,nz,ny)){manBlocked=true;return;}if(collides(nx,nz,ny)){bumpMsg();return;}rp.x=nx;rp.z=nz;rp.yaw=ny;}
+let bumpT=0;function bumpMsg(){if(clock-bumpT>1.5){toast('Blocked: that move would hit something');bumpT=clock;}}
+function estop(){if(sup.state==='estop'){sup.msg='E-stop released. Motors re-enabled.';log('E-stop released');if(!arm.stowed){sup.anim={from:arm.cur.clone(),t:0,next:'stopped'};setState('stopping');}else setState('stopped');$('estop').classList.remove('on');$('estop').textContent='E-STOP (hardware)';return;}
+sup.origin={state:sup.state==='manual'?'manual':'running'};log('E-STOP pressed: motor power cut');setState('estop');$('estop').classList.add('on');$('estop').textContent='Release E-STOP';}
+const inp={f:0,b:0,l:0,r:0,ccw:0,cw:0};
+const KEY={w:'f',s:'b',a:'l',d:'r',q:'ccw',e:'cw'};
+addEventListener('keydown',e=>{const k=KEY[e.key.toLowerCase()];if(k&&sup.state==='manual'&&!e.target.closest('input')){inp[k]=1;}});
+addEventListener('keyup',e=>{const k=KEY[e.key.toLowerCase()];if(k)inp[k]=0;});
+addEventListener('pointerup',()=>{for(const k in inp)inp[k]=0;document.querySelectorAll('.dpad .act').forEach(b=>b.classList.remove('act'));});
+
+const logEl=$('log');const t0=performance.now();
+function log(t){const s=Math.floor((performance.now()-t0)/1000);const li=document.createElement('li');li.innerHTML='<time>'+Math.floor(s/60)+':'+String(s%60).padStart(2,'0')+'</time><span></span>';li.lastChild.textContent=t;logEl.prepend(li);while(logEl.children.length>60)logEl.lastChild.remove();}
+let toastT;function toast(t){const el=$('toast');el.textContent=t;el.style.opacity=1;clearTimeout(toastT);toastT=setTimeout(()=>el.style.opacity=0,2200);}
+
+function etaInfo(){let r=0,tele=sup.feat==='teleop';if(['running','hold'].includes(sup.state)){for(let j=sup.si;j<sup.segs.length;j++){const q=sup.segs[j];const d=q.dur||(q.k==='move'?2:q.k==='turn'?1.2:0);r+=j===sup.si?Math.max(0,d-(q.t||0)):d;}}
+for(let j=sup.pi+1;j<sup.playlist.length;j++){const f=sup.playlist[j];if(f==='teleop')tele=true;r+=EST[f];}return{r,tele};}
+const fmt=s=>{s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
+function msHTML(){const pl=sup.playlist;if(!pl.length)return'';const acc={hold:'#F2A93B',stopped:'#E5484D',stopping:'#E5484D',estop:'#E5484D'}[sup.state]||'#2BB39A';
+return'<div class="ms" style="grid-template-columns:repeat('+pl.length+',minmax(0,1fr))">'+pl.map((f,i)=>'<div><div class="b" style="background:'+(i<sup.pi?'#6F7D7B':i===sup.pi?acc:'#2A3539')+'"></div><div class="l" style="color:'+(i===sup.pi?'#F2F5F4':'#9AA8A6')+'">'+FN[f]+'</div></div>').join('')+'</div>';}
+function segLabel(){const s=sup.segs[sup.si];return s?s.label:'';}
+
+const pb=$('pbody');let viewKey='';
+function setState(s){sup.state=s;renderPanel();}
+function renderPanel(){const s=sup.state;viewKey=s+'|'+sup.manualSub+'|'+sup.selFeat+'|'+sup.selLoop;let h='';
+if(s==='idle'){const L=loc();const fl=['leaveHome','spin','dock','replay','teleop','backOut','greet','goHome'];const need=NEEDS[sup.selFeat]();const canLoop=LOOPABLE.includes(sup.selFeat);
+h='<div class="pb"><div class="rowx"><span class="h2">Choose a mode</span><span class="mut">'+LOCN[L]+(arm.stowed?' · arm stowed':'')+'</span></div><div class="mgrid">'+
+mb(1,'Show loop','Runs on its own. The arm replays a recorded clean.'+(L!=='home'?' Goes home first.':''),true)+mb(4,'Show loop + teleop','Same loop; a person does the clean step.')+mb(5,'Teleop in place','Brakes on. Visitors drive the arm.')+mb(3,'Manual','Controller drives the base, or the arm. One at a time.')+
+'<button class="mbtn full" data-a="mode" data-m="2"><span class="t"><span class="n">2</span>Go home</span><span class="d">Drops everything and returns to the home tape.</span></button></div>'+
+'<span class="mut">Run one feature</span><div class="chips">'+fl.map(f=>{const ok=NEEDS[f]()===true;return'<button class="chip'+(f===sup.selFeat?' sel':'')+(ok?'':' na')+'" data-a="sel" data-f="'+f+'">'+FN[f]+'</button>';}).join('')+'</div>'+
+'<div class="rowx" style="align-items:center"><div class="seg"><button class="'+(!sup.selLoop?'on':'')+'" data-a="once">Once</button><button class="'+(sup.selLoop?'on':'')+'" data-a="loopf" '+(canLoop?'':'disabled')+'>Loop</button></div><button class="btn go" style="min-width:110px" data-a="runf" '+(need===true?'':'disabled')+'>Run '+FN[sup.selFeat]+'</button></div>'+
+'<span class="mut" style="color:'+(need===true?'#9AA8A6':'#F2A93B')+'">'+(need===true?(canLoop?'Ready. This feature can loop.':'Ready. Runs once; its end point differs from its start.'):need+'.')+'</span></div>';}
+else if(s==='running'){h='<div class="pb"><span class="mut" id="dMode"></span><div><div class="h2" id="dFeat"></div><div id="dSeg" style="color:#C9D3D1;font-size:15px;margin-top:2px"></div></div><div class="rowx"><span class="mut" id="dEtaL">Playlist done in</span><span class="big" id="dEta"></span></div><div id="dMs"></div><span style="flex:1"></span><div class="btns"><button class="btn tall" data-a="reset">Reset<small>Go home, restart</small></button><button class="btn tall stop" data-a="stop">STOP<small>Base halts, arm stows</small></button></div></div>';}
+else if(s==='hold'){h='<div class="pb"><div class="banner b-hold"><span class="h2">Holding: someone is close</span><span class="s" id="dHold"></span></div><div id="dMs"></div><span class="mut" id="dSeg2"></span><span style="flex:1"></span><div class="btns"><button class="btn tall" data-a="home">Go home<small>After the area clears</small></button><button class="btn tall stop" data-a="stop">STOP<small>Base halts, arm stows</small></button></div></div>';}
+else if(s==='gate'){h='<div class="pb"><div class="rowx"><span class="h2">Start teleoperation</span><span class="mut">Nothing moves until START</span></div><div id="dChecks" style="display:flex;flex-direction:column;gap:6px"></div><span class="mut" id="dGate"></span><span style="flex:1"></span><div class="btns">'+(sup.mode===4?'<button class="btn tall" data-a="skip">Skip, replay instead<small>Automatic after 20 s</small></button>':'<button class="btn tall" data-a="cancel">Cancel<small>'+(sup.mode===3?'Back to manual':'End this mode')+'</small></button>')+'<button class="btn tall go" id="dStart" data-a="start">START<small>Follower mirrors the leader</small></button></div></div>';}
+else if(s==='live'){h='<div class="pb"><div class="banner b-live"><span style="display:flex;align-items:center;gap:8px;font-weight:600"><i class="dot" style="background:#FF6B6B;width:11px;height:11px"></i>Live · recording demo #'+(demos+1)+'</span><span class="big" style="font-size:26px" id="dLt"></span></div><div class="tiles"><div class="tile"><span class="mut">Auto-ends in</span><span class="v" id="dIdle"></span></div><div class="tile"><span class="mut">Germs cleared</span><span class="v" id="dGerm"></span></div><div class="tile"><span class="mut">Speed limit</span><span class="v">50%</span></div></div><span class="mut">Drag the leader-arm pad below. Brakes stay on for the whole session.</span><span style="flex:1"></span><button class="btn stop" style="min-height:96px;font-size:26px" data-a="endtele">STOP teleop<small>Arm holds, then stows</small></button></div>';}
+else if(s==='endstow'||s==='stopping'){h='<div class="pb"><div class="banner b-info"><span class="h2">'+(s==='endstow'?'Teleop ended':'Stopping')+'</span><span class="s">Arm lifting clear, then stowing. Base braked.</span></div><div id="dMs"></div></div>';}
+else if(s==='ended'){const e=sup.ended;h='<div class="pb"><span class="h2">Teleop ended</span><span class="mut">'+e.reason+'. Arm stowed, base braked.</span><div class="tiles"><div class="tile"><span class="mut">Run</span><span class="v">#'+(demos+1)+'</span></div><div class="tile"><span class="mut">Length</span><span class="v">'+fmt(e.len)+'</span></div><div class="tile"><span class="mut">Germs cleared</span><span class="v">'+e.cleared+'</span></div></div><span style="flex:1"></span><div class="btns"><button class="btn tall" data-a="discard">Discard run<small>Not used for training</small></button><button class="btn tall go" data-a="save">Save and continue<small>Counter goes to '+(demos+1)+'</small></button></div></div>';}
+else if(s==='stopped'){h='<div class="pb"><div class="banner b-stop"><span class="h2">'+(sup.msg.startsWith('Stopped')?'Stopped by staff':sup.msg.startsWith('E-stop')?'E-stop released':'Fault')+'</span><span class="s">'+esc(sup.msg)+'</span><span class="s">'+LOCN[loc()]+' · arm stowed · brakes on</span></div><div id="dMs"></div><span style="flex:1"></span><div class="btns"><button class="btn tall go" data-a="resume" '+((sup.feat||(sup.origin&&sup.origin.state==='manual'))?'':'disabled')+'>Resume<small>From where it stopped</small></button><button class="btn tall" data-a="home">Go home<small>Then the mode list</small></button><button class="btn tall" data-a="reset">Reset<small>Home, restart mode</small></button><button class="btn tall" data-a="manual">Manual<small>Drive it clear</small></button></div></div>';}
+else if(s==='manual'){const d=sup.manualSub==='drive';h='<div class="pb"><div class="rowx"><span class="h2">Manual</span><div class="seg"><button class="'+(d?'on':'')+'" data-a="msub" data-v="drive">Drive base</button><button class="'+(!d?'on':'')+'" data-a="msub" data-v="arm">Teleop arm</button></div></div>'+
+(d?'<span class="mut">Arm stowed, so the base may move. Hold a button, or use <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> to move and <kbd>Q</kbd><kbd>E</kbd> to rotate.</span><div class="dpad"><button class="btn" data-dir="ccw">Rotate left</button><button class="btn" data-dir="f">Forward</button><button class="btn" data-dir="cw">Rotate right</button><button class="btn" data-dir="l">Strafe left</button><button class="btn" data-dir="b">Back</button><button class="btn" data-dir="r">Strafe right</button></div><span class="mut" id="dMan" style="min-height:18px"></span>':
+'<span class="mut">Brakes go on. The teleop gate opens, the same as in modes 4 and 5.</span><button class="btn tall go" data-a="mantele">Open the teleop gate<small>Base stays braked during teleop</small></button>')+
+'<span style="flex:1"></span><div class="btns"><button class="btn tall" data-a="exitman">Exit manual<small>Back to modes</small></button><button class="btn tall stop" data-a="stop">STOP<small>Halt everything</small></button></div></div>';}
+else if(s==='estop'){h='<div class="pb"><div class="banner b-stop" style="background:#5A1012"><span class="h2">E-stop pressed</span><span class="s">Motor power is cut in hardware. The software cannot override it.</span><span class="s">Twist the button to release, then choose what to do.</span></div></div>';}
+pb.innerHTML=h;tick(true);}
+function mb(n,t,d,hi){return'<button class="mbtn" data-a="mode" data-m="'+n+'"'+(hi?' style="border-color:#2BB39A"':'')+'><span class="t"><span class="n"'+(hi?' style="background:#2BB39A;color:#04211B"':'')+'>'+n+'</span>'+t+'</span><span class="d">'+d+'</span></button>';}
+function esc(t){return String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+pb.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b||b.disabled)return;const a=b.dataset.a;
+if(a==='mode')startMode(+b.dataset.m);
+else if(a==='sel'){sup.selFeat=b.dataset.f;if(!LOOPABLE.includes(sup.selFeat))sup.selLoop=false;renderPanel();}
+else if(a==='once'){sup.selLoop=false;renderPanel();}else if(a==='loopf'){sup.selLoop=true;renderPanel();}
+else if(a==='runf'){startPlaylist([sup.selFeat],0,sup.selLoop,'single');}
+else if(a==='stop')stop();else if(a==='reset'){stopQuiet();resetMode();}
+else if(a==='home'){stopQuiet();goHomeNow();}
+else if(a==='skip'){log('Skipped teleop: replay instead');startFeature('replay');}
+else if(a==='cancel'){log('Teleop cancelled');if(sup.mode===3){sup.feat=null;setState('manual');}else{sup.mode=null;sup.feat=null;sup.playlist=[];setState('idle');}}
+else if(a==='start')startLive();else if(a==='endtele')endTeleop('Ended with STOP');
+else if(a==='save'){demos++;lastDemo=demos;saveFlash=2;log('Saved demo #'+demos);featureDone();}
+else if(a==='discard'){log('Discarded the run');featureDone();}
+else if(a==='resume')resume();
+else if(a==='manual'){sup.mode=3;sup.feat=null;sup.playlist=[];sup.manualSub='drive';log('Start '+MN[3]);setState('manual');}
+else if(a==='msub'){sup.manualSub=b.dataset.v;renderPanel();}
+else if(a==='mantele'){startPlaylist(['teleop'],0,false,3);}
+else if(a==='exitman'){log('Manual ended');sup.mode=null;setState('idle');}});
+function stopQuiet(){if(!arm.stowed){arm.cur.copy(STOW);arm.stowed=true;}}
+pb.addEventListener('pointerdown',e=>{const b=e.target.closest('[data-dir]');if(!b)return;inp[b.dataset.dir]=1;b.classList.add('act');});
+function tick(force){const s=sup.state;
+$('sbMode').textContent=sup.mode?MN[sup.mode]:'Idle';
+const moving=s==='running'&&sup.segs[sup.si]&&['move','turn'].includes(sup.segs[sup.si].k)||(s==='manual'&&(inp.f||inp.b||inp.l||inp.r||inp.ccw||inp.cw));
+$('sbBrake').innerHTML='<i class="dot" style="background:'+(moving?'#F2A93B':'#7FD8B6')+'"></i>'+(moving?'Brakes off':'Brakes on');
+$('sbArm').innerHTML='<i class="dot" style="background:'+(arm.stowed?'#7FD8B6':'#85B7EB')+'"></i>'+(arm.stowed?'Arm stowed':'Arm out');
+const q=id=>document.getElementById(id);
+if(q('dMs'))q('dMs').innerHTML=msHTML();
+if(s==='running'){q('dMode').textContent=(MN[sup.mode]||'')+(sup.loop?' · loop '+sup.runs:'');q('dFeat').textContent=FN[sup.feat]||'';q('dSeg').textContent=segLabel();const e=etaInfo();q('dEtaL').textContent=sup.loop?'Loop restarts in':'Done in';q('dEta').textContent=fmt(e.r)+(e.tele?' + teleop':'');}
+if(s==='hold'){q('dHold').textContent=personBlocks()?'Resumes on its own 3 s after the area clears.':'Area clear. Resuming in '+Math.max(0,3-sup.clearT).toFixed(1)+' s.';q('dSeg2').textContent='Paused during: '+segLabel();}
+if(s==='gate'){const cs=gateChecks();q('dChecks').innerHTML=cs.map(c=>'<div class="check"><span style="color:'+(c.ok?'#7FD8B6':'#F2A93B')+';font-weight:600">'+(c.ok?'✓':'•')+'</span><span>'+c.l+'</span><span class="r">'+c.d+'</span></div>').join('');q('dStart').disabled=!cs.every(c=>c.ok);q('dGate').textContent=sup.mode===4?'Replay starts automatically in '+Math.max(0,Math.ceil(20-sup.gate.t))+' s.':'Waiting as long as needed.';}
+if(s==='live'){q('dLt').textContent=fmt(sup.live.t);q('dIdle').textContent=Math.max(0,Math.ceil(15-sup.live.idle))+' s';q('dGerm').textContent=germsCleared()+'/7';}
+if(s==='manual'&&q('dMan'))q('dMan').textContent=manBlocked?'Holding: a visitor is too close':'';
+const ov=$('ovl');const tg=tvTag();ov.innerHTML='<span class="pill" style="background:'+tg[1]+';color:'+tg[2]+'">'+esc(tg[0])+'</span><span class="pill" style="background:#ffffffd9;color:#141716">'+LOCN[loc()]+'</span>';}
+
+function tvTag(){const s=sup.state,f=sup.feat;
+if(s==='estop')return['E-stop','#E5484D','#FFFFFF'];if(s==='hold'||manBlocked)return['Waiting','#F2A93B','#2A1A00'];
+if(s==='live')return['Live · human-guided','#E5484D','#FFFFFF'];if(s==='gate')return['Starting soon','#85B7EB','#042C53'];
+if(s==='ended'||s==='endstow')return['Teleop ended','#97C459','#173404'];if(s==='stopped'||s==='stopping')return['Paused','#E5484D','#FFFFFF'];
+if(s==='manual')return['Manual control','#D3D1C7','#2C2C2A'];
+if(s==='running'){if(f==='replay')return['Replay of demo #'+lastDemo,'#FAC775','#2A1A00'];if(f==='greet')return['Greeting','#85B7EB','#042C53'];return['Driving itself','#1D9E75','#04211B'];}
+return[loc()==='home'?'At home':'Idle','#2F3D41','#F2F5F4'];}
+function tvCap(){const s=sup.state;if(s==='hold'||manBlocked)return'Someone came close. The robot waits.';
+if(s==='running'){const l=segLabel();return sup.feat==='replay'?'Replaying a cleaning a person recorded earlier':l;}
+return{gate:'Next: a visitor at the counter guides the arm',live:'A visitor at the counter is guiding the arm right now',endstow:'Teleop finished. Arm stowing.',ended:'Saving the run as training data',stopped:'Paused by staff',stopping:'Stopping',manual:'Driven by staff with a controller',estop:'Emergency stop pressed',idle:loc()==='home'?'Ready at home':'Ready'}[s]||'';}
+let lidarHits=[],lidarO={x:0,z:0};
+function drawMap(x0,y0,w,h){const x=tvx;const S=Math.min(w/2,h/2.3);const ox=x0+(w-2*S)/2+S,oy=y0+S;const X=v=>ox+v*S,Z=v=>oy+v*S;
+x.fillStyle='#2A1615';x.fillRect(X(-1),Z(1),2*S,0.3*S);x.fillStyle='#1B282C';x.fillRect(X(-1),Z(-1),2*S,2*S);
+x.strokeStyle='#5DCAA5';x.lineWidth=2;x.beginPath();x.moveTo(X(-1),Z(1));x.lineTo(X(-1),Z(-1));x.lineTo(X(1),Z(-1));x.lineTo(X(1),Z(1));x.stroke();
+x.fillStyle='#85B7EB';x.fillRect(X(1)-3,Z(-0.87),4,0.84*S);
+x.fillStyle='#F1EFE8';x.fillRect(X(0.3),Z(-0.49),0.7*S,0.38*S);x.fillStyle='#444441';x.fillRect(X(-1),Z(0.6),0.95*S,0.5*S);x.fillStyle='#2C2C2A';x.fillRect(X(0.495),Z(-0.985),0.45*S,0.45*S);
+x.setLineDash([4,3]);x.lineWidth=1.5;x.strokeStyle='#9AA8A6';x.strokeRect(X(-0.91),Z(-0.615),0.72*S,0.53*S);x.strokeStyle=loc()==='dock'?'#97C459':'#9AA8A6';x.strokeRect(X(-0.46),Z(-0.565),0.72*S,0.53*S);
+x.strokeStyle='#2F6F5F';x.beginPath();x.arc(X(0.45),Z(0.5),0.43*S,0,PI*2);x.stroke();x.setLineDash([]);
+if(sup.state==='running'||sup.state==='hold'){x.strokeStyle='#FAC775';x.lineWidth=2;x.setLineDash([2,4]);x.beginPath();x.moveTo(X(rp.x),Z(rp.z));for(let j=sup.si;j<sup.segs.length;j++){const q=sup.segs[j];if(q.k==='move')x.lineTo(X(q.x),Z(q.z));}x.stroke();x.setLineDash([]);}
+const blk=sup.state==='hold'||manBlocked;x.fillStyle=blk?'#F09595':'#9FE1CB';lidarHits.forEach(p=>{if(p[1]<1.3)x.fillRect(X(p[0])-1.5,Z(p[1])-1.5,3,3);});
+x.save();x.translate(X(rp.x),Z(rp.z));x.rotate(-rp.yaw);x.fillStyle='#1D9E75';x.fillRect(-HW*S,-HL*S,2*HW*S,2*HL*S);x.fillStyle='#FAC775';x.fillRect(-0.07*S,-HL*S,0.14*S,0.07*S);x.restore();
+if(showP){x.fillStyle='#E5484D';x.beginPath();x.arc(X(PERSON.x),Z(Math.min(PERSON.z,1.22)),0.15*S,0,PI*2);x.fill();}}
+function rr(x,X,Y,w,h,r){x.beginPath();x.moveTo(X+r,Y);x.arcTo(X+w,Y,X+w,Y+h,r);x.arcTo(X+w,Y+h,X,Y+h,r);x.arcTo(X,Y+h,X,Y,r);x.arcTo(X,Y,X+w,Y,r);x.closePath();}
+function drawTV(){const x=tvx;x.fillStyle='#0B1012';x.fillRect(0,0,640,360);
+x.fillStyle='#9AA8A6';x.font='14px Inter, sans-serif';x.fillText('Demonstrations recorded',16,31);x.fillStyle=saveFlash>0?'#97C459':'#F2F5F4';x.font='600 24px "Space Grotesk", Inter, sans-serif';x.fillText(String(demos),190,33);
+const tg=tvTag();x.font='600 14px Inter, sans-serif';const tw=x.measureText(tg[0]).width+20;x.fillStyle=tg[1];rr(x,624-tw,12,tw,28,6);x.fill();x.fillStyle=tg[2];x.fillText(tg[0],634-tw,31);
+let top=50;const pl=sup.playlist;
+if(pl.length&&['running','hold','gate','live','endstow','ended','stopped','stopping'].includes(sup.state)&&sup.mode!==5&&sup.mode!==3){const n=pl.length,gw=(608-(n-1)*5)/n;const acc={hold:'#F2A93B',stopped:'#E5484D',stopping:'#E5484D'}[sup.state]||'#2BB39A';
+pl.forEach((f,i)=>{const X=16+i*(gw+5);x.fillStyle=i<sup.pi?'#6F7D7B':i===sup.pi?acc:'#2A3539';rr(x,X,top,gw,6,3);x.fill();x.fillStyle=i===sup.pi?'#F2F5F4':'#9AA8A6';x.font=(i===sup.pi?'600 ':'')+'12px Inter, sans-serif';x.fillText(FN[f],X,top+22);});top+=34;}
+const camOn=!arm.stowed||['gate','live','endstow','ended'].includes(sup.state);const bot=300;
+if(camOn){const cw=380,ch=bot-top;x.drawImage(wristRen.domElement,0,0,320,240,16,top,cw,ch);
+const ct={live:['Live · human-guided','#E5484D','#FFFFFF'],gate:['Waiting for START','#85B7EB','#042C53'],ended:['Run finished','#97C459','#173404'],endstow:['Run finished','#97C459','#173404']}[sup.state]||(sup.feat==='greet'?['Greeting','#85B7EB','#042C53']:['Replay of demo #'+lastDemo,'#FAC775','#2A1A00']);
+x.font='600 13px Inter, sans-serif';const w2=x.measureText(ct[0]).width+16;x.fillStyle=ct[1];rr(x,24,top+8,w2,24,5);x.fill();x.fillStyle=ct[2];x.fillText(ct[0],32,top+25);
+x.fillStyle='#E4E2DA';x.font='12px Inter, sans-serif';x.fillText('Wrist camera',24,bot-10);
+x.fillStyle='#9AA8A6';x.fillText('Booth map',410,top+12);drawMap(410,top+18,214,bot-top-18);}
+else{drawMap(16,top,270,bot-top);const lx=300,lw=324,lh=bot-top;x.fillStyle='#111A1D';rr(x,lx,top,lw,lh,8);x.fill();const cx=lx+lw/2,cy=top+lh/2;x.strokeStyle='#2F4146';x.lineWidth=1;[30,60,90].forEach(r=>{x.beginPath();x.arc(cx,cy,r*lh/200,0,PI*2);x.stroke();});
+const blk=sup.state==='hold'||manBlocked;lidarHits.forEach(p=>{const dx=(p[0]-lidarO.x)*lh/3.2,dz=(p[1]-lidarO.z)*lh/3.2;if(Math.abs(dx)<lw/2-4&&Math.abs(dz)<lh/2-4){const isP=showP&&Math.hypot(p[0]-PERSON.x,p[1]-PERSON.z)<0.25;x.fillStyle=isP?'#F09595':(blk?'#F4C7C7':'#5DCAA5');x.beginPath();x.arc(cx+dx,cy+dz,2.2,0,PI*2);x.fill();}});
+x.fillStyle='#FAC775';x.beginPath();x.arc(cx,cy,5,0,PI*2);x.fill();x.fillStyle='#C9D3D1';x.font='12px Inter, sans-serif';x.fillText('Lidar, live',lx+10,bot-10);}
+x.fillStyle=sup.state==='hold'||manBlocked?'#F2A93B':'#FFFFFF';x.font='500 20px Inter, sans-serif';x.fillText(tvCap(),16,338);
+if(sup.state==='hold'||manBlocked){x.fillStyle='#F2A93B';rr(x,360,top+8,264,96,12);x.fill();x.fillStyle='#2A1A00';x.font='600 28px "Space Grotesk", Inter, sans-serif';x.fillText('Robot paused',378,top+48);x.font='500 16px Inter, sans-serif';x.fillStyle='#3D2600';x.fillText('Please step back a little',378,top+80);}
+if(sup.state==='estop'){x.fillStyle='rgba(90,16,18,0.85)';x.fillRect(0,0,640,360);x.fillStyle='#FFFFFF';x.font='600 34px "Space Grotesk", Inter, sans-serif';x.fillText('Emergency stop',190,180);}
+ttex.needsUpdate=true;}
+
+const padC=$('pad'),px=padC.getContext('2d');
+function padXY(e){const r=padC.getBoundingClientRect();return[clamp((e.clientX-r.left)/r.width,0.03,0.97),clamp((e.clientY-r.top)/r.height,0.04,0.97)];}
+padC.addEventListener('pointerdown',e=>{pad.down=true;padC.setPointerCapture(e.pointerId);[pad.x,pad.y]=padXY(e);pad.dirty=true;});
+padC.addEventListener('pointermove',e=>{if(!pad.down)return;[pad.x,pad.y]=padXY(e);pad.dirty=true;});
+padC.addEventListener('pointerup',()=>{pad.down=false;});
+function drawPad(){const W=400,H=260,x=px;x.fillStyle='#E9EEEC';x.fillRect(0,0,W,H);
+const U=v=>(0.5+v/0.4)*W,V=t=>(0.92-0.72*t)*H;
+x.strokeStyle='#C7D0CD';x.lineWidth=1;for(let i=1;i<5;i++){x.beginPath();x.moveTo(0,i*H/5);x.lineTo(W,i*H/5);x.stroke();}
+const docked=loc()==='dock';x.globalAlpha=docked?1:0.35;x.fillStyle='#F7F6F2';x.strokeStyle='#B4B2A9';x.lineWidth=2;x.beginPath();x.ellipse(U(0),V((0.67-0.36)/0.44),0.19/0.4*W,0.72*0.25/0.44*H,0,0,PI*2);x.fill();x.stroke();
+germs.forEach((o,i)=>{const a=i/7*PI*2;const lx=0.11*Math.cos(a),lz=0.08+0.14*Math.sin(a)-0.75;const t=(-lz-0.36)/0.44;x.globalAlpha=(docked?1:0.35)*o.a;x.fillStyle='#4CB33A';x.beginPath();x.arc(U(lx),V(t),6,0,PI*2);x.fill();});x.globalAlpha=1;
+x.fillStyle='#4A5452';x.font='12px Inter, sans-serif';x.fillText(docked?'Bowl (robot docked)':'Bowl outline appears when docked',10,18);x.fillText('Reach',W-46,18);x.fillText('Stow',W/2+40,H-10);
+const m=padMatched();x.strokeStyle=m?'#3B6D11':'#0F6E56';x.lineWidth=2.5;x.setLineDash(m?[]:[5,4]);x.beginPath();x.arc(W/2,0.92*H,0.06*W,0,PI*2);x.stroke();x.setLineDash([]);
+const c=arm.cur;const ft=clamp((-c.z-0.36)/0.44,0,1);x.strokeStyle='#185FA5';x.lineWidth=2;x.beginPath();x.arc(U(c.x),V(ft),13,0,PI*2);x.stroke();
+x.fillStyle=sup.state==='live'?'#C9302C':'#0F6E56';x.beginPath();x.arc(pad.x*W,pad.y*H,10,0,PI*2);x.fill();x.strokeStyle='#fff';x.lineWidth=2;x.stroke();}
+
+document.querySelectorAll('[data-cam]').forEach(b=>b.onclick=()=>setCam(b.dataset.cam));
+document.querySelectorAll('[data-speed]').forEach(b=>b.onclick=()=>{simSpeed=+b.dataset.speed;document.querySelectorAll('[data-speed]').forEach(o=>o.classList.toggle('on',o===b));});
+$('visitor').onclick=()=>{showP=!showP;person.visible=showP;$('visitor').classList.toggle('on',showP);$('visitor').textContent=showP?'Visitor steps back':'Visitor leans in';log(showP?'Visitor leans into the booth':'Visitor steps back');};
+$('estop').onclick=estop;
+$('leaderOk').onchange=()=>log($('leaderOk').checked?'Leader arm link restored':'Leader arm link lost');
+
+let last=performance.now(),uiT=0,prevPose={x:rp.x,z:rp.z,y:rp.yaw},lrot=0;
+function frame(now){const rdt=Math.min((now-last)/1000,0.05);last=now;const dt=rdt*simSpeed;clock+=rdt;
+const s=sup.state;
+if(s==='running')stepRunning(dt);else if(s==='hold')stepHold(dt);else if(s==='gate')stepGate(dt);else if(s==='live')stepLive(rdt);else if(s==='endstow'||s==='stopping')stepStow(dt);else if(s==='manual')stepManual(dt);else manBlocked=false;
+R.position.set(rp.x,0,rp.z);R.rotation.y=rp.yaw;
+const dx=rp.x-prevPose.x,dz=rp.z-prevPose.z,dy=wrap(rp.yaw-prevPose.y);const c=Math.cos(rp.yaw),sn=Math.sin(rp.yaw);const f=dx*(-sn)+dz*(-c),l=dx*c+dz*(-sn);
+wheels.forEach(w=>{const sp=f-Math.sign(w.sx)*Math.sign(w.sz)*l+Math.sign(w.sx)*dy*0.37;w.g.rotation.x-=sp/0.075;});prevPose={x:rp.x,z:rp.z,y:rp.yaw};
+ik(arm.cur);R.updateMatrixWorld();
+const tip=wj.getWorldPosition(new THREE.Vector3());tip.y-=0.085;const scrubbing=tip.y<0.56&&!arm.stowed&&s!=='estop';if(scrubbing)brush.rotation.y+=rdt*25;
+if(scrubbing&&tip.y<0.49)germs.forEach(o=>{if(!o.clean&&Math.hypot(tip.x-o.w.x,tip.z-o.w.z)<0.05){o.clean=true;}});
+germs.forEach(o=>{if(o.clean){o.a=Math.max(0,o.a-rdt*1.5);o.mat.opacity=o.a;o.g.visible=o.a>0.02;}else{o.mat.opacity=1;}});
+const lt=[0.9,1.15,0.75];const lp=new THREE.Vector3(-0.2,0.95,0.8);const tp=padTarget();const le=new THREE.Vector3(-0.2,1.18,0.68+(tp.z+0.36)*0.3);link(ll1,lp,le);link(ll2,le,new THREE.Vector3(-0.2+tp.x*0.4,0.98+(tp.y-0.5)*0.3,0.55+(tp.z+0.36)*0.4));
+panelMat.color.setHex({hold:0xF2A93B,stopped:0xE5484D,stopping:0xE5484D,estop:0xE5484D,live:0xE5484D,gate:0x85B7EB}[s]||0x5DCAA5);
+dockTape.color.setHex(loc()==='dock'?0x97C459:0xffffff);
+const o=R.localToWorld(new THREE.Vector3(0,0.84,0.25));lidarO={x:o.x,z:o.z};if(s!=='estop')lrot+=rdt*3;
+const arr=rayG.attributes.position.array;lidarHits=[];
+for(let k=0;k<NR;k++){const a=k/NR*PI*2+lrot;const ddx=Math.cos(a),ddz=Math.sin(a);const tm=cast(o.x,o.z,ddx,ddz);const ex=o.x+ddx*tm,ez=o.z+ddz*tm;arr.set([o.x,o.y,o.z,ex,o.y,ez],k*6);if(tm<2.39)lidarHits.push([ex,ez]);}
+rayG.attributes.position.needsUpdate=true;rayM.color.setHex(s==='hold'||manBlocked?0xE24B4A:0x1D9E75);
+if(saveFlash>0)saveFlash-=rdt;
+const camOn=!arm.stowed||['gate','live','endstow','ended'].includes(s);if(camOn)wristRen.render(scene,wristCam);
+drawTV();drawPad();
+uiT+=rdt;if(uiT>0.1){uiT=0;tick();}
+ctl.update();ren.render(scene,cam);requestAnimationFrame(frame);}
+new ResizeObserver(()=>{const w=W3.clientWidth,h=W3.clientHeight;cam.aspect=w/h;cam.updateProjectionMatrix();ren.setSize(w,h);}).observe(W3);
+log('Simulator ready. Robot at home.');renderPanel();requestAnimationFrame(frame);
+</script>
+</body>
+</html>

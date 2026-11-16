@@ -186,6 +186,7 @@ class Decision:
     stopped: bool
     guards: tuple
     reasons: tuple
+    bypassed: bool = False
 
     def gate(self, cmd):
         """Return the command if every block allows it, else zero."""
@@ -213,7 +214,7 @@ class Layout:
 
 
 def decide(layout, *, estop_latched, lost, full_stop_topics, cliff_ranges, floor_distance,
-           cliff_margin, bumpers_pressed, topic_of):
+           cliff_margin, bumpers_pressed, topic_of, bypass=False):
     """
     Combine every input into a Decision.
 
@@ -222,6 +223,8 @@ def decide(layout, *, estop_latched, lost, full_stop_topics, cliff_ranges, floor
     cliff_ranges: position -> latest range (absent: none yet; the watchdog reports it lost).
     bumpers_pressed: plank -> latest state.
     topic_of: maps ('cliff' | 'bumper' | 'ultrasonic', name) to its topic, to match lost topics.
+    bypass: only the e-stop stops the robot (Manual driving with its checks off, on the
+    operator's judgement); every other block is still reported in reasons.
     """
     reasons = []
     guards = []
@@ -254,4 +257,7 @@ def decide(layout, *, estop_latched, lost, full_stop_topics, cliff_ranges, floor
         if topic in lost:
             guards.append(face_guard(x, layout.half_width))
             reasons.append(f'lost {topic}')
+    if bypass:
+        return Decision(stopped=estop_latched, guards=(), reasons=tuple(sorted(reasons)),
+                        bypassed=True)
     return Decision(stopped=stopped, guards=tuple(guards), reasons=tuple(sorted(reasons)))
