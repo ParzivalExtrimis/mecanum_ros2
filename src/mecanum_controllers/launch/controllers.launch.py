@@ -22,7 +22,8 @@ hardware:=mock  Also robot_state_publisher on urdf/mecanum_mock.urdf.xacro and
 hardware:=esp32 Also robot_state_publisher on urdf/mecanum_esp32.urdf.xacro and
                 ros2_control_node on the real drive (mecanum_hardware/Esp32System on the ESP32
                 at port:=...), with config/controllers_hardware.yaml over controllers.yaml.
-                The ESP32_ARGS below go to the xacro; docs/hardware_drive_test.md says what
+                The ESP32_ARGS below go to the xacro when set; left empty, the xacro's own
+                defaults (the measured values) apply. docs/hardware_drive_test.md says what
                 each test stage sets.
 
 The drive controller's topics are remapped to the command and odometry contract:
@@ -40,25 +41,43 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
+from launch.substitution import Substitution
 from launch.substitutions import (
     Command, EqualsSubstitution, LaunchConfiguration, PythonExpression)
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
 
-# xacro args of urdf/mecanum_esp32.urdf.xacro, with the same defaults (all STAND-INs).
+# xacro args of urdf/mecanum_esp32.urdf.xacro. Their defaults live in that xacro only: an
+# argument left empty here (the default) is not passed, so the xacro's value applies.
 ESP32_ARGS = {
-    'port': ('/dev/ttyUSB0', 'The ESP32 serial port; use the /dev/serial/by-id/ path'),
-    'pulses_per_rev': ('1600', 'Step pulses per motor revolution (CS-D808 DIP switches)'),
-    'counts_per_wheel_rev': ('4000', 'Encoder counts per wheel revolution (x4 decoding)'),
-    'motor_for_wheel': ('0 1 2 3', 'Motor index (0..3) of FL FR RL RR'),
-    'dir_invert': ('0 0 0 0', 'Per motor 1..4: 1 inverts its step direction'),
-    'enc_invert': ('0 0 0 0', 'Per motor 1..4: 1 inverts its encoder count'),
-    'watchdog_ms': ('200', 'The ESP32 stops the wheels when no command arrives this long'),
-    'accel_backstop': ('2.5', 'The ESP32 ramp at each wheel, starts and stops (rad/s^2)'),
-    'max_wheel_speed': ('3.5', 'The ESP32 clamps wheel commands to this (rad/s)'),
-    'following_error_limit': ('0.5', 'Pulses vs counts difference that stops all (wheel rad)'),
+    'port': 'The ESP32 serial port; use the /dev/serial/by-id/ path',
+    'pulses_per_rev': 'Step pulses per motor revolution (CS-D808 DIP switches)',
+    'counts_per_wheel_rev': 'Encoder counts per wheel revolution (x4 decoding)',
+    'motor_for_wheel': 'Motor index (0..3) of FL FR RL RR',
+    'dir_invert': 'Per motor 1..4: 1 inverts its step direction',
+    'enc_invert': 'Per motor 1..4: 1 inverts its encoder count',
+    'watchdog_ms': 'The ESP32 stops the wheels when no command arrives this long',
+    'accel_backstop': 'The ESP32 ramp at each wheel, starts and stops (rad/s^2)',
+    'max_wheel_speed': 'The ESP32 clamps wheel commands to this (rad/s)',
+    'following_error_limit': 'Pulses vs counts difference that stops all (wheel rad)',
 }
+ESP32_ARG_HELP = ' (empty: the default of urdf/mecanum_esp32.urdf.xacro)'
+
+
+class XacroArg(Substitution):
+    """` name:="value"` for a non-empty launch argument, else nothing (the xacro default)."""
+
+    def __init__(self, name):
+        super().__init__()
+        self.name = name
+
+    def describe(self):
+        return f'XacroArg({self.name})'
+
+    def perform(self, context):
+        value = context.launch_configurations.get(self.name, '').strip()
+        return f' {self.name}:="{value}"' if value else ''
 
 
 def drive_remaps(reference_topic):
@@ -81,7 +100,7 @@ def generate_launch_description():
         value_type=str)
     esp32_xacro = ['xacro ', os.path.join(share, 'urdf', 'mecanum_esp32.urdf.xacro')]
     for name in ESP32_ARGS:
-        esp32_xacro += [f' {name}:="', LaunchConfiguration(name), '"']
+        esp32_xacro.append(XacroArg(name))
     esp32_description = ParameterValue(Command(esp32_xacro), value_type=str)
 
     def spawner(*args):
@@ -98,8 +117,9 @@ def generate_launch_description():
         DeclareLaunchArgument('hardware', default_value='sim',
                               description='sim (Gazebo, gz_ros2_control), mock, or esp32 '
                               '(the real drive)'),
-        *[DeclareLaunchArgument(name, default_value=default, description=f'esp32: {text}')
-          for name, (default, text) in ESP32_ARGS.items()],
+        *[DeclareLaunchArgument(name, default_value='',
+                                description=f'esp32: {text}{ESP32_ARG_HELP}')
+          for name, text in ESP32_ARGS.items()],
         DeclareLaunchArgument('reference_topic', default_value='/cmd_vel_safe',
                               description='The drive reference: the safety gate output, or '
                               '/cmd_vel to bypass the gate (mock dry runs only)'),

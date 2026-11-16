@@ -26,7 +26,8 @@ Stage 5H of docs/hardware_transition.md; the procedure is docs/hardware_drive_te
 
 Every argument of controllers.launch.py's esp32 set passes through (port, pulses_per_rev,
 counts_per_wheel_rev, motor_for_wheel, dir_invert, enc_invert, watchdog_ms, accel_backstop,
-max_wheel_speed, following_error_limit). Drive it from another terminal:
+max_wheel_speed, following_error_limit); left out, each takes its default from
+mecanum_controllers urdf/mecanum_esp32.urdf.xacro. Drive it from another terminal:
     ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true \\
         -p frame_id:=base_footprint -p speed:=0.1 -p turn:=0.3
 """
@@ -44,25 +45,25 @@ from launch_ros.actions import Node
 
 
 def esp32_args():
-    """Read the esp32 argument names and defaults from controllers.launch.py."""
+    """Read the esp32 argument names and help from controllers.launch.py."""
     path = os.path.join(get_package_share_directory('mecanum_controllers'), 'launch',
                         'controllers.launch.py')
     spec = importlib.util.spec_from_file_location('mecanum_controllers_launch', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.ESP32_ARGS
+    return module.ESP32_ARGS, module.ESP32_ARG_HELP
 
 
 def generate_launch_description():
     controllers_share = get_package_share_directory('mecanum_controllers')
     safety_share = get_package_share_directory('mecanum_safety')
     bringup_share = get_package_share_directory('mecanum_bringup')
-    args = esp32_args()
+    args, arg_help = esp32_args()
     watched = ('lidar_2d', 'l2', 'd435i', 'ultrasonics', 'cliff_tof', 'bumpers', 'odom')
 
     return LaunchDescription([
-        *[DeclareLaunchArgument(name, default_value=default, description=text)
-          for name, (default, text) in args.items()],
+        *[DeclareLaunchArgument(name, default_value='', description=text + arg_help)
+          for name, text in args.items()],
         DeclareLaunchArgument('rviz', default_value='false', description='Start RViz'),
 
         IncludeLaunchDescription(

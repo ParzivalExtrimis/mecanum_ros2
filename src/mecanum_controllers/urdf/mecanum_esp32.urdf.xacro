@@ -7,31 +7,33 @@
 -->
 <robot name="mecanum" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:arg name="prefix" default=""/>
-  <xacro:arg name="port" default="/dev/ttyUSB0"/>
-  <xacro:arg name="pulses_per_rev" default="1600"/>
-  <xacro:arg name="counts_per_wheel_rev" default="4000"/>
-  <xacro:arg name="motor_for_wheel" default="0 1 2 3"/>
-  <xacro:arg name="dir_invert" default="0 0 0 0"/>
-  <xacro:arg name="enc_invert" default="0 0 0 0"/>
-  <xacro:arg name="watchdog_ms" default="200"/>
-  <xacro:arg name="accel_backstop" default="2.5"/>
-  <xacro:arg name="max_wheel_speed" default="3.5"/>
-  <xacro:arg name="following_error_limit" default="0.5"/>
+  <xacro:arg name="prefix" default="" />
+  <xacro:arg name="port" default="/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0" /> <!-- default
+  entry point on dev machine - subject to chaange when porting to SBC-->
+  <xacro:arg name="pulses_per_rev" default="1600" /> <!-- verified empirical value -->
+  <xacro:arg name="counts_per_wheel_rev" default="4000" /> <!-- verified empirical value -->
+  <xacro:arg name="motor_for_wheel" default="3 0 2 1" /> <!-- verified empirical value -->
+  <xacro:arg name="dir_invert" default="0 0 1 1" /> <!-- verified empirical value -->
+  <xacro:arg name="enc_invert" default="0 0 1 1" /> <!-- verified empirical value -->
+  <xacro:arg name="watchdog_ms" default="200" />
+  <xacro:arg name="accel_backstop" default="2.5" />
+  <xacro:arg name="max_wheel_speed" default="3.5" />
+  <xacro:arg name="following_error_limit" default="0.5" /> <!-- verified empirical value ( measured
+  average is much lower thus set to default ) -->
 
-  <xacro:include filename="$(find mecanum_description)/urdf/mecanum.urdf.xacro"/>
-  <xacro:include filename="$(find mecanum_controllers)/urdf/mecanum.ros2_control.xacro"/>
+  <xacro:include filename="$(find mecanum_description)/urdf/mecanum.urdf.xacro" />
+  <xacro:include filename="$(find mecanum_controllers)/urdf/mecanum.ros2_control.xacro" />
 
   <xacro:mecanum_ros2_control prefix="$(arg prefix)" hardware="esp32"
-      esp32_port="$(arg port)"
-      esp32_pulses_per_rev="$(arg pulses_per_rev)"
-      esp32_counts_per_wheel_rev="$(arg counts_per_wheel_rev)"
-      esp32_motor_for_wheel="$(arg motor_for_wheel)"
-      esp32_dir_invert="$(arg dir_invert)"
-      esp32_enc_invert="$(arg enc_invert)"
-      esp32_watchdog_ms="$(arg watchdog_ms)"
-      esp32_accel_backstop="$(arg accel_backstop)"
-      esp32_max_wheel_speed="$(arg max_wheel_speed)"
-      esp32_following_error_limit="$(arg following_error_limit)"/>
+    esp32_port="$(arg port)"
+    esp32_pulses_per_rev="$(arg pulses_per_rev)"
+    esp32_counts_per_wheel_rev="$(arg counts_per_wheel_rev)"
+    esp32_motor_for_wheel="$(arg motor_for_wheel)"
+    esp32_dir_invert="$(arg dir_invert)"
+    esp32_enc_invert="$(arg enc_invert)"
+    esp32_watchdog_ms="$(arg watchdog_ms)"
+    esp32_accel_backstop="$(arg accel_backstop)"
+    esp32_max_wheel_speed="$(arg max_wheel_speed)"
+    esp32_following_error_limit="$(arg following_error_limit)" />
 
 </robot>

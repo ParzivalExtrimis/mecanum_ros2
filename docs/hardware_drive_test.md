@@ -143,18 +143,20 @@ configuration yet; 0x0040 a command was clamped to the maximum speed; 0x0080 a f
 
 All launch arguments below are arguments of `drive_test.launch.py` (and of
 `controllers.launch.py hardware:=esp32`); they go to the xacro, then to the ESP32 by CONFIG on
-every activation. Rows marked STAND-IN are in `STANDINS.md`.
+every activation. Their defaults live in one place, the `xacro:arg` defaults of
+`src/mecanum_controllers/urdf/mecanum_esp32.urdf.xacro`: a launch argument left out (empty)
+is not passed, so the xacro's value applies. Rows marked STAND-IN are in `STANDINS.md`.
 
 | Value | Default | Where | Set in |
 |---|---|---|---|
-| `port` | `/dev/ttyUSB0` | launch arg | T1: the `/dev/serial/by-id/...` path |
-| `pulses_per_rev` | 1600, STAND-IN | launch arg | T2, measured |
-| `counts_per_wheel_rev` | 4000, STAND-IN | launch arg | T2, measured |
-| `motor_for_wheel`, `dir_invert`, `enc_invert` | `0 1 2 3`, `0 0 0 0`, `0 0 0 0`, STAND-IN | launch args | T2, `drive_monitor.py identify` |
-| `following_error_limit` | 0.5 rad at the wheel, STAND-IN | launch arg | T2 (0 = off for identify) |
-| `watchdog_ms` | 200 | launch arg | T2 check |
-| `accel_backstop` | 2.5 rad/s², STAND-IN (0.26 m/s², 0.57 rad/s²) | launch arg | T5 ladder |
-| `max_wheel_speed` | 3.5 rad/s, STAND-IN (0.36 m/s at the rim) | launch arg | T5, with the speed ladder |
+| `port` | `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0` (the dev laptop) | xacro default, launch arg | T1: the `/dev/serial/by-id/...` path; changes on the Jetson |
+| `pulses_per_rev` | 1600, measured T2 | xacro default, launch arg | T2, measured |
+| `counts_per_wheel_rev` | 4000, measured T2 | xacro default, launch arg | T2, measured |
+| `motor_for_wheel`, `dir_invert`, `enc_invert` | `3 0 2 1`, `0 0 1 1`, `0 0 1 1`, measured T2 | xacro defaults, launch args | T2, `drive_monitor.py identify` |
+| `following_error_limit` | 0.5 rad at the wheel (owner's choice; the T2 soak allows down to 0.05) | xacro default, launch arg | T2 (0 = off for identify) |
+| `watchdog_ms` | 200 | xacro default, launch arg | T2 check |
+| `accel_backstop` | 2.5 rad/s², STAND-IN (0.26 m/s², 0.57 rad/s²) | xacro default, launch arg | T5 ladder |
+| `max_wheel_speed` | 3.5 rad/s, STAND-IN (0.36 m/s at the rim) | xacro default, launch arg | T5, with the speed ladder |
 | Speed limits | 0.1 m/s x, 0.1 m/s y, 0.3 rad/s, STAND-IN | `controllers_hardware.yaml` | T5 (`drive_tune.py` raises them at run time, then restores) |
 | Reference timeout | 0.25 s | `controllers.yaml` | T5 check |
 | Wheel radius, `lx + ly` | 0.1025 m, 0.451 m, STAND-IN | `controllers.yaml`, the URDF | T4 |
@@ -165,10 +167,11 @@ every activation. Rows marked STAND-IN are in `STANDINS.md`.
 | Tool | Use |
 |---|---|
 | `ros2 launch mecanum_bringup drive_test.launch.py port:=... [rviz:=true]` | The drive: controllers on the ESP32, the safety gate (`/cmd_vel` → `/cmd_vel_safe`, watching `/joint_states` only), RViz in `odom` |
-| `ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true -p frame_id:=base_footprint -p speed:=0.1 -p turn:=0.3` | Teleop. Hold a key to drive; release it to stop (the 0.25 s reference timeout). `i` forward, `,` back, `j`/`l` rotate, Shift+`J`/`L` strafe, `k` stop. |
+| `ros2 launch mecanum_bringup teleop.launch.py` (or `ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true -p frame_id:=base_footprint -p speed:=0.1 -p turn:=0.3`) | Teleop; the launch opens it in its own window, type there. Hold a key to drive; release it to stop (the 0.25 s reference timeout). `i` forward, `,` back, `j`/`l` rotate, Shift+`J`/`L` strafe, `k` stop. |
 | `tools/drive_monitor.py` | Live table per wheel: command, speeds from pulses and from counts, totals since Enter, following error, faults, mode |
 | `tools/drive_monitor.py identify` | On blocks: the motor order and signs from three patterns and the owner's answers |
 | `tools/drive_tune.py` | The ladders: steps with confirmation, the limit rule, CSV output (`--help`) |
+| [`drive_firmware.md`](drive_firmware.md) | Reference: the sketch, `Esp32System`, and every configurable value with where it lives |
 | `tools/fe_soak.py` | T2 check 4 scripted: still, hard start/stop cycles per axis, reversals, still; CSV of every report, the largest following error per phase, the settled error after each stop (build-up), a suggested limit (`--help`) |
 | `tools/l2_wall_range.py --side front` | Distance and angle to a wall from the L2, for setting up runs |
 | `ros2 launch mecanum_base motion_test.launch.py measure_odom_topic:=/wheel/odometry linear_speed:=0.1 angular_speed:=0.3` | The axes pattern and the loop (T4) |
@@ -438,3 +441,5 @@ as a following error), and the strapping pins (T1, check 6).
 | 2026-11-13 | T2 checks 1 and 3 (on blocks, owner) | Identify: `motor_for_wheel:="3 0 2 1" dir_invert:="0 0 1 1" enc_invert:="0 0 1 1"`, re-run gave the expected answers. Ten turns at 0.1 m/s (0.976 rad/s): 15 943 pulses and 39 849–39 850 counts on all four wheels at release, 16 050 / 40 116–40 118 after the ramp. Counts ÷ pulses = 2.4995 (4000 ÷ 1600 = 2.5, within 0.02%): pulses per rev 1600 and counts per rev 4000 kept; 1594 pulses per "turn" is the tape-mark release error. Following error at speed and on the ramp: 7–9 counts behind on every wheel (since Enter), steady. Offsets built up before Enter in the same launch: FR −38, RL −18, RR +7, FL 0 counts, cause unknown (check 4 to find out whether they grow). Pulse speed 0.972 against 0.976 rad/s commanded (−0.4%, the same on all wheels). MCU rx errors 1. Following-error limit not chosen yet. |
 | 2026-11-13 | T2 check 4 (on blocks, `tools/fe_soak.py`, full default sequence) | 324 s, 32 552 reports (100 Hz, largest gap 17.6 ms), no faults, host rx errors 0, MCU rx errors 1 (unchanged from before). Largest following error 10 counts (0.016 rad, FR, at a rotate stop); per phase max 5–10 counts, cruise lag 3–7 counts at 0.1 m/s / 0.3 rad/s, FR about 2.5 counts biased positive. No build-up: the error left after each of 123 stops stayed within −3…+5 counts and ended within 1 count of the start, across 60 axis cycles and 10 straight reversals, so the earlier −38 / −18 / +7 offsets did not come from driving. Limit by the rule: 2.5 × 10 counts is below the floor, so **0.05 rad (32 counts)** for T3; re-check against the lag at each higher speed in T5. |
 | 2026-11-13 | Floor (owner) | RR held little torque at power-on and lagged in strafe, giving a yaw drift. Cause: the RR wheel was not mounted to the motor shaft properly (mechanical); fixed by the owner. The on-blocks soak had already shown RR's motor tracking its pulses, so the drive and the firmware were not involved. |
+| 2026-11-14 | T2 checks 5–7 (on blocks, owner) | Pass, as reported by the owner. Check 5: a low following-error limit tripped the fault in normal running and every wheel stopped. Check 6: pulling the USB cable while driving stopped all wheels. Check 7: every teleop key turned the wheels as expected and releasing it stopped them. T2 complete. |
+| 2026-11-14 | Floor recheck after the RR wheel was remounted (owner) | Pass, as reported by the owner: the strafe drive was repeated and the yaw drift is gone. |
